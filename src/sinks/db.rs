@@ -157,7 +157,7 @@ mod tests {
         //Basic initialize the db schema
         // A transaction is implicitly created for the all file so some instruction could be applied
         // -- { severity: Error, code: "25001", message: "CREATE INDEX CONCURRENTLY cannot run inside a transaction block",
-        sqlx::raw_sql(read_to_string("../cdviz-db/src/schema.sql").unwrap().as_str())
+        sqlx::raw_sql(read_to_string("tests/assets/db/schema.sql").unwrap().as_str())
             .execute(&dbsink.pool)
             .await
             .unwrap();
