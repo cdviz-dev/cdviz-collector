@@ -405,6 +405,7 @@ tmp
 
 # ignore downloaded charts
 *.tgz
+*.tar.*
 Chart.lock
 
 # ignore report from MegaLinterreport/
