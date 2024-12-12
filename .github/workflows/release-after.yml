@@ -9,9 +9,14 @@ on:
   workflow_dispatch:
     inputs:
       plan:
-        description: plan json (eg {"releases":[{"app_version":"0.2.1"}]}) to extract version
+        description: plan json (only used to extract version)
         required: true
         type: string
+        default: '{"releases":[{"app_version":"0.2.2"}]}'
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   container-push:
@@ -22,7 +27,7 @@ jobs:
         shell: bash
         run: |
           cat >plan.json << EOF
-          {{ inputs.plan }}
+          ${{ inputs.plan }}
           EOF
           VERSION=$(yq -r '.releases[0].app_version' < plan.json)
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"

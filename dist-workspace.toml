@@ -24,6 +24,7 @@ publish-jobs = ["homebrew"]
 install-updater = false
 # Post-announce jobs to run in CI
 post-announce-jobs = ["./release-after"]
+github-custom-job-permissions = { "release-after" = { packages = "write", contents = "read" } }
 # Whether CI should trigger releases with dispatches instead of tag pushes
 dispatch-releases = true
 
