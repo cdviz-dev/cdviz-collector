@@ -34,6 +34,7 @@ run = [
 run = "cargo hack check --each-feature --no-dev-deps"
 
 [tasks."build"]
+depends = ["install:rustcomponents"]
 run = "cargo build"
 
 [tasks."format"]
@@ -63,11 +64,13 @@ run = [
 
 
 [tasks."lint:dependencies"]
+depends = ["install:rustcomponents"]
 run = ["cargo machete --with-metadata"]
 # check unused with cargo-machete or cargo-udeps
 # TODO check outdated
 
 [tasks."test"]
+depends = ["install:rustcomponents"]
 run = [
     "cargo nextest run",
     # "cargo test --doc",
