@@ -20,8 +20,6 @@ permissions:
 jobs:
   ci:
     runs-on: "ubuntu-latest"
-    strategy:
-      fail-fast: false
     env:
       CARGO_TERM_COLOR: always
       RUST_BACKTRACE: full
