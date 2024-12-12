@@ -1,0 +1,6 @@
+[workspace]
+features_always_increment_minor = true
+git_tag_name = "{{version}}"
+
+[changelog]
+protect_breaking_commits = true

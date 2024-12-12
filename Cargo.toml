@@ -1,22 +1,21 @@
 [package]
 name = "cdviz-collector"
-description = "The service to collect (pull/push) and to forward cdevents"
-keywords = ["cd"]
+description = "A service & cli to collect SDLC/CI/CD events and to dispatch as cdevents"
+keywords = ["cd", "cdevents", "sdlc"]
 categories = []
 edition = "2021"
 version = "0.2.0"
 authors = ["David Bernard"]
 license = "Apache-2.0"
-repository = "https://github.com/cdviz-dev/cdviz"
-rust-version = "1.80.0"
-publish = false
+repository = "https://github.com/cdviz-dev/cdviz-collector"
+rust-version = "1.83.0"
+publish = true
 
 [dependencies]
 async-trait = "0.1"
 axum = { version = "0.7", optional = true }
 axum-tracing-opentelemetry = { version = "0.24", optional = true }
 bytes = { version = "1.8", optional = true }
-# cdevents-sdk = { git = "https://github.com/cdevents/sdk-rust" }
 cdevents-sdk = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 cid = "0.11"
@@ -173,3 +172,8 @@ rc_mutex = "warn"
 unnecessary_safety_doc = "warn"
 unwrap_used = "warn"
 module_name_repetitions = "allow"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
