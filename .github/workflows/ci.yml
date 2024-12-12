@@ -1,0 +1,39 @@
+---
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+      - "releases/*"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: "ubuntu-latest"
+    strategy:
+      fail-fast: false
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: full
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mozilla-actions/sccache-action@v0.0.6
+      - uses: jdx/mise-action@v2
+      - run: mise install
+        shell: bash
+      - run: mise run ci
+        shell: bash
+      - run: ${SCCACHE_PATH} --show-stats
+        shell: bash
