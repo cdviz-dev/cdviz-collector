@@ -12,16 +12,17 @@ installers = ["shell", "homebrew"]
 # A GitHub repo to push Homebrew formulas to
 tap = "cdviz-dev/homebrew-tap"
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = [
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-    "aarch64-unknown-linux-musl",
-    "x86_64-unknown-linux-musl",
-    "x86_64-pc-windows-msvc",
-]
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-musl", "x86_64-apple-darwin", "x86_64-unknown-linux-musl", "x86_64-pc-windows-msvc"]
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
 # Publish jobs to run in CI
 publish-jobs = ["homebrew"]
 # Whether to install an updater program
 install-updater = false
+# Post-announce jobs to run in CI
+post-announce-jobs = ["./release-after"]
+
+# [dist.github-custom-runners]
+# buildjet could be used to build the binaries (faster, cheaper? than github's runners)
+# aarch64-unknown-linux-gnu = "buildjet-8vcpu-ubuntu-2204-arm"
+# aarch64-unknown-linux-musl = "buildjet-8vcpu-ubuntu-2204-arm"

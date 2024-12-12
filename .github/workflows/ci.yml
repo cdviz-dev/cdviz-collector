@@ -31,7 +31,7 @@ jobs:
       - uses: jdx/mise-action@v2
       - run: mise install
         shell: bash
-      - run: mise run ci
+      - run: mise run --jobs 1 ci
         shell: bash
       - run: ${SCCACHE_PATH} --show-stats
         shell: bash
