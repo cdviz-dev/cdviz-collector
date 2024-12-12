@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.2.0...0.2.1) - 2024-12-12
+
+### Other
+
+- try to fix concurrent update of rustup
+- use a non default GITHUB_TOKEN to trigger workflow
+- release v0.2.0
+
 ## [0.2.0](https://github.com/cdviz-dev/cdviz-collector/releases/tag/0.2.0) - 2024-12-12
 
 ### Added
