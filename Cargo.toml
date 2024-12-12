@@ -1,6 +1,6 @@
 [package]
 name = "cdviz-collector"
-description = "A service & cli to collect SDLC/CI/CD events and to dispatch as cdevents"
+description = "A service & cli to collect SDLC/CI/CD events and to dispatch as cdevents."
 keywords = ["cd", "cdevents", "sdlc"]
 categories = []
 edition = "2021"
