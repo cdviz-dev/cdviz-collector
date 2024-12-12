@@ -4,6 +4,9 @@ RUST_WITHOUT = "rust-docs"
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = "http://127.0.0.1:4317"
 # OTEL_EXPORTER_OTLP_TRACES_PROTOCOL = "grpc"
 OTEL_TRACES_SAMPLER = "always_off"
+PG_OFFLINE_PWD = "mysecretpassword"
+PG_OFFLINE_USER = "me"
+PG_OFFLINE_URL = "postgres://{{env.PG_OFFLINE_USER}}:{{env.PG_OFFLINE_PWD}}@127.0.0.1:5432/{{env.PG_OFFLINE_USER}}"
 
 [tools]
 # "aqua:hadolint/hadolint" = "2"         # hadolint is a Dockerfile linter
@@ -79,28 +82,33 @@ run = [
 # #   git add CHANGELOG.md && git commit -m "📝 update CHANGELOG" && git push
 
 [vars]
-PG_OFFLINE_PWD = "mysecretpassword"
-PG_OFFLINE_USER = "me"
-PG_OFFLINE_URL = "postgres://{{vars.PG_OFFLINE_USER}}:{{vars.PG_OFFLINE_PWD}}@127.0.0.1:5432/{{vars.PG_OFFLINE_USER}}"
+
+
+[tasks."db:start"]
+description = "start a local db"
+shell = "bash -c"
+run = ["docker rm -f postgres || true", "sleep 3", """
+    docker run --name postgres \
+        -e "POSTGRES_PASSWORD=$PG_OFFLINE_PWD" \
+        -e "POSTGRES_USER=$PG_OFFLINE_USER" \
+        -v "$MISE_CONFIG_ROOT/tests/assets/db:/docker-entrypoint-initdb.d" \
+        -p 5432:5432 -dpostgres:16
+    """]
+
+[tasks."db:stop"]
+description = "stop & delete a local db"
+run = ["docker rm -f postgres"]
 
 [tasks."db:prepare-offline"]
 depends = ["install:sqlx-cli"]
 description = "update db definition to be able compile sqlx code"
 run = [
-    "docker rm -f postgres || true",
-    "sleep 3",
-    """
-    docker run --name postgres \
-        -e POSTGRES_PASSWORD={{vars.PG_OFFLINE_PWD}} \
-        -e POSTGRES_USER={{vars.PG_OFFLINE_USER}} \
-        -v "$MISE_CONFIG_ROOT"/../cdviz-db/src:/docker-entrypoint-initdb.d \
-        -p 5432:5432 -d postgres:16
-    """,
+    "mise run db:start",
     "sleep 5",
-    "sqlx database create --database-url {{vars.PG_OFFLINE_URL}}",
-    "cargo sqlx prepare --workspace --database-url {{vars.PG_OFFLINE_URL}}",
-    "sqlx database drop -y --database-url {{vars.PG_OFFLINE_URL}}",
-    "docker rm -f postgres",
+    "sqlx database create --database-ur \"$PG_OFFLINE_URL\"",
+    "cargo sqlx prepare --workspace --database-url \"$PG_OFFLINE_URL\"",
+    "sqlx database drop -y --database-url \"PG_OFFLINE_URL\"",
+    "mise run db:stop",
 ]
 
 [tasks."run"]
