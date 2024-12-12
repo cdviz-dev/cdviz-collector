@@ -18,13 +18,11 @@ rust = "1.83.0"                        # the rust tool stack (with cargo, fmt, c
 "cargo:cargo-deny" = "latest"
 "cargo:cargo-nextest" = "latest"
 
-[tasks."install:rustfmt"]
+[tasks."install:rustcomponents"]
 hide = true
-run = ["rustup component add rustfmt"]
-
-[tasks."install:clippy"]
-hide = true
-run = ["rustup component add clippy"]
+run = [
+    "rustup component add rustfmt clippy", # not installed by rust-toolchain.toml ??
+]
 
 [tasks."install:sqlx-cli"]
 hide = true
@@ -39,11 +37,12 @@ run = "cargo hack check --each-feature --no-dev-deps"
 run = "cargo build"
 
 [tasks."format"]
-depends = ["install:rustfmt"]
+depends = ["install:rustcomponents"]
 description = "Format the code and sort dependencies"
 run = ["cargo fmt", "cargo sort --grouped"]
 
 [tasks."deny"]
+depends = ["install:rustcomponents"]
 run = ["cargo tree -i opentelemetry", "cargo deny --all-features check"]
 
 [tasks."lint"]
@@ -55,7 +54,7 @@ description = "Lint all the code (megalinter + lint_rust)"
 # - lint:megalinter
 
 [tasks."lint:rust"]
-depends = ["install:rustfmt", "install:clippy"]
+depends = ["install:rustcomponents"]
 run = [
     "cargo fmt --all -- --check",
     "cargo sort --grouped --check",
