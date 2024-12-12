@@ -1,5 +1,5 @@
 [toolchain]
 # `mise` set the env var RUSTUP_TOOLCHAIN and in docker use the provided toolchain => no channel set
 # channel = "1.83.0"
-components = ["rustfmt", "clippy"]
+components = ["rustc", "cargo", "rust-std", "clippy", "rustfmt"]
 profile = "minimal"
