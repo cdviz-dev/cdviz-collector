@@ -1,3 +1,5 @@
+#! run `dist init` after modifying this file to set up your CI
+#
 [workspace]
 members = ["cargo:."]
 
@@ -22,6 +24,8 @@ publish-jobs = ["homebrew"]
 install-updater = false
 # Post-announce jobs to run in CI
 post-announce-jobs = ["./release-after"]
+# Whether CI should trigger releases with dispatches instead of tag pushes
+dispatch-releases = true
 
 [dist.github-custom-runners]
 # buildjet could be used to build the binaries (faster, cheaper? than github's runners)
