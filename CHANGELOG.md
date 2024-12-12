@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.2.2...0.2.3) - 2024-12-12
+
+### Other
+
+- fix release-after
+- ci; build container by downloading pre-built binaries (vs build from source)
+- try to build rust with the same toolchain
+- switch to manual release (for tuning,...)
+- reduce the number of call of megalinter (avoid trigger on tag)
+- tune dist/release to focus on what is needed (and reduce cost)
+
 ## [0.2.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.2.1...0.2.2) - 2024-12-12
 
 ### Other
