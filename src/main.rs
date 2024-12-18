@@ -48,7 +48,7 @@ enum Command {
 }
 
 //TODO use logfmt
-fn init_log(verbose: &Verbosity) -> Result<TracingGuard> {
+fn init_log(verbose: Verbosity) -> Result<TracingGuard> {
     let level = verbose.log_level().map(|level| level.to_string());
     std::env::set_var(
         "RUST_LOG",
@@ -65,7 +65,7 @@ fn init_log(verbose: &Verbosity) -> Result<TracingGuard> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let _guard = init_log(&cli.verbose)?;
+    let _guard = init_log(cli.verbose)?;
     let ok = match cli.command {
         Command::Connect(args) => connect::connect(args).await?,
         #[cfg(feature = "tool_transform")]
