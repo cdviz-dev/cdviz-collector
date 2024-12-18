@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4](https://github.com/cdviz-dev/cdviz-collector/compare/0.2.3...0.2.4) - 2024-12-18
+
+### Other
+
+- *(deps)* commit the Cargo.lock of executable
+- capture samples of kubewatch events
+- enable renovate as github-action
+
 ## [0.2.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.2.2...0.2.3) - 2024-12-12
 
 ### Other
