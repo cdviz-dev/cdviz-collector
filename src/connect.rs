@@ -73,18 +73,29 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
         .into_iter()
         .filter(|(_name, config)| config.is_enabled())
         .inspect(|(name, _config)| tracing::info!(kind = "source", name, "starting"))
-        .map(|(name, config)| sources::start(&name, config, tx.clone()))
-        .collect::<Vec<_>>();
+        .map(|(name, config)| sources::make(&name, &config, tx.clone()))
+        .collect::<Result<Vec<_>>>()?;
 
     if sources.is_empty() {
         tracing::error!("no source configured or started");
         return Err(errors::Error::NoSource);
     }
+    let mut join_handles = vec![];
+    let mut routes = vec![];
+    for source in sources {
+        match source {
+            sources::extractors::Extractor::Task(task) => join_handles.push(task),
+            sources::extractors::Extractor::Webhook(route) => routes.push(route),
+        }
+    }
+
+    let servers = vec![crate::http::launch(&config.http, routes)];
 
     //TODO use tokio JoinSet?
     sinks
         .into_iter()
-        .chain(sources)
+        .chain(join_handles)
+        .chain(servers)
         .collect::<TryJoinAll<_>>()
         .await
         .map_err(|err| Error::from(err.to_string()))?;
