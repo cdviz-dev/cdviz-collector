@@ -5,9 +5,8 @@ pub(crate) mod parsers;
 
 use self::filter::{FilePatternMatcher, Filter};
 use self::parsers::{Parser, ParserEnum};
-use super::{EventSourcePipe, Extractor};
+use super::EventSourcePipe;
 use crate::errors::Result;
-use async_trait::async_trait;
 use futures::TryStreamExt;
 use opendal::Metakey;
 use opendal::Operator;
@@ -78,11 +77,8 @@ impl OpendalExtractor {
         }
         Ok(())
     }
-}
 
-#[async_trait]
-impl Extractor for OpendalExtractor {
-    async fn run(&mut self) -> Result<()> {
+    pub(crate) async fn run(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.run_once().await {
                 tracing::warn!(?err, filter = ?self.filter, scheme =? self.op.info().scheme(), root =? self.op.info().root(), "fail during scanning");

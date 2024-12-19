@@ -1,29 +1,16 @@
 pub(crate) mod extractors;
-#[cfg(feature = "source_http")]
-pub(crate) mod http;
 #[cfg(feature = "source_opendal")]
 pub(crate) mod opendal;
 mod send_cdevents;
 pub(crate) mod transformers;
+pub(crate) mod webhook;
 
 use crate::errors::Result;
 use crate::pipes::Pipe;
 use crate::{Message, Sender};
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use tokio::task::JoinHandle;
-
-// #[enum_dispatch]
-// #[allow(clippy::enum_variant_names, clippy::large_enum_variant)]
-// enum SourceEnum {
-//     #[cfg(feature = "source_http")]
-//     HttpSource,
-//     NoopSource,
-//     #[cfg(feature = "source_opendal")]
-//     OpendalSource,
-// }
 
 // TODO support name/reference for extractor / transformer
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -53,18 +40,18 @@ impl Config {
     }
 }
 
-pub(crate) fn start(_name: &str, config: Config, tx: Sender<Message>) -> JoinHandle<Result<()>> {
-    tokio::spawn(async move {
-        let mut pipe: EventSourcePipe = Box::new(send_cdevents::Processor::new(tx));
-        let mut tconfigs = config.transformers.clone();
-        tconfigs.reverse();
-        for tconfig in tconfigs {
-            pipe = tconfig.make_transformer(pipe)?;
-        }
-        let mut extractor = config.extractor.make_extractor(pipe)?;
-        extractor.run().await?;
-        Ok(())
-    })
+pub(crate) fn make(
+    _name: &str,
+    config: &Config,
+    tx: Sender<Message>,
+) -> Result<extractors::Extractor> {
+    let mut pipe: EventSourcePipe = Box::new(send_cdevents::Processor::new(tx));
+    let mut tconfigs = config.transformers.clone();
+    tconfigs.reverse();
+    for tconfig in tconfigs {
+        pipe = tconfig.make_transformer(pipe)?;
+    }
+    config.extractor.make_extractor(pipe)
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
@@ -76,8 +63,3 @@ pub struct EventSource {
 
 // TODO explore to use enum_dispatch instead of Box(dyn) on EventSourcePipe (a recursive structure)
 pub type EventSourcePipe = Box<dyn Pipe<Input = EventSource> + Send + Sync>;
-
-#[async_trait]
-pub trait Extractor: Send + Sync {
-    async fn run(&mut self) -> Result<()>;
-}

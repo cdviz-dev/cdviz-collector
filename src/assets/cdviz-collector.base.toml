@@ -1,3 +1,7 @@
+[http]
+host = "0.0.0.0"
+port = 8080
+
 [sinks.debug]
 enabled = false
 type = "debug"
@@ -31,9 +35,8 @@ parser = "json"
 enabled = false
 
 [sources.cdevents_webhook.extractor]
-type = "http"
-host = "0.0.0.0"
-port = 8080
+type = "webhook"
+id = "000"
 
 [transformers.passthrough]
 type = "passthrough"

@@ -1,4 +1,4 @@
-use crate::{errors, sinks, sources};
+use crate::{errors, http, sinks, sources};
 
 use figment::{
     providers::{Env, Format, Serialized, Toml},
@@ -13,6 +13,7 @@ pub(crate) struct Config {
     pub(crate) sinks: HashMap<String, sinks::Config>,
     // extractors: HashMap<String, sources::extractors::Config>,
     pub(crate) transformers: HashMap<String, sources::transformers::Config>,
+    pub(crate) http: http::Config,
 }
 
 impl Config {
