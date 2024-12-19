@@ -13,8 +13,8 @@ publish = true
 
 [dependencies]
 async-trait = "0.1"
-axum = { version = "0.7", optional = true }
-axum-tracing-opentelemetry = { version = "0.24", optional = true }
+axum = "0.7"
+axum-tracing-opentelemetry = "0.24"
 bytes = { version = "1.8", optional = true }
 cdevents-sdk = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
@@ -71,13 +71,13 @@ vrl = { version = "0.21", optional = true }
 
 [dev-dependencies]
 assert2 = "0.3"
-# axum-test = "14"
+axum-test = "16"
 cdevents-sdk = { version = "0.1", features = ["testkit"] }
 figment = { version = "0.10", features = ["toml", "env", "test"] }
 pretty_assertions = "1"
 proptest = "1"
 rstest = "0.24"
-rustainers = "0.13"
+rustainers = "0.12"                                                # 0.13 doesn't work on machine with ipv6 enabled
 tempfile = "3"
 test-strategy = "0.4"
 tracing-subscriber = "0.3"
@@ -89,7 +89,6 @@ default = [
   "sink_db",
   "sink_folder",
   "sink_http",
-  "source_http",
   "source_opendal",
   "tool_transform",
 ]
@@ -107,7 +106,6 @@ sink_http = [
   "reqwest/rustls-tls",
 ]
 #! ### Sources
-source_http = ["dep:axum", "dep:axum-tracing-opentelemetry"]
 source_opendal = [
   "dep:bytes",
   "dep:csv",
