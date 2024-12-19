@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4](https://github.com/cdviz-dev/cdviz-collector/compare/0.2.3...0.2.4) - 2024-12-19
+
+### Fixed
+
+- *(deps)* update rust crate init-tracing-opentelemetry to 0.25
+
+### Other
+
+- *(deps)* update rust crate rustainers to 0.13
+- *(deps)* commit the Cargo.lock of executable
+- capture samples of kubewatch events
+- enable renovate as github-action
+
 ## [0.2.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.2.2...0.2.3) - 2024-12-12
 
 ### Other
