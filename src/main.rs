@@ -1,6 +1,7 @@
 mod config;
 mod connect;
 mod errors;
+mod http;
 mod pipes;
 mod sinks;
 mod sources;

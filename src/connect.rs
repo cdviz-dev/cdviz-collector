@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     config,
@@ -68,12 +68,13 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
         return Err(errors::Error::NoSink);
     }
 
+    let webhooks = Arc::new(dashmap::DashMap::new());
     let sources = config
         .sources
         .into_iter()
         .filter(|(_name, config)| config.is_enabled())
         .inspect(|(name, _config)| tracing::info!(kind = "source", name, "starting"))
-        .map(|(name, config)| sources::start(&name, config, tx.clone()))
+        .map(|(name, config)| sources::start(&name, config, tx.clone(), Arc::clone(&webhooks)))
         .collect::<Vec<_>>();
 
     if sources.is_empty() {
@@ -81,10 +82,13 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
         return Err(errors::Error::NoSource);
     }
 
+    let servers = vec![crate::http::launch(&config.http, webhooks)];
+
     //TODO use tokio JoinSet?
     sinks
         .into_iter()
         .chain(sources)
+        .chain(servers)
         .collect::<TryJoinAll<_>>()
         .await
         .map_err(|err| Error::from(err.to_string()))?;
