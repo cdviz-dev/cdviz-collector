@@ -78,7 +78,7 @@ figment = { version = "0.10", features = ["toml", "env", "test"] }
 pretty_assertions = "1"
 proptest = "1"
 rstest = "0.23"
-rustainers = "0.13"
+rustainers = "0.14"
 tempfile = "3"
 test-strategy = "0.4"
 tracing-subscriber = "0.3"
