@@ -45,7 +45,7 @@ init-tracing-opentelemetry = { version = "0.25", features = [
   "logfmt",
 ] }
 multihash = "0.19"
-opendal = { version = "0.50", default-features = false, features = [
+opendal = { version = "0.51", default-features = false, features = [
   "services-fs",
   "services-s3",
 ], optional = true }
