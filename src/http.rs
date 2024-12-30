@@ -1,7 +1,6 @@
-use crate::errors::{self, Error};
+use crate::errors::{Error, IntoDiagnostic, ReportWrapper, Result};
 use axum::{http, response::IntoResponse, routing::get, Json, Router};
 use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
-use errors::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::net::{IpAddr, SocketAddr};
@@ -29,12 +28,12 @@ pub(crate) fn launch(config: &Config, routes: Vec<Router>) -> JoinHandle<Result<
         let app = app(routes);
         // run it
         tracing::warn!("listening on {}", addr);
-        let listener = tokio::net::TcpListener::bind(addr).await?;
+        let listener = tokio::net::TcpListener::bind(addr).await.into_diagnostic()?;
         axum::serve(listener, app.into_make_service())
             //FIXME gracefull shutdown is in wip for axum 0.7
             // see [axum/examples/graceful-shutdown/src/main.rs at main · tokio-rs/axum](https://github.com/tokio-rs/axum/blob/main/examples/graceful-shutdown/src/main.rs)
             // .with_graceful_shutdown(shutdown_signal())
-            .await?;
+            .await.into_diagnostic()?;
         Ok(())
     })
 }
@@ -66,13 +65,23 @@ impl IntoResponse for Error {
         //     Error::Db(e) => (http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
         //     _ => (http::StatusCode::INTERNAL_SERVER_ERROR, "".to_string()),
         // };
-        let (status, error_message) = (http::StatusCode::INTERNAL_SERVER_ERROR, String::new());
-        tracing::warn!(?error_message);
+        tracing::warn!(error = ?self);
         let body = Json(json!({
-            "error": error_message,
+            "error": "",
+        }));
+        (http::StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+    }
+}
+
+impl IntoResponse for ReportWrapper {
+    //TODO report the trace_id into the message to help to debug
+    fn into_response(self) -> axum::response::Response {
+        tracing::warn!(error = ?self);
+        let body = Json(json!({
+            "error": "",
         }));
 
-        (status, body).into_response()
+        (http::StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
     }
 }
 

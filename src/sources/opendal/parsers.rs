@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    errors::Result,
+    errors::{IntoDiagnostic, Result},
     sources::{EventSource, EventSourcePipe},
 };
 use bytes::Buf;
@@ -75,9 +75,9 @@ impl JsonParser {
 
 impl Parser for JsonParser {
     async fn parse(&mut self, op: &Operator, entry: &Entry) -> Result<()> {
-        let bytes = op.read(entry.path()).await?;
+        let bytes = op.read(entry.path()).await.into_diagnostic()?;
         let metadata = extract_metadata(op, entry);
-        let body: serde_json::Value = serde_json::from_reader(bytes.reader())?;
+        let body: serde_json::Value = serde_json::from_reader(bytes.reader()).into_diagnostic()?;
         let event = EventSource { metadata, body, ..Default::default() };
         self.next.send(event)
     }
@@ -97,12 +97,12 @@ impl Parser for CsvRowParser {
     async fn parse(&mut self, op: &Operator, entry: &Entry) -> Result<()> {
         use csv::Reader;
 
-        let bytes = op.read(entry.path()).await?;
+        let bytes = op.read(entry.path()).await.into_diagnostic()?;
         let mut rdr = Reader::from_reader(bytes.reader());
-        let headers = rdr.headers()?.clone();
+        let headers = rdr.headers().into_diagnostic()?.clone();
         let metadata = extract_metadata(op, entry);
         for record in rdr.records() {
-            let record = record?;
+            let record = record.into_diagnostic()?;
             let body = json!(headers.iter().zip(record.iter()).collect::<HashMap<&str, &str>>());
             let event = EventSource { metadata: metadata.clone(), body, ..Default::default() };
             self.next.send(event)?;

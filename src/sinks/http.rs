@@ -19,7 +19,7 @@ pub(crate) struct Config {
 }
 
 impl TryFrom<Config> for HttpSink {
-    type Error = crate::errors::Error;
+    type Error = Report;
 
     fn try_from(value: Config) -> Result<Self> {
         Ok(HttpSink::new(value.destination))
@@ -57,8 +57,8 @@ impl Sink for HttpSink {
         req = match event_result {
             Ok(event_builder) => {
                 let event_result = event_builder.build();
-                let value = event_result?;
-                req.event(value)?
+                let value = event_result.into_diagnostic()?;
+                req.event(value).into_diagnostic()?
             }
             Err(err) => {
                 tracing::warn!(error = ?err, "Failed to convert to cloudevents");
@@ -66,7 +66,7 @@ impl Sink for HttpSink {
                 req.json(&cd_event)
             }
         };
-        req.send().await?;
+        req.send().await.into_diagnostic()?;
 
         Ok(())
     }

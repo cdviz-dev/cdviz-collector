@@ -1,6 +1,7 @@
-use crate::errors::{Error, Result};
+use crate::errors::{IntoDiagnostic, Result};
 use crate::pipes::Pipe;
 use crate::sources::{EventSource, EventSourcePipe};
+use miette::bail;
 use vrl::compiler::{Program, TargetValue};
 use vrl::core::Value;
 use vrl::prelude::state::RuntimeState;
@@ -27,7 +28,7 @@ impl Processor {
         match vrl::compiler::compile(src, &fns) {
             Err(err) => {
                 tracing::error!("VRL compilation error: {:?}", err);
-                Err(Error::from("VRL compilation error"))
+                bail!("VRL compilation error")
             }
             Ok(res) => Ok(Self { next, renderer: res.program }),
         }
@@ -44,7 +45,8 @@ impl Pipe for Processor {
 
         let mut target = TargetValue {
             // the value starts as just an object with a single field "x" set to 1
-            value: serde_json::from_value(serde_json::to_value(input)?)?,
+            value: serde_json::from_value(serde_json::to_value(input).into_diagnostic()?)
+                .into_diagnostic()?,
             // the metadata is empty
             metadata: Value::Object(std::collections::BTreeMap::new()),
             // and there are no secrets associated with the target
@@ -60,9 +62,11 @@ impl Pipe for Processor {
         let mut ctx = Context::new(&mut target, &mut state, &timezone);
 
         // This executes the VRL program, making any modifications to the target, and returning a result.
-        let res = self.renderer.resolve(&mut ctx)?;
+        let res = self.renderer.resolve(&mut ctx).into_diagnostic()?;
 
-        let output: EventSource = serde_json::from_value(serde_json::to_value(res)?)?;
+        let output: EventSource =
+            serde_json::from_value(serde_json::to_value(res).into_diagnostic()?)
+                .into_diagnostic()?;
         self.next.send(output)
     }
 }

@@ -6,7 +6,7 @@ pub(crate) mod parsers;
 use self::filter::{FilePatternMatcher, Filter};
 use self::parsers::{Parser, ParserEnum};
 use super::EventSourcePipe;
-use crate::errors::Result;
+use crate::errors::{IntoDiagnostic, Result};
 use futures::TryStreamExt;
 use opendal::Metakey;
 use opendal::Operator;
@@ -42,7 +42,8 @@ pub(crate) struct OpendalExtractor {
 
 impl OpendalExtractor {
     pub(crate) fn try_from(value: &Config, next: EventSourcePipe) -> Result<Self> {
-        let op: Operator = Operator::via_iter(value.kind, value.parameters.clone())?;
+        let op: Operator =
+            Operator::via_iter(value.kind, value.parameters.clone()).into_diagnostic()?;
         let filter = Filter::from_patterns(FilePatternMatcher::from(&value.path_patterns)?);
         let parser = value.parser.make_parser(next)?;
         Ok(Self {
@@ -67,8 +68,8 @@ impl OpendalExtractor {
         .recursive(recursive)
         // Make sure content-length and last-modified been fetched.
         .metakey(Metakey::ContentLength | Metakey::LastModified)
-        .await?;
-        while let Some(entry) = lister.try_next().await? {
+        .await.into_diagnostic()?;
+        while let Some(entry) = lister.try_next().await.into_diagnostic()? {
             if filter.accept(&entry) {
                 if let Err(err) = parser.parse(op, &entry).await {
                     tracing::warn!(?err, path = entry.path(), "fail to process, skip");
