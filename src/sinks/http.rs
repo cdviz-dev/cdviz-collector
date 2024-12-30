@@ -1,15 +1,13 @@
+use super::Sink;
+use crate::errors::{IntoDiagnostic, Report, Result};
+use crate::Message;
 use cdevents_sdk::cloudevents::BuilderExt;
 use cloudevents::{EventBuilder, EventBuilderV10};
+use http_cloudevents::RequestBuilderExt;
 use reqwest::Url;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use serde::{Deserialize, Serialize};
-//use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
-use crate::errors::Result;
-use crate::Message;
-use http_cloudevents::RequestBuilderExt;
 use reqwest_tracing::TracingMiddleware;
-
-use super::Sink;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct Config {

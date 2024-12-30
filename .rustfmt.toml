@@ -1,5 +1,6 @@
 # Rustfmt configuration
 # https://github.com/rust-lang/rustfmt/blob/HEAD/Configurations.md
+unstable_features = true
 
 # Rustfmt cannot format long lines inside macros, but this option detects this.
 # This is unstable (tracking issue: https://github.com/rust-lang/rustfmt/issues/3391)
@@ -13,8 +14,11 @@ use_small_heuristics = "Max"
 overflow_delimited_expr = true
 # This is unstable (tracking issue: https://github.com/rust-lang/rustfmt/issues/4991).
 imports_granularity = "Crate"
+imports_indent = "Block"
+merge_imports = true
+reorder_imports = true
 # This is unstable (tracking issue: https://github.com/rust-lang/rustfmt/issues/5083).
-group_imports = "StdExternalCrate"
+group_imports = "StdExternalCrate" # not available on 2.0+
 
 # Apply rustfmt to more places.
 # This is unstable (tracking issue: https://github.com/rust-lang/rustfmt/issues/3348).
@@ -30,3 +34,4 @@ edition = "2021"
 hard_tabs = false
 newline_style = "Unix"
 tab_spaces = 4
+indent_style = "Block"

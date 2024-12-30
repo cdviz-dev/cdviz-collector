@@ -1,11 +1,12 @@
-use crate::{errors::Result, Message};
-
+use super::Sink;
+use crate::{
+    errors::{IntoDiagnostic, Report, Result},
+    Message,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use tracing::Instrument;
-
-use super::Sink;
 
 /// The database client config
 #[derive(Clone, Debug, Deserialize, Serialize)]
