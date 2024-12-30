@@ -6,19 +6,18 @@ pub(crate) mod folder;
 #[cfg(feature = "sink_http")]
 pub(crate) mod http;
 
-use crate::errors::Result;
+use crate::errors::{Report, Result};
 use crate::{Message, Receiver};
-use enum_dispatch::enum_dispatch;
-use serde::{Deserialize, Serialize};
-use tokio::task::JoinHandle;
-
 #[cfg(feature = "sink_db")]
 use db::DbSink;
 use debug::DebugSink;
+use enum_dispatch::enum_dispatch;
 #[cfg(feature = "sink_folder")]
 use folder::FolderSink;
 #[cfg(feature = "sink_http")]
 use http::HttpSink;
+use serde::{Deserialize, Serialize};
+use tokio::task::JoinHandle;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]

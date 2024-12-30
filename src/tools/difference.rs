@@ -1,4 +1,8 @@
-use crate::{errors::Result, tools::ui, utils::PathExt};
+use crate::{
+    errors::{IntoDiagnostic, Result},
+    tools::ui,
+    utils::PathExt,
+};
 use std::{collections::HashMap, path::Path, path::PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

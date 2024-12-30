@@ -1,3 +1,4 @@
+use super::EventSource;
 use crate::errors::{IntoDiagnostic, Result};
 use crate::pipes::Pipe;
 use crate::Message;
@@ -7,8 +8,6 @@ use multihash::Multihash;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use tokio::sync::broadcast::Sender;
-
-use super::EventSource;
 
 const RAW: u64 = 0x55;
 const SHA2_256: u64 = 0x12;

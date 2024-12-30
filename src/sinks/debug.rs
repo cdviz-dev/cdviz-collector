@@ -1,9 +1,7 @@
-use serde::{Deserialize, Serialize};
-
+use super::Sink;
 use crate::errors::{Report, Result};
 use crate::Message;
-
-use super::Sink;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub(crate) struct Config {

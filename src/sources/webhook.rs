@@ -1,3 +1,4 @@
+use super::EventSourcePipe;
 use crate::errors::ReportWrapper;
 use crate::sources::EventSource;
 use axum::extract::State;
@@ -6,8 +7,6 @@ use axum::Json;
 use futures::lock::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-
-use super::EventSourcePipe;
 
 /// The webhook config
 #[derive(Clone, Debug, Deserialize, Serialize)]

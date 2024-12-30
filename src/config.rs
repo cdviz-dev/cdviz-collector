@@ -1,5 +1,7 @@
-use crate::{errors, http, sinks, sources};
-
+use crate::{
+    errors::{Error, IntoDiagnostic, Result},
+    http, sinks, sources,
+};
 use figment::{
     providers::{Env, Format, Serialized, Toml},
     Figment,

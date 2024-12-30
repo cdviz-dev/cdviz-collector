@@ -1,7 +1,6 @@
+use crate::errors::{miette, Result};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
-
-use crate::errors::{miette, Result};
 
 pub trait PathExt {
     fn extract_filename(&self) -> Result<Cow<str>>;
