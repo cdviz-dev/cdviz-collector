@@ -10,7 +10,7 @@ mod utils;
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
-use errors::{Error, Result};
+use errors::{IntoDiagnostic, Result};
 use init_tracing_opentelemetry::tracing_subscriber_ext::TracingGuard;
 
 pub(crate) use connect::{Message, Receiver, Sender};
@@ -59,7 +59,7 @@ fn init_log(verbose: Verbosity) -> Result<TracingGuard> {
             .unwrap_or_else(|| "off".to_string()),
     );
     // very opinionated init of tracing, look as is source to make your own
-    init_tracing_opentelemetry::tracing_subscriber_ext::init_subscribers().map_err(Error::from)
+    init_tracing_opentelemetry::tracing_subscriber_ext::init_subscribers().into_diagnostic()
 }
 
 //TODO document the architecture and the configuration

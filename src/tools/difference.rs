@@ -27,14 +27,16 @@ impl Comparison {
 
 pub fn search_new_vs_out(directory: &Path) -> Result<HashMap<Comparison, Difference>> {
     let mut differences = HashMap::new();
-    for entry in std::fs::read_dir(directory)? {
-        let path = entry?.path();
+    for entry in std::fs::read_dir(directory).into_diagnostic()? {
+        let path = entry.into_diagnostic()?.path();
         let filename = path.extract_filename()?;
         if filename.ends_with(".new.json") {
             let comparison = Comparison::from_xxx_json(&path)?;
             if comparison.expected.exists() {
-                let expected_content = std::fs::read_to_string(&comparison.expected)?;
-                let actual_content = std::fs::read_to_string(&comparison.actual)?;
+                let expected_content =
+                    std::fs::read_to_string(&comparison.expected).into_diagnostic()?;
+                let actual_content =
+                    std::fs::read_to_string(&comparison.actual).into_diagnostic()?;
                 if expected_content != actual_content {
                     differences.insert(
                         comparison,
@@ -65,13 +67,14 @@ impl Difference {
         match self {
             Difference::Presence { expected, actual } => {
                 if *expected && !*actual {
-                    cliclack::log::warning(format!("missing: {label}"))?;
+                    cliclack::log::warning(format!("missing: {label}")).into_diagnostic()?;
                 } else {
-                    cliclack::log::warning(format!("unexpected : {label}"))?;
+                    cliclack::log::warning(format!("unexpected : {label}")).into_diagnostic()?;
                 }
             }
             Difference::StringContent { expected, actual } => {
-                cliclack::log::warning(format!("difference detected on: {label}\n"))?;
+                cliclack::log::warning(format!("difference detected on: {label}\n"))
+                    .into_diagnostic()?;
                 ui::show_difference_text(expected, actual, true)?;
             }
         }
@@ -87,7 +90,7 @@ impl Difference {
                         "Accept to remove existing {}?",
                         &comparison.label
                     ))? {
-                        std::fs::remove_file(&comparison.expected)?;
+                        std::fs::remove_file(&comparison.expected).into_diagnostic()?;
                         true
                     } else {
                         false
@@ -96,10 +99,10 @@ impl Difference {
                     "Accept to add new {}?",
                     &comparison.label
                 ))? {
-                    std::fs::rename(&comparison.actual, &comparison.expected)?;
+                    std::fs::rename(&comparison.actual, &comparison.expected).into_diagnostic()?;
                     true
                 } else {
-                    std::fs::remove_file(&comparison.actual)?;
+                    std::fs::remove_file(&comparison.actual).into_diagnostic()?;
                     false
                 }
             }
@@ -109,10 +112,10 @@ impl Difference {
                     "Accept to update {}?",
                     comparison.label
                 ))? {
-                    std::fs::rename(&comparison.actual, &comparison.expected)?;
+                    std::fs::rename(&comparison.actual, &comparison.expected).into_diagnostic()?;
                     true
                 } else {
-                    std::fs::remove_file(&comparison.actual)?;
+                    std::fs::remove_file(&comparison.actual).into_diagnostic()?;
                     false
                 }
             }

@@ -1,6 +1,6 @@
 #[allow(dead_code)]
 use super::Pipe;
-use crate::errors::{Error, Result};
+use crate::errors::{miette, Result};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Debug,
@@ -20,7 +20,7 @@ impl<I> Pipe for Processor<I> {
     type Input = I;
     fn send(&mut self, input: Self::Input) -> Result<()> {
         //.lock().unwrap() if mutex
-        self.buffer.lock().map_err(|err| Error::from(err.to_string()))?.push(input);
+        self.buffer.lock().map_err(|err| miette!("{}", err))?.push(input);
         Ok(())
     }
 }
@@ -47,7 +47,7 @@ where
     pub fn try_into_iter(&self) -> Result<std::vec::IntoIter<I>> {
         self.buffer
             .lock()
-            .map_err(|err| Error::from(err.to_string()))
+            .map_err(|err| miette!("{}", err))
             .map(|buffer| buffer.clone().into_iter())
     }
 }

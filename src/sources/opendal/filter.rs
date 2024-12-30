@@ -1,4 +1,4 @@
-use crate::errors::Result;
+use crate::errors::{IntoDiagnostic, Result};
 use chrono::DateTime;
 use chrono::Utc;
 use globset::GlobSet;
@@ -56,18 +56,29 @@ impl FilePatternMatcher {
             if pattern.starts_with('!') {
                 let glob = globset::GlobBuilder::new(&pattern.as_str()[1..])
                     .literal_separator(true)
-                    .build()?;
+                    .build()
+                    .into_diagnostic()?;
                 builder_exclude.add(glob);
                 count_exclude += 1;
             } else {
-                let glob =
-                    globset::GlobBuilder::new(pattern.as_str()).literal_separator(true).build()?;
+                let glob = globset::GlobBuilder::new(pattern.as_str())
+                    .literal_separator(true)
+                    .build()
+                    .into_diagnostic()?;
                 builder_include.add(glob);
                 count_include += 1;
             }
         }
-        let include = if count_include == 0 { None } else { Some(builder_include.build()?) };
-        let exclude = if count_exclude == 0 { None } else { Some(builder_exclude.build()?) };
+        let include = if count_include == 0 {
+            None
+        } else {
+            Some(builder_include.build().into_diagnostic()?)
+        };
+        let exclude = if count_exclude == 0 {
+            None
+        } else {
+            Some(builder_exclude.build().into_diagnostic()?)
+        };
         Ok(Self::new(include, exclude))
     }
 

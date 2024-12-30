@@ -56,6 +56,7 @@ pub fn resolve_transformer_refs(
                 .get(name)
                 .cloned()
                 .ok_or_else(|| Error::ConfigTransformerNotFound(name.to_string()))
+                .into_diagnostic()
         })
         .collect::<Result<Vec<_>>>()?;
     Ok(transformers)

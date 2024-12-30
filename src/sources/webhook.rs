@@ -1,4 +1,4 @@
-use crate::errors::Result;
+use crate::errors::ReportWrapper;
 use crate::sources::EventSource;
 use axum::extract::State;
 use axum::routing::{post, Router};
@@ -31,7 +31,7 @@ pub(crate) fn make_route(config: &Config, next: EventSourcePipe) -> Router {
 async fn webhook(
     State(next): State<Arc<Mutex<EventSourcePipe>>>,
     Json(body): Json<serde_json::Value>,
-) -> Result<axum::http::StatusCode> {
+) -> std::result::Result<axum::http::StatusCode, ReportWrapper> {
     tracing::trace!("received {:?}", &body);
     let event = EventSource { body, ..Default::default() };
     next.lock().await.send(event)?;

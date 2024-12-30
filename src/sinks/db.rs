@@ -34,7 +34,7 @@ pub(crate) struct Config {
 ///
 /// Fail if we cannot connect to the database
 impl TryFrom<Config> for DbSink {
-    type Error = crate::errors::Error;
+    type Error = Report;
 
     fn try_from(config: Config) -> Result<Self> {
         let pool_options = PgPoolOptions::new()
@@ -50,7 +50,7 @@ impl TryFrom<Config> for DbSink {
             "Using the database"
         );
 
-        let pool = pool_options.connect_lazy(&config.url)?;
+        let pool = pool_options.connect_lazy(&config.url).into_diagnostic()?;
 
         Ok(Self { pool })
     }
@@ -66,7 +66,7 @@ impl Sink for DbSink {
         store_event(
             &self.pool,
             // TODO build Event from raw json
-            Event { payload: serde_json::to_value(&message.cdevent)? },
+            Event { payload: serde_json::to_value(&message.cdevent).into_diagnostic()? },
         )
         .await?;
         Ok(())
@@ -99,7 +99,8 @@ async fn store_event(pg_pool: &PgPool, event: Event) -> Result<()> {
     sqlx::query!("CALL store_cdevent($1)", event.payload)
         .execute(pg_pool)
         .instrument(build_otel_span("store_cdevent"))
-        .await?;
+        .await
+        .into_diagnostic()?;
     Ok(())
 }
 
