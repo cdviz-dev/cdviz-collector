@@ -1,4 +1,4 @@
-use crate::errors::{Error, Result};
+use crate::errors::{IntoDiagnostic, Result};
 
 pub fn show_difference_text(old: &str, new: &str, show_whitespace: bool) -> Result<()> {
     use console::{style, Style};
@@ -43,7 +43,7 @@ pub fn show_difference_text(old: &str, new: &str, show_whitespace: bool) -> Resu
             }
         }
     }
-    cliclack::note("", message)?;
+    cliclack::note("", message).into_diagnostic()?;
     Ok(())
 }
 
@@ -63,5 +63,5 @@ fn replace_blank_char(txt: &str) -> String {
 }
 
 pub fn ask_to_update_sample(msg: &str) -> Result<bool> {
-    cliclack::confirm(msg).interact().map_err(Error::from)
+    cliclack::confirm(msg).interact().into_diagnostic()
 }

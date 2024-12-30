@@ -57,7 +57,7 @@ impl Config {
 }
 
 impl TryFrom<Config> for SinkEnum {
-    type Error = crate::errors::Error;
+    type Error = Report;
 
     fn try_from(value: Config) -> Result<Self> {
         let out = match value {

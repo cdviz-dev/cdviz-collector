@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::{
     config,
-    errors::{self, Error, Result},
+    errors::{Error, IntoDiagnostic, Result},
     sinks, sources,
 };
 use cdevents_sdk::CDEvent;
@@ -50,7 +50,7 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
     let config = config::Config::from_file(args.config)?;
 
     if let Some(dir) = args.directory {
-        std::env::set_current_dir(dir)?;
+        std::env::set_current_dir(dir).into_diagnostic()?;
     }
 
     let (tx, _) = broadcast::channel::<Message>(100);
@@ -65,7 +65,7 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
 
     if sinks.is_empty() {
         tracing::error!("no sink configured or started");
-        return Err(errors::Error::NoSink);
+        return Err(Error::NoSink).into_diagnostic();
     }
 
     let sources = config
@@ -78,7 +78,7 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
 
     if sources.is_empty() {
         tracing::error!("no source configured or started");
-        return Err(errors::Error::NoSource);
+        return Err(Error::NoSource).into_diagnostic();
     }
     let mut join_handles = vec![];
     let mut routes = vec![];
@@ -98,7 +98,7 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
         .chain(servers)
         .collect::<TryJoinAll<_>>()
         .await
-        .map_err(|err| Error::from(err.to_string()))?;
+        .into_diagnostic()?;
     // handlers.append(&mut sinks);
     // handlers.append(&mut sources);
     //tokio::try_join!(handlers).await?;

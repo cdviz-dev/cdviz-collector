@@ -17,12 +17,13 @@ pub(crate) struct Config {
 }
 
 impl Config {
-    pub fn from_file(config_file: Option<PathBuf>) -> errors::Result<Self> {
+    pub fn from_file(config_file: Option<PathBuf>) -> Result<Self> {
         if let Some(ref config_file) = config_file {
             if !config_file.exists() {
-                return Err(errors::Error::ConfigNotFound {
+                return Err(Error::ConfigNotFound {
                     path: config_file.to_string_lossy().to_string(),
-                });
+                })
+                .into_diagnostic();
             }
         }
         let config_file_base = include_str!("assets/cdviz-collector.base.toml");
@@ -32,8 +33,10 @@ impl Config {
         if let Some(config_file) = config_file {
             figment = figment.merge(Toml::file(config_file.as_path()));
         }
-        let mut config: Config =
-            figment.merge(Env::prefixed("CDVIZ_COLLECTOR__").split("__")).extract()?;
+        let mut config: Config = figment
+            .merge(Env::prefixed("CDVIZ_COLLECTOR__").split("__"))
+            .extract()
+            .into_diagnostic()?;
 
         // resolve transformers references
         config.sources.iter_mut().try_for_each(|(_name, source_config)| {

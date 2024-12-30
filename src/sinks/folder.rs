@@ -1,4 +1,4 @@
-use crate::errors::Result;
+use crate::errors::{IntoDiagnostic, Report, Result};
 use crate::Message;
 use opendal::{Operator, Scheme};
 use serde::{Deserialize, Serialize};
@@ -18,10 +18,10 @@ pub(crate) struct Config {
 }
 
 impl TryFrom<Config> for FolderSink {
-    type Error = crate::errors::Error;
+    type Error = Report;
 
     fn try_from(value: Config) -> Result<Self> {
-        let op = Operator::via_iter(value.kind, value.parameters.clone())?;
+        let op = Operator::via_iter(value.kind, value.parameters.clone()).into_diagnostic()?;
         Ok(Self { op })
     }
 }
@@ -33,9 +33,12 @@ pub(crate) struct FolderSink {
 impl Sink for FolderSink {
     async fn send(&self, msg: &Message) -> Result<()> {
         let id = msg.cdevent.id();
-        let mut writer = self.op.writer(&format!("{id}.json")).await?;
-        writer.write(serde_json::to_string(&msg.cdevent)?).await?;
-        writer.close().await?;
+        let mut writer = self.op.writer(&format!("{id}.json")).await.into_diagnostic()?;
+        writer
+            .write(serde_json::to_string(&msg.cdevent).into_diagnostic()?)
+            .await
+            .into_diagnostic()?;
+        writer.close().await.into_diagnostic()?;
         Ok(())
     }
 }
