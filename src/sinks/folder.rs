@@ -1,11 +1,10 @@
+use super::Sink;
 use crate::errors::{IntoDiagnostic, Report, Result};
 use crate::Message;
 use opendal::{Operator, Scheme};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use std::collections::HashMap;
-
-use super::Sink;
 
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

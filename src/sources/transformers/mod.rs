@@ -3,14 +3,13 @@ mod hbs;
 #[cfg(feature = "transformer_vrl")]
 mod vrl;
 
-use std::collections::HashMap;
-
 use super::EventSourcePipe;
 use crate::{
-    errors::{Error, Result},
+    errors::{Error, IntoDiagnostic, Result},
     pipes::{discard_all, log, passthrough},
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(tag = "type")]

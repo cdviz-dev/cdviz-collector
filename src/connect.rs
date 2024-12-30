@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::{
     config,
     errors::{Error, IntoDiagnostic, Result},
@@ -8,6 +6,7 @@ use crate::{
 use cdevents_sdk::CDEvent;
 use clap::Args;
 use futures::future::TryJoinAll;
+use std::path::PathBuf;
 use tokio::sync::broadcast;
 
 #[derive(Debug, Clone, Args)]

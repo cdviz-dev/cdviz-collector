@@ -10,10 +10,9 @@ mod utils;
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
+pub(crate) use connect::{Message, Receiver, Sender};
 use errors::{IntoDiagnostic, Result};
 use init_tracing_opentelemetry::tracing_subscriber_ext::TracingGuard;
-
-pub(crate) use connect::{Message, Receiver, Sender};
 
 // Use Jemalloc only for musl-64 bits platforms
 #[cfg(all(target_env = "musl", target_pointer_width = "64"))]
