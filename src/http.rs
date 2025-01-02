@@ -1,10 +1,12 @@
 use crate::errors::{Error, IntoDiagnostic, ReportWrapper, Result};
-use axum::{http, response::IntoResponse, routing::get, Json, Router};
+use axum::{extract::DefaultBodyLimit, http, response::IntoResponse, routing::get, Json, Router};
 use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::net::{IpAddr, SocketAddr};
+use std::time::Duration;
 use tokio::task::JoinHandle;
+use tower_http::{compression::CompressionLayer, timeout::TimeoutLayer};
 
 /// The http server config
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -30,12 +32,37 @@ pub(crate) fn launch(config: &Config, routes: Vec<Router>) -> JoinHandle<Result<
         tracing::warn!("listening on {}", addr);
         let listener = tokio::net::TcpListener::bind(addr).await.into_diagnostic()?;
         axum::serve(listener, app.into_make_service())
-            //FIXME gracefull shutdown is in wip for axum 0.7
             // see [axum/examples/graceful-shutdown/src/main.rs at main · tokio-rs/axum](https://github.com/tokio-rs/axum/blob/main/examples/graceful-shutdown/src/main.rs)
-            // .with_graceful_shutdown(shutdown_signal())
+            // TODO check graceful shutdown with spawned task & integration with main
+            .with_graceful_shutdown(shutdown_signal())
             .await.into_diagnostic()?;
         Ok(())
     })
+}
+
+#[allow(clippy::expect_used)]
+#[allow(clippy::ignored_unit_patterns)]
+async fn shutdown_signal() {
+    use tokio::signal;
+    let ctrl_c = async {
+        signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
 
 //TODO make route per extractor/sources
@@ -52,6 +79,14 @@ fn app(routes: Vec<Router>) -> Router {
         .layer(OtelAxumLayer::default())
         .route("/healthz", get(health)) // request processed without span / trace
         .route("/readyz", get(health)) // request processed without span / trace
+        .layer((
+            CompressionLayer::new(),
+            // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
+            // requests don't hang forever.
+            TimeoutLayer::new(Duration::from_secs(3)),
+            // Replace the default of 2MB with 1MB.
+            DefaultBodyLimit::max(1024*1024),
+        ))
 }
 
 async fn health() -> impl IntoResponse {
