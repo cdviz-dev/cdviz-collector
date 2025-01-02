@@ -88,69 +88,42 @@ impl IntoResponse for ReportWrapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum_test::{TestServer, TestServerBuilder};
+    use axum::{
+        body::Body,
+        http::{self, Request, StatusCode},
+    };
     use rstest::*;
     use serde_json::json;
-
-    struct TestContext {
-        http: TestServer,
-        // keep tracing subscriber
-        _tracing_guard: tracing::subscriber::DefaultGuard,
-    }
-
-    // #[fixture]
-    // //#[once] // only work with non-async, non generic fixtures
-    // // workaround explained at [Async once fixtures · Issue #141 · la10736/rstest](https://github.com/la10736/rstest/issues/141)
-    // // no drop call on the fixture like on static
-    // fn pg() -> (PgPool, Container<Postgres>) {
-    //     futures::executor::block_on(async { async_pg().await })
-    // }
-
-    // servers() is called once per test, so db could only started several times.
-    // We could not used `static` (or the once on fixtures) because statis are not dropped at end of the test
-    #[fixture]
-    async fn testcontext() -> TestContext {
-        let subscriber = tracing_subscriber::FmtSubscriber::builder()
-            .with_max_level(tracing::Level::WARN)
-            .finish();
-        let tracing_guard = tracing::subscriber::set_default(subscriber);
-
-        let app = app(vec![]);
-
-        let config = TestServerBuilder::new()
-            // Preserve cookies across requests
-            // for the session cookie to work.
-            .save_cookies()
-            .default_content_type("application/json")
-            .mock_transport()
-            .into_config();
-
-        TestContext {
-            http: TestServer::new_with_config(app, config).unwrap(),
-            _tracing_guard: tracing_guard,
-        }
-    }
+    use tower::ServiceExt; // for `oneshot`
 
     #[rstest]
     #[tokio::test(flavor = "multi_thread")]
     // test health endpoint
-    async fn test_readyz(#[future] testcontext: TestContext) {
-        let resp = testcontext.await.http.get("/readyz").await;
-        resp.assert_status_ok();
+    async fn test_readyz() {
+        let app = app(vec![]);
+        let response = app
+            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[rstest]
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_post_webhook_not_found(#[future] testcontext: TestContext) {
-        let resp = testcontext
+    async fn test_post_webhook_not_found() {
+        let app = app(vec![]);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(http::Method::POST)
+                    .uri("/webhook/test")
+                    .header(http::header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(serde_json::to_vec(&json!([1, 2, 3, 4])).unwrap()))
+                    .unwrap(),
+            )
             .await
-            .http
-            .post("/webhook/test")
-            .json(&json!({
-                "bar": "foo",
-            }))
-            .await;
-        resp.assert_text("");
-        resp.assert_status(http::StatusCode::NOT_FOUND);
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }
