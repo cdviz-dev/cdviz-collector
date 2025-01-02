@@ -1,13 +1,12 @@
-use std::path::PathBuf;
-
 use crate::{
     config,
-    errors::{self, Error, Result},
+    errors::{Error, IntoDiagnostic, Result},
     sinks, sources,
 };
 use cdevents_sdk::CDEvent;
 use clap::Args;
 use futures::future::TryJoinAll;
+use std::path::PathBuf;
 use tokio::sync::broadcast;
 
 #[derive(Debug, Clone, Args)]
@@ -50,7 +49,7 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
     let config = config::Config::from_file(args.config)?;
 
     if let Some(dir) = args.directory {
-        std::env::set_current_dir(dir)?;
+        std::env::set_current_dir(dir).into_diagnostic()?;
     }
 
     let (tx, _) = broadcast::channel::<Message>(100);
@@ -65,7 +64,7 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
 
     if sinks.is_empty() {
         tracing::error!("no sink configured or started");
-        return Err(errors::Error::NoSink);
+        return Err(Error::NoSink).into_diagnostic();
     }
 
     let sources = config
@@ -73,21 +72,32 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
         .into_iter()
         .filter(|(_name, config)| config.is_enabled())
         .inspect(|(name, _config)| tracing::info!(kind = "source", name, "starting"))
-        .map(|(name, config)| sources::start(&name, config, tx.clone()))
-        .collect::<Vec<_>>();
+        .map(|(name, config)| sources::make(&name, &config, tx.clone()))
+        .collect::<Result<Vec<_>>>()?;
 
     if sources.is_empty() {
         tracing::error!("no source configured or started");
-        return Err(errors::Error::NoSource);
+        return Err(Error::NoSource).into_diagnostic();
     }
+    let mut join_handles = vec![];
+    let mut routes = vec![];
+    for source in sources {
+        match source {
+            sources::extractors::Extractor::Task(task) => join_handles.push(task),
+            sources::extractors::Extractor::Webhook(route) => routes.push(route),
+        }
+    }
+
+    let servers = vec![crate::http::launch(&config.http, routes)];
 
     //TODO use tokio JoinSet?
     sinks
         .into_iter()
-        .chain(sources)
+        .chain(join_handles)
+        .chain(servers)
         .collect::<TryJoinAll<_>>()
         .await
-        .map_err(|err| Error::from(err.to_string()))?;
+        .into_diagnostic()?;
     // handlers.append(&mut sinks);
     // handlers.append(&mut sources);
     //tokio::try_join!(handlers).await?;

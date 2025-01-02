@@ -1,6 +1,7 @@
 mod config;
 mod connect;
 mod errors;
+mod http;
 mod pipes;
 mod sinks;
 mod sources;
@@ -9,10 +10,9 @@ mod utils;
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
-use errors::{Error, Result};
-use init_tracing_opentelemetry::tracing_subscriber_ext::TracingGuard;
-
 pub(crate) use connect::{Message, Receiver, Sender};
+use errors::{IntoDiagnostic, Result};
+use init_tracing_opentelemetry::tracing_subscriber_ext::TracingGuard;
 
 // Use Jemalloc only for musl-64 bits platforms
 #[cfg(all(target_env = "musl", target_pointer_width = "64"))]
@@ -58,7 +58,7 @@ fn init_log(verbose: Verbosity) -> Result<TracingGuard> {
             .unwrap_or_else(|| "off".to_string()),
     );
     // very opinionated init of tracing, look as is source to make your own
-    init_tracing_opentelemetry::tracing_subscriber_ext::init_subscribers().map_err(Error::from)
+    init_tracing_opentelemetry::tracing_subscriber_ext::init_subscribers().into_diagnostic()
 }
 
 //TODO document the architecture and the configuration

@@ -1,4 +1,5 @@
-use crate::errors::Result;
+use super::EventSource;
+use crate::errors::{IntoDiagnostic, Result};
 use crate::pipes::Pipe;
 use crate::Message;
 use cdevents_sdk::CDEvent;
@@ -7,8 +8,6 @@ use multihash::Multihash;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use tokio::sync::broadcast::Sender;
-
-use super::EventSource;
 
 const RAW: u64 = 0x55;
 const SHA2_256: u64 = 0x12;
@@ -29,10 +28,10 @@ impl Pipe for Processor {
         let mut body = input.body;
         set_id_zero_to_cid(&mut body)?;
         // TODO if source is empty, set a default value based on configuration TBD
-        let cdevent: CDEvent = serde_json::from_value(body)?;
+        let cdevent: CDEvent = serde_json::from_value(body).into_diagnostic()?;
 
         // TODO include headers into message
-        self.next.send(cdevent.into())?;
+        self.next.send(cdevent.into()).into_diagnostic()?;
         Ok(())
     }
 }
@@ -45,9 +44,9 @@ fn set_id_zero_to_cid(body: &mut serde_json::Value) -> Result<()> {
         // https://rustsec.org/advisories/RUSTSEC-2024-0370
         // let hash = Code::Sha2_256.digest(serde_json::to_string(&input.body)?.as_bytes());
         let mut hasher = Sha256::new();
-        hasher.update(serde_json::to_string(&body)?.as_bytes());
+        hasher.update(serde_json::to_string(&body).into_diagnostic()?.as_bytes());
         let hash = hasher.finalize();
-        let mhash = Multihash::<64>::wrap(SHA2_256, hash.as_slice())?;
+        let mhash = Multihash::<64>::wrap(SHA2_256, hash.as_slice()).into_diagnostic()?;
         let cid = Cid::new_v1(RAW, mhash);
         body["context"]["id"] = json!(cid.to_string());
     }

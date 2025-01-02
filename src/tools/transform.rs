@@ -1,6 +1,6 @@
 use crate::{
     config,
-    errors::{Error, Result},
+    errors::{miette, IntoDiagnostic, Result},
     pipes::Pipe,
     sources::{opendal as source_opendal, transformers, EventSource, EventSourcePipe},
     utils::PathExt,
@@ -45,11 +45,11 @@ enum TransformMode {
 }
 
 pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
-    cliclack::intro("Transforming files...")?;
+    cliclack::intro("Transforming files...").into_diagnostic()?;
     let config = config::Config::from_file(args.config)?;
 
     if !args.output.exists() {
-        std::fs::create_dir_all(&args.output)?;
+        std::fs::create_dir_all(&args.output).into_diagnostic()?;
     }
 
     let mut pipe: EventSourcePipe = Box::new(OutputToJsonFile { directory: args.output.clone() });
@@ -79,7 +79,7 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
         TransformMode::Overwrite => overwrite(&args.output),
     };
     remove_new_files(&args.output)?;
-    cliclack::outro("Transformation done.")?;
+    cliclack::outro("Transformation done.").into_diagnostic()?;
     res
 }
 
@@ -92,37 +92,39 @@ impl Pipe for OutputToJsonFile {
     fn send(&mut self, input: Self::Input) -> Result<()> {
         let filename = input.metadata["name"]
             .as_str()
-            .ok_or(Error::from("could not extract 'name' field from metadata"))?;
+            .ok_or(miette!("could not extract 'name' field from metadata"))?;
         let filename = filename.replace(".json", ".new.json");
         let path = self.directory.join(filename);
-        std::fs::write(path, serde_json::to_string_pretty(&input)?)?;
+        std::fs::write(path, serde_json::to_string_pretty(&input).into_diagnostic()?)
+            .into_diagnostic()?;
         Ok(())
     }
 }
 
 fn overwrite(output: &PathBuf) -> Result<bool> {
     let mut count = 0;
-    for entry in std::fs::read_dir(output)? {
-        let path = entry?.path();
+    for entry in std::fs::read_dir(output).into_diagnostic()? {
+        let path = entry.into_diagnostic()?.path();
         let filename = path.extract_filename()?;
         if filename.ends_with(".new.json") {
             let out_filename = filename.replace(".new.json", ".out.json");
             let out_path = path.with_file_name(out_filename);
-            std::fs::rename(path, out_path)?;
+            std::fs::rename(path, out_path).into_diagnostic()?;
             count += 1;
         }
     }
-    cliclack::log::success(format!("Overwritten {count} files."))?;
+    cliclack::log::success(format!("Overwritten {count} files.")).into_diagnostic()?;
     Ok(true)
 }
 
 fn check(output: &Path) -> Result<bool> {
     let differences = crate::tools::difference::search_new_vs_out(output)?;
     if differences.is_empty() {
-        cliclack::log::success("0 differences found.")?;
+        cliclack::log::success("0 differences found.").into_diagnostic()?;
         Ok(true)
     } else {
-        cliclack::log::warning(format!("{} differences found.", differences.len()))?;
+        cliclack::log::warning(format!("{} differences found.", differences.len()))
+            .into_diagnostic()?;
         for (comparison, diff) in differences {
             diff.show(&comparison)?;
         }
@@ -133,10 +135,11 @@ fn check(output: &Path) -> Result<bool> {
 fn review(output: &Path) -> Result<bool> {
     let differences = crate::tools::difference::search_new_vs_out(output)?;
     if differences.is_empty() {
-        cliclack::log::success("0 differences found.")?;
+        cliclack::log::success("0 differences found.").into_diagnostic()?;
         Ok(true)
     } else {
-        cliclack::log::warning(format!("{} differences found.", differences.len()))?;
+        cliclack::log::warning(format!("{} differences found.", differences.len()))
+            .into_diagnostic()?;
         let mut no_differences = true;
         for (comparison, diff) in differences {
             no_differences = diff.review(&comparison)? && no_differences;
@@ -146,11 +149,11 @@ fn review(output: &Path) -> Result<bool> {
 }
 
 fn remove_new_files(output: &PathBuf) -> Result<()> {
-    for entry in std::fs::read_dir(output)? {
-        let path = entry?.path();
+    for entry in std::fs::read_dir(output).into_diagnostic()? {
+        let path = entry.into_diagnostic()?.path();
         let filename = path.extract_filename()?;
         if filename.ends_with(".new.json") {
-            std::fs::remove_file(path)?;
+            std::fs::remove_file(path).into_diagnostic()?;
         }
     }
     Ok(())

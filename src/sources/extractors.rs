@@ -1,6 +1,8 @@
-use super::{http, opendal, EventSourcePipe, Extractor};
+use super::{opendal, webhook, EventSourcePipe};
 use crate::errors::Result;
+use axum::Router;
 use serde::{Deserialize, Serialize};
+use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(tag = "type")]
@@ -8,37 +10,36 @@ pub(crate) enum Config {
     #[serde(alias = "noop")]
     #[default]
     Sleep,
-    #[cfg(feature = "source_http")]
-    #[serde(alias = "http")]
-    Http(http::Config),
+    #[serde(alias = "webhook")]
+    Webhook(webhook::Config),
     #[cfg(feature = "source_opendal")]
     #[serde(alias = "opendal")]
     Opendal(opendal::Config),
 }
 
-impl Config {
-    //TODO include some metadata into the extractor like the source name
-    pub(crate) fn make_extractor(&self, next: EventSourcePipe) -> Result<Box<dyn Extractor>> {
-        let out: Box<dyn Extractor> = match self {
-            Config::Sleep => Box::new(SleepExtractor {}),
-            #[cfg(feature = "source_http")]
-            Config::Http(config) => Box::new(http::HttpExtractor::try_from(config, next)?),
-            #[cfg(feature = "source_opendal")]
-            Config::Opendal(config) => Box::new(opendal::OpendalExtractor::try_from(config, next)?),
-        };
-        Ok(out)
-    }
+pub enum Extractor {
+    Task(JoinHandle<Result<()>>),
+    Webhook(Router),
 }
 
-struct SleepExtractor {}
-
-#[async_trait::async_trait]
-impl Extractor for SleepExtractor {
-    async fn run(&mut self) -> Result<()> {
-        use std::future;
-
-        let future = future::pending();
-        let () = future.await;
-        unreachable!()
+impl Config {
+    //TODO include some metadata into the extractor like the source name
+    pub(crate) fn make_extractor(&self, next: EventSourcePipe) -> Result<Extractor> {
+        let out = match self {
+            Config::Sleep => Extractor::Task(tokio::spawn(async move {
+                std::future::pending::<()>().await;
+                Ok(())
+            })),
+            Config::Webhook(config) => Extractor::Webhook(webhook::make_route(config, next)),
+            #[cfg(feature = "source_opendal")]
+            Config::Opendal(config) => {
+                let mut extractor = opendal::OpendalExtractor::try_from(config, next)?;
+                Extractor::Task(tokio::spawn(async move {
+                    extractor.run().await?;
+                    Ok(())
+                }))
+            }
+        };
+        Ok(out)
     }
 }

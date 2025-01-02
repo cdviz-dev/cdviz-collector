@@ -1,9 +1,7 @@
-use serde::{Deserialize, Serialize};
-
-use crate::errors::Result;
-use crate::Message;
-
 use super::Sink;
+use crate::errors::{Report, Result};
+use crate::Message;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub(crate) struct Config {
@@ -12,7 +10,7 @@ pub(crate) struct Config {
 }
 
 impl TryFrom<Config> for DebugSink {
-    type Error = crate::errors::Error;
+    type Error = Report;
 
     fn try_from(_value: Config) -> Result<Self> {
         Ok(DebugSink {})

@@ -1,4 +1,4 @@
-use crate::errors::Result;
+use crate::errors::{IntoDiagnostic, Result};
 use crate::pipes::Pipe;
 use crate::sources::{EventSource, EventSourcePipe};
 use handlebars::Handlebars;
@@ -15,7 +15,7 @@ impl Processor {
         renderer.set_strict_mode(true);
         renderer.register_escape_fn(handlebars::no_escape);
         handlebars_misc_helpers::register(&mut renderer);
-        renderer.register_template_string("tpl", template)?;
+        renderer.register_template_string("tpl", template).into_diagnostic()?;
         Ok(Self { next, renderer })
     }
 }
@@ -23,8 +23,8 @@ impl Processor {
 impl Pipe for Processor {
     type Input = EventSource;
     fn send(&mut self, input: Self::Input) -> Result<()> {
-        let res = self.renderer.render("tpl", &input)?;
-        let output: EventSource = serde_json::from_str(&res)?;
+        let res = self.renderer.render("tpl", &input).into_diagnostic()?;
+        let output: EventSource = serde_json::from_str(&res).into_diagnostic()?;
         self.next.send(output)
     }
 }
