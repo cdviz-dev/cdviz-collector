@@ -14,7 +14,7 @@ publish = true
 
 [dependencies]
 async-trait = "0.1"
-axum = { version = "0.7", optional = true }
+axum = { version = "0.8", optional = true }
 axum-tracing-opentelemetry = { version = "0.24", optional = true }
 bytes = { version = "1.8", optional = true }
 cdevents-sdk = "0.1"
