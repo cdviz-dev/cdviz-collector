@@ -9,7 +9,6 @@ authors = ["David Bernard"]
 license = "Apache-2.0"
 homepage = "https://cdviz.dev"
 repository = "https://github.com/cdviz-dev/cdviz-collector"
-rust-version = "1.83.0"
 publish = true
 
 [dependencies]
