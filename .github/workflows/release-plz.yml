@@ -15,11 +15,15 @@ jobs:
     name: Release-plz release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v1
+        id: get_token
         with:
+          private-key: ${{ secrets.INTBOT_PRIVATE_KEY }}
+          app-id: ${{ secrets.INTBOT_APP_ID }}
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.get_token.outputs.token }}
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Run release-plz
