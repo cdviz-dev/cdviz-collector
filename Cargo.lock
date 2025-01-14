@@ -758,6 +758,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "ciborium"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
+dependencies = [
+ "ciborium-io",
+ "ciborium-ll",
+ "serde",
+]
+
+[[package]]
+name = "ciborium-io"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+
+[[package]]
+name = "ciborium-ll"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
+dependencies = [
+ "ciborium-io",
+ "half",
+]
+
+[[package]]
 name = "cid"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1861,6 +1888,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "half"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dd08c532ae367adf81c312a4580bc67f1d0fe8bc9c460520283f4c0ff277888"
+dependencies = [
+ "cfg-if",
+ "crunchy",
+]
+
+[[package]]
 name = "handlebars"
 version = "6.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2468,6 +2505,15 @@ name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
@@ -3187,6 +3233,12 @@ dependencies = [
  "smallvec",
  "windows-targets 0.52.6",
 ]
+
+[[package]]
+name = "parse-size"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "487f2ccd1e17ce8c1bfab3a65c89525af41cfad4c8659021a1e9a2aacd73b89b"
 
 [[package]]
 name = "parse-zoneinfo"
@@ -5810,9 +5862,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vrl"
-version = "0.20.1"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea6f5f954461e21cacc090537e49f1023c34b6d10e12030b40ca1821a43aca68"
+checksum = "880a8f015d7986a2042c60c6edcc71dfcdc78306040b05db3cc7c39b6596ac2f"
 dependencies = [
  "aes",
  "aes-siv",
@@ -5827,10 +5879,12 @@ dependencies = [
  "charset",
  "chrono",
  "chrono-tz",
+ "ciborium",
  "cidr-utils",
  "codespan-reporting",
  "community-id",
  "convert_case 0.6.0",
+ "crc",
  "crypto_secretbox",
  "csv",
  "ctr",
@@ -5839,18 +5893,20 @@ dependencies = [
  "dns-lookup",
  "domain",
  "dyn-clone",
+ "encoding_rs",
  "fancy-regex",
  "flate2",
  "grok",
  "hex",
  "hmac",
  "hostname 0.4.0",
+ "humantime",
  "iana-time-zone",
  "idna",
  "indexmap 2.7.0",
  "indoc",
  "influxdb-line-protocol",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "lalrpop",
  "lalrpop-util 0.22.0",
  "md-5",
@@ -5859,6 +5915,7 @@ dependencies = [
  "once_cell",
  "onig",
  "ordered-float",
+ "parse-size",
  "paste",
  "peeking_take_while",
  "percent-encoding",
