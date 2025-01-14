@@ -67,7 +67,7 @@ sqlx = { version = "0.8", features = [
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-opentelemetry-instrumentation-sdk = { version = "0.24" }
-vrl = { version = "0.20", optional = true }
+vrl = { version = "0.21", optional = true }
 
 [dev-dependencies]
 assert2 = "0.3"
