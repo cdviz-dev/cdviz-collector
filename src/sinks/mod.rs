@@ -16,10 +16,10 @@ use enum_dispatch::enum_dispatch;
 use folder::FolderSink;
 #[cfg(feature = "sink_http")]
 use http::HttpSink;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tokio::task::JoinHandle;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type")]
 pub(crate) enum Config {
     #[cfg(feature = "sink_db")]

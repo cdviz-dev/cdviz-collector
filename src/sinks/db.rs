@@ -3,19 +3,20 @@ use crate::{
     errors::{IntoDiagnostic, Report, Result},
     Message,
 };
-use serde::{Deserialize, Serialize};
+use secrecy::{zeroize::Zeroize, ExposeSecret, SecretString};
+use serde::Deserialize;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use tracing::Instrument;
 
 /// The database client config
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub(crate) struct Config {
     /// Is the sink is enabled?
     pub(crate) enabled: bool,
 
     /// The database url (with username, password and the database)
-    url: String,
+    url: SecretString,
 
     /// The minimum number of connections to the database to maintain at all times.
     /// minimum > 0, require to have access to the database at startup time,
@@ -51,8 +52,9 @@ impl TryFrom<Config> for DbSink {
             "Using the database"
         );
 
-        let pool = pool_options.connect_lazy(&config.url).into_diagnostic()?;
-
+        let pool = pool_options.connect_lazy(config.url.expose_secret()).into_diagnostic()?;
+        let mut config = config;
+        config.url.zeroize();
         Ok(Self { pool })
     }
 }
@@ -151,7 +153,12 @@ mod tests {
 
         let config = Config {
             enabled: true,
-            url: pg_container.url().await.expect("find db url").replace("localhost", "127.0.0.1"), // replace localhost by 127.0.0.1 because localhost in ipv6 doesn't work
+            url: pg_container
+                .url()
+                .await
+                .expect("find db url")
+                .replace("localhost", "127.0.0.1")
+                .into(), // replace localhost by 127.0.0.1 because localhost in ipv6 doesn't work
             pool_connections_min: 1,
             pool_connections_max: 30,
         };
