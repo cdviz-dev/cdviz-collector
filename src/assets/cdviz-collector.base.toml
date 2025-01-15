@@ -37,6 +37,7 @@ enabled = false
 [sources.cdevents_webhook.extractor]
 type = "webhook"
 id = "000"
+# headers_to_keep = []
 
 [transformers.passthrough]
 type = "passthrough"
