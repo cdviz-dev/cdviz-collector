@@ -3,18 +3,22 @@ use crate::{
     http, sinks, sources,
 };
 use figment::{
-    providers::{Env, Format, Serialized, Toml},
+    providers::{Env, Format, Toml},
     Figment,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf};
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default)]
 pub(crate) struct Config {
+    #[serde(default)]
     pub(crate) sources: HashMap<String, sources::Config>,
+    #[serde(default)]
     pub(crate) sinks: HashMap<String, sinks::Config>,
     // extractors: HashMap<String, sources::extractors::Config>,
+    #[serde(default)]
     pub(crate) transformers: HashMap<String, sources::transformers::Config>,
+    #[serde(default)]
     pub(crate) http: http::Config,
 }
 
@@ -30,8 +34,7 @@ impl Config {
         }
         let config_file_base = include_str!("assets/cdviz-collector.base.toml");
 
-        let mut figment = Figment::from(Serialized::defaults(Config::default()))
-            .merge(Toml::string(config_file_base));
+        let mut figment = Figment::new().merge(Toml::string(config_file_base));
         if let Some(config_file) = config_file {
             figment = figment.merge(Toml::file(config_file.as_path()));
         }
