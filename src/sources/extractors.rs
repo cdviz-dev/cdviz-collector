@@ -1,10 +1,10 @@
 use super::{opendal, webhook, EventSourcePipe};
 use crate::errors::Result;
 use axum::Router;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tokio::task::JoinHandle;
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default)]
 #[serde(tag = "type")]
 pub(crate) enum Config {
     #[serde(alias = "noop")]

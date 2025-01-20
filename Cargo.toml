@@ -15,6 +15,7 @@ publish = true
 async-trait = "0.1"
 axum = "0.8"
 axum-tracing-opentelemetry = "0.25"
+base64 = "0.22"
 bytes = { version = "1", optional = true }
 cdevents-sdk = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
@@ -27,6 +28,7 @@ console = { version = "0.15", optional = true }
 csv = { version = "1", optional = true }
 derive_more = { version = "1", features = ["display", "from", "error"] }
 enum_dispatch = "0.3"
+faster-hex = "0.10"
 figment = { version = "0.10", features = ["toml", "env"] }
 futures = "0.3"
 globset = { version = "0.4", optional = true }
@@ -37,6 +39,7 @@ handlebars_misc_helpers = { version = "0.17", optional = true, default-features 
   "regex",
   "uuid",
 ] }
+hmac = "0.12"
 humantime-serde = "1"
 init-tracing-opentelemetry = { version = "0.25", features = [
   "otlp",

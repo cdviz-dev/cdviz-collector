@@ -1,29 +1,36 @@
+mod signature;
+
 use super::EventSourcePipe;
 use crate::errors::ReportWrapper;
 use crate::sources::EventSource;
 use axum::extract::State;
 use axum::http::{HeaderMap, HeaderName};
+use axum::response::IntoResponse;
 use axum::routing::{post, Router};
 use axum::Json;
 use futures::lock::Mutex;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::str::FromStr;
 use std::sync::Arc;
 
 /// The webhook config
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default)]
 pub(crate) struct Config {
-    /// id of the webhook
+    /// id of the webhook, used to define the path of the webhook's url (`/webhooks/{id}`)
     pub(crate) id: String,
     /// HTTP headers to forward into the pipeline
     #[serde(default)]
     pub(crate) headers_to_keep: Vec<String>,
+    /// Verify the incoming request and the signature
+    #[serde(default)]
+    pub(crate) signature: Option<signature::SignatureConfig>,
 }
 
 #[derive(Clone)]
 struct WebhookState {
     next: Arc<Mutex<EventSourcePipe>>,
     headers_to_keep: Vec<HeaderName>,
+    signature: Option<signature::SignatureConfig>,
 }
 
 pub(crate) fn make_route(config: &Config, next: EventSourcePipe) -> Router {
@@ -32,8 +39,9 @@ pub(crate) fn make_route(config: &Config, next: EventSourcePipe) -> Router {
         headers_to_keep: config
             .headers_to_keep
             .iter()
-            .filter_map(|s| HeaderName::from_str(s.as_str()).ok())
+            .filter_map(|name| HeaderName::from_str(name.as_str()).ok())
             .collect(),
+        signature: config.signature.clone(),
     };
     Router::new().route(&format!("/webhook/{}", config.id), post(webhook)).with_state(state)
 }
@@ -47,18 +55,32 @@ pub(crate) fn make_route(config: &Config, next: EventSourcePipe) -> Router {
 async fn webhook(
     State(state): State<WebhookState>,
     headers: HeaderMap,
-    Json(body): Json<serde_json::Value>,
-) -> std::result::Result<axum::http::StatusCode, ReportWrapper> {
+    body: axum::body::Bytes,
+) -> impl IntoResponse {
     //tracing::trace!(?body, "received");
+    //TODO replace by a middleware
+    if let Some(signature) = state.signature.as_ref() {
+        if let Err(err) = signature::check_signature(signature, &headers, &body) {
+            return err.into_response();
+        }
+    }
+    let maybe_json = Json::from_bytes(&body);
+    if let Err(err) = maybe_json {
+        return err.into_response();
+    }
+    let Json(body): Json<serde_json::Value> = maybe_json.unwrap_or_default();
     let header = header_to_map(&headers, &state.headers_to_keep);
-    let event = EventSource { body, header, ..Default::default() };
-    state.next.lock().await.send(event)?;
-    Ok(axum::http::StatusCode::CREATED)
+    let event = EventSource { header, body, ..Default::default() };
+    if let Err(err) = state.next.lock().await.send(event) {
+        return ReportWrapper::from(err).into_response();
+    }
+    (axum::http::StatusCode::CREATED).into_response()
 }
 
 /// Convert a header map to a map of header name to header value
 /// The output map will only contain headers that are in the `headers_to_keep` list
 /// and that are not sensitive.
+#[allow(clippy::min_ident_chars)]
 fn header_to_map(
     headers: &HeaderMap,
     headers_to_keep: &[HeaderName],
@@ -85,8 +107,11 @@ mod tests_handler {
 
     #[tokio::test]
     async fn test_webhook_success() {
-        let config =
-            Config { id: "test".to_string(), headers_to_keep: vec!["Content-Type".to_string()] };
+        let config = Config {
+            id: "test".to_string(),
+            headers_to_keep: vec!["Content-Type".to_string()],
+            ..Default::default()
+        };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
 
