@@ -154,20 +154,33 @@ pub(crate) enum SignatureError {
     BodyReadFailed,
 }
 
+// try to follow [RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457.html)
 impl IntoResponse for SignatureError {
     fn into_response(self) -> Response {
+        use axum::Json;
+        use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
         match self {
             SignatureError::HmacCreationFailed(err) => {
+                let trace_id = find_current_trace_id();
                 tracing::warn!(?err, "invalid length on token/key");
-                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({
+                        "title": StatusCode::INTERNAL_SERVER_ERROR.as_str(),
+                        "status": StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                        "detail": err.to_string(),
+                        "trace_id": trace_id,
+                    })),
+                )
+                    .into_response()
             }
             err => (
                 StatusCode::FORBIDDEN,
-                json!({
-                    "title": "invalid signature",
+                Json(json!({
+                    "title": "Invalid Signature",
+                    "status": StatusCode::FORBIDDEN.as_u16(),
                     "detail": err.to_string(),
-                })
-                .to_string(),
+                })),
             )
                 .into_response(),
         }

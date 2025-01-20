@@ -11,6 +11,7 @@ use tower_http::{
     sensitive_headers::SetSensitiveRequestHeadersLayer, timeout::TimeoutLayer,
     validate_request::ValidateRequestHeaderLayer,
 };
+use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 /// The http server config
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -100,6 +101,7 @@ async fn health() -> impl IntoResponse {
     http::StatusCode::OK
 }
 
+// try to follow [RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457.html)
 impl IntoResponse for Error {
     //TODO report the trace_id into the message to help to debug
     fn into_response(self) -> axum::response::Response {
@@ -107,20 +109,27 @@ impl IntoResponse for Error {
         //     Error::Db(e) => (http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
         //     _ => (http::StatusCode::INTERNAL_SERVER_ERROR, "".to_string()),
         // };
+        let trace_id = find_current_trace_id();
         tracing::warn!(error = ?self);
         let body = Json(json!({
-            "error": "",
+            "title": http::StatusCode::INTERNAL_SERVER_ERROR.as_str(),
+            "status": http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+            "trace_id": trace_id,
         }));
         (http::StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
     }
 }
 
+// try to follow [RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457.html)
 impl IntoResponse for ReportWrapper {
     //TODO report the trace_id into the message to help to debug
     fn into_response(self) -> axum::response::Response {
+        let trace_id = find_current_trace_id();
         tracing::warn!(error = ?self);
         let body = Json(json!({
-            "error": "",
+            "title": http::StatusCode::INTERNAL_SERVER_ERROR.as_str(),
+            "status": http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+            "trace_id": trace_id,
         }));
 
         (http::StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
