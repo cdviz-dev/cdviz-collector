@@ -6,7 +6,11 @@ use serde_json::json;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use tower_http::{compression::CompressionLayer, timeout::TimeoutLayer};
+use tower_http::{
+    compression::CompressionLayer, decompression::RequestDecompressionLayer,
+    sensitive_headers::SetSensitiveRequestHeadersLayer, timeout::TimeoutLayer,
+    validate_request::ValidateRequestHeaderLayer,
+};
 
 /// The http server config
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -80,6 +84,9 @@ fn app(routes: Vec<Router>) -> Router {
         .route("/healthz", get(health)) // request processed without span / trace
         .route("/readyz", get(health)) // request processed without span / trace
         .layer((
+            SetSensitiveRequestHeadersLayer::new(std::iter::once(http::header::AUTHORIZATION)),
+            ValidateRequestHeaderLayer::accept("application/json"),
+            RequestDecompressionLayer::new(),
             CompressionLayer::new(),
             // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
             // requests don't hang forever.

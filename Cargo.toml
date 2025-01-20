@@ -70,7 +70,14 @@ sqlx = { version = "0.8", features = [
   "json",
 ], default-features = false, optional = true }
 tokio = { version = "1", features = ["full"] }
-tower-http = { version = "0.6", features = ["compression-gzip", "timeout"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = [
+  "compression-full",
+  "decompression-full",
+  "timeout",
+  "sensitive-headers",
+  "validate-request",
+] }
 tracing = "0.1"
 tracing-opentelemetry-instrumentation-sdk = { version = "0.24" }
 vrl = { version = "0.21", optional = true }
