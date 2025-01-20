@@ -13,7 +13,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 // TODO support name/reference for extractor / transformer
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default)]
 pub(crate) struct Config {
     #[serde(default)]
     enabled: bool,
