@@ -2,15 +2,15 @@
 
 mod filter;
 pub(crate) mod parsers;
+mod resource;
 
 use self::filter::{FilePatternMatcher, Filter};
 use self::parsers::{Parser, ParserEnum};
+use self::resource::Resource;
 use super::EventSourcePipe;
 use crate::errors::{IntoDiagnostic, Result};
 use futures::TryStreamExt;
-use opendal::Metakey;
-use opendal::Operator;
-use opendal::Scheme;
+use opendal::{Operator, Scheme};
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::{serde_as, DisplayFromStr};
@@ -67,12 +67,12 @@ impl OpendalExtractor {
         .lister_with("")
         .recursive(recursive)
         // Make sure content-length and last-modified been fetched.
-        .metakey(Metakey::ContentLength | Metakey::LastModified)
         .await.into_diagnostic()?;
         while let Some(entry) = lister.try_next().await.into_diagnostic()? {
-            if filter.accept(&entry) {
-                if let Err(err) = parser.parse(op, &entry).await {
-                    tracing::warn!(?err, path = entry.path(), "fail to process, skip");
+            let resource = Resource::from_entry(op, entry).await;
+            if filter.accept(&resource) {
+                if let Err(err) = parser.parse(op, &resource).await {
+                    tracing::warn!(?err, path = resource.path(), "fail to process, skip");
                 }
             }
         }

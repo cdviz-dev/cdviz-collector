@@ -1,0 +1,103 @@
+use chrono::{DateTime, Utc};
+use opendal::{Entry, EntryMode, Operator};
+
+/// Information about the Resource
+/// NOTE: Resource was build from the information of the Entry, Metadata and the path
+/// It's like an `OpenDAL`'s Entry but with information prefetched (`last_modified`) (no longer available via list on FS since `OpenDAL` 0.51)
+/// Rebuild entry with `metadata.last_modified` if not present.
+/// see [opendal::docs::rfcs::rfc\_5314\_remove\_metakey - Rust](https://docs.rs/opendal/latest/opendal/docs/rfcs/rfc_5314_remove_metakey/index.html)
+#[derive(Clone, Debug)]
+pub(crate) struct Resource {
+    entry: Entry,
+    root: String,
+    last_modified: Option<DateTime<Utc>>,
+}
+
+impl Resource {
+    pub(crate) async fn from_entry(op: &Operator, entry: Entry) -> Self {
+        let mut last_modified = entry.metadata().last_modified();
+        if last_modified.is_none() {
+            let stats = op.stat(entry.path()).await.ok();
+            last_modified = stats.and_then(|stat| stat.last_modified());
+        }
+
+        Self { entry, root: op.info().root().to_string(), last_modified }
+    }
+
+    pub(crate) fn name(&self) -> &str {
+        self.entry.name()
+    }
+
+    pub(crate) fn path(&self) -> &str {
+        self.entry.path()
+    }
+
+    pub(crate) fn last_modified(&self) -> Option<DateTime<Utc>> {
+        self.last_modified
+    }
+
+    pub(crate) fn content_length(&self) -> u64 {
+        self.entry.metadata().content_length()
+    }
+
+    pub(crate) fn is_file(&self) -> bool {
+        self.entry.metadata().mode() == EntryMode::FILE
+    }
+
+    pub(crate) fn as_json_metadata(&self) -> serde_json::Value {
+        let mut value = serde_json::json!({
+            "name": self.name(),
+            "path": self.path(),
+            "root": self.root,
+        });
+        if let Some(last_modified) = self.last_modified() {
+            value["last_modified"] = serde_json::Value::String(last_modified.to_rfc3339());
+        }
+        value
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use assert2::{check, let_assert};
+    use futures::TryStreamExt;
+    use std::path::Path;
+
+    async fn provide_op_resource(prefix: &str) -> (Operator, Resource) {
+        // Create fs backend builder.
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/assets/inputs");
+        let builder = opendal::services::Fs::default().root(&root.to_string_lossy());
+        let op: Operator = Operator::new(builder).unwrap().finish();
+        let mut entries = op.lister_with(prefix).await.unwrap();
+        let_assert!(Ok(Some(entry)) = entries.try_next().await);
+        let resource = Resource::from_entry(&op, entry).await;
+        (op, resource)
+    }
+
+    #[tokio::test]
+    async fn extract_metadata_works() {
+        let (_, resource) = provide_op_resource("dir1/file").await;
+        // Extract the metadata and check that it's what we expect
+        let result = resource.as_json_metadata();
+        check!(result["name"] == "file01.txt");
+        check!(result["path"] == "dir1/file01.txt");
+        let_assert!(Some(abs_root) = result["root"].as_str());
+        check!(abs_root.ends_with("examples/assets/inputs"));
+        let_assert!(
+            Ok(_) = result["last_modified"].as_str().unwrap_or_default().parse::<DateTime<Utc>>()
+        );
+    }
+
+    // TODO
+    // #[tokio::test]
+    // async fn csv_row_via_template_works() {
+    //     let (op, entry) = provide_op_entry("cdevents.").await;
+    //     let dest = collect_to_vec::Processor::new();
+    //     let collector = dest.collector();
+    //     let sut = CsvRowParser::new(Box::new(collector));
+    //     assert!(Ok(()) == sut.parse(&op, &entry).await);
+    //     check!(collector.len() == 3);
+    //     // TODO check!(collector[0]. == "dev".as_bytes());
+    // }
+}
