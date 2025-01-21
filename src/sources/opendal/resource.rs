@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use opendal::{Entry, EntryMode, Operator};
+use opendal::{Entry, EntryMode, Metadata, Operator};
 
 /// Information about the Resource
 /// NOTE: Resource was build from the information of the Entry, Metadata and the path
@@ -11,17 +11,29 @@ pub(crate) struct Resource {
     entry: Entry,
     root: String,
     last_modified: Option<DateTime<Utc>>,
+    content_length: u64,
 }
 
 impl Resource {
     pub(crate) async fn from_entry(op: &Operator, entry: Entry) -> Self {
+        let mut stats: Option<Metadata> = None;
         let mut last_modified = entry.metadata().last_modified();
+        let mut content_length = entry.metadata().content_length();
+
         if last_modified.is_none() {
-            let stats = op.stat(entry.path()).await.ok();
-            last_modified = stats.and_then(|stat| stat.last_modified());
+            if stats.is_none() {
+                stats = op.stat(entry.path()).await.ok();
+            }
+            last_modified = stats.as_ref().and_then(Metadata::last_modified);
+        }
+        if content_length == 0 {
+            if stats.is_none() {
+                stats = op.stat(entry.path()).await.ok();
+            }
+            content_length = stats.as_ref().map(Metadata::content_length).unwrap_or_default();
         }
 
-        Self { entry, root: op.info().root().to_string(), last_modified }
+        Self { entry, root: op.info().root().to_string(), last_modified, content_length }
     }
 
     pub(crate) fn name(&self) -> &str {
@@ -37,7 +49,7 @@ impl Resource {
     }
 
     pub(crate) fn content_length(&self) -> u64 {
-        self.entry.metadata().content_length()
+        self.content_length
     }
 
     pub(crate) fn is_file(&self) -> bool {
@@ -77,6 +89,16 @@ mod tests {
 
     #[tokio::test]
     async fn extract_metadata_works() {
+        let (_, resource) = provide_op_resource("dir1/file").await;
+        check!(resource.is_file());
+        check!(resource.name() == "file01.txt");
+        check!(resource.path() == "dir1/file01.txt");
+        check!(resource.content_length() > 0);
+        let_assert!(Some(_) = resource.last_modified());
+    }
+
+    #[tokio::test]
+    async fn as_json_metadata_works() {
         let (_, resource) = provide_op_resource("dir1/file").await;
         // Extract the metadata and check that it's what we expect
         let result = resource.as_json_metadata();
