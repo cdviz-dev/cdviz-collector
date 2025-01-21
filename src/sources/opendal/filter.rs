@@ -1,9 +1,8 @@
+use super::resource::Resource;
 use crate::errors::{IntoDiagnostic, Result};
 use chrono::DateTime;
 use chrono::Utc;
 use globset::GlobSet;
-use opendal::Entry;
-use opendal::EntryMode;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Filter {
@@ -17,16 +16,18 @@ impl Filter {
         Filter { ts_after: DateTime::<Utc>::MIN_UTC, ts_before: Utc::now(), path_patterns }
     }
 
-    pub(crate) fn accept(&self, entry: &Entry) -> bool {
-        let meta = entry.metadata();
-        if meta.mode() == EntryMode::FILE {
-            if let Some(last) = meta.last_modified() {
+    pub(crate) fn accept(&self, resource: &Resource) -> bool {
+        if resource.is_file() {
+            if let Some(last) = resource.last_modified() {
                 last > self.ts_after
                     && last <= self.ts_before
-                    && meta.content_length() > 0
-                    && self.path_patterns.accept(entry.path())
+                    && resource.content_length() > 0
+                    && self.path_patterns.accept(resource.path())
             } else {
-                tracing::warn!(path = entry.path(), "can not read last modified timestamp, skip");
+                tracing::warn!(
+                    path = resource.path(),
+                    "can not read last modified timestamp, skip"
+                );
                 false
             }
         } else {

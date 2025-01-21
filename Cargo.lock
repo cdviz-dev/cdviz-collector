@@ -605,9 +605,9 @@ dependencies = [
 
 [[package]]
 name = "brotli-decompressor"
-version = "4.0.1"
+version = "4.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a45bd2e4095a8b518033b128020dd4a55aab1c0a381ba4404a472630f4bc362"
+checksum = "74fa05ad7d803d413eb8380983b092cbbaf9a85f151b871360e7b00cd7060b37"
 dependencies = [
  "alloc-no-stdlib",
  "alloc-stdlib",
@@ -926,9 +926,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.26"
+version = "4.5.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8eb5e908ef3a6efbe1ed62520fb7287959888c88485abe072543190ecc66783"
+checksum = "769b0145982b4b48713e01ec42d61614425f27b7058bda7180a3a41f30104796"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -946,9 +946,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.26"
+version = "4.5.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96b01801b5fc6a0a232407abc821660c9c6d25a1cafc0d4f85f29fb8d9afc121"
+checksum = "1b26884eb4b57140e4d2d93652abfa49498b938b3c9179f9fc487b0acc3edad7"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1727,12 +1727,6 @@ name = "fixedbitset"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
-
-[[package]]
-name = "flagset"
-version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3ea1ec5f8307826a5b71094dd91fc04d4ae75d5709b20ad351c7fb4815c86ec"
 
 [[package]]
 name = "flate2"
@@ -3252,9 +3246,9 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "opendal"
-version = "0.50.2"
+version = "0.51.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb28bb6c64e116ceaf8dd4e87099d3cfea4a58e85e62b104fef74c91afba0f44"
+checksum = "8c9dcfa7a3615e3c60eb662ed6b46b6f244cf2658098f593c0c0915430b3a268"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3263,7 +3257,6 @@ dependencies = [
  "bytes",
  "chrono",
  "crc32c",
- "flagset",
  "futures 0.3.31",
  "getrandom",
  "http 1.2.0",
@@ -6118,9 +6111,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.12.0"
+version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "744018581f9a3454a9e15beb8a33b017183f1e7c0cd170232a2d1453b23a51c4"
+checksum = "b3758f5e68192bb96cc8f9b7e2c2cfdabb435499a28499a42f8f984092adad4b"
 dependencies = [
  "getrandom",
  "serde",
