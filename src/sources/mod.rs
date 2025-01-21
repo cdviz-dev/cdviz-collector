@@ -11,6 +11,7 @@ use crate::{Message, Sender};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use tokio_util::sync::CancellationToken;
 
 // TODO support name/reference for extractor / transformer
 #[derive(Clone, Debug, Deserialize, Default)]
@@ -41,9 +42,10 @@ impl Config {
 }
 
 pub(crate) fn make(
-    _name: &str,
+    name: &str,
     config: &Config,
     tx: Sender<Message>,
+    cancel_token: CancellationToken,
 ) -> Result<extractors::Extractor> {
     let mut pipe: EventSourcePipe = Box::new(send_cdevents::Processor::new(tx));
     let mut tconfigs = config.transformers.clone();
@@ -51,7 +53,7 @@ pub(crate) fn make(
     for tconfig in tconfigs {
         pipe = tconfig.make_transformer(pipe)?;
     }
-    config.extractor.make_extractor(pipe)
+    config.extractor.make_extractor(name, pipe, cancel_token)
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
