@@ -17,6 +17,7 @@ use serde_with::{serde_as, DisplayFromStr};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 #[serde_as]
@@ -79,13 +80,17 @@ impl OpendalExtractor {
         Ok(())
     }
 
-    pub(crate) async fn run(&mut self) -> Result<()> {
-        loop {
+    pub(crate) async fn run(&mut self, cancel_token: CancellationToken) -> Result<()> {
+        while !cancel_token.is_cancelled() {
             if let Err(err) = self.run_once().await {
                 tracing::warn!(?err, filter = ?self.filter, scheme =? self.op.info().scheme(), root =? self.op.info().root(), "fail during scanning");
             }
-            sleep(self.polling_interval).await;
+            tokio::select! {
+                () = sleep(self.polling_interval) => {},
+                () = cancel_token.cancelled() => {},
+            }
             self.filter.jump_to_next_ts_window();
         }
+        Ok(())
     }
 }

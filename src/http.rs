@@ -6,6 +6,7 @@ use serde_json::json;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use tower_http::{
     compression::CompressionLayer, decompression::RequestDecompressionLayer,
     sensitive_headers::SetSensitiveRequestHeadersLayer, timeout::TimeoutLayer,
@@ -29,7 +30,11 @@ impl Default for Config {
     }
 }
 
-pub(crate) fn launch(config: &Config, routes: Vec<Router>) -> JoinHandle<Result<()>> {
+pub(crate) fn launch(
+    config: &Config,
+    routes: Vec<Router>,
+    cancel_token: &'static CancellationToken,
+) -> JoinHandle<Result<()>> {
     let addr = SocketAddr::new(config.host, config.port);
     tokio::spawn(async move {
         let app = app(routes);
@@ -39,38 +44,13 @@ pub(crate) fn launch(config: &Config, routes: Vec<Router>) -> JoinHandle<Result<
         axum::serve(listener, app.into_make_service())
             // see [axum/examples/graceful-shutdown/src/main.rs at main · tokio-rs/axum](https://github.com/tokio-rs/axum/blob/main/examples/graceful-shutdown/src/main.rs)
             // TODO check graceful shutdown with spawned task & integration with main
-            .with_graceful_shutdown(shutdown_signal())
+            .with_graceful_shutdown(cancel_token.cancelled())
             .await.into_diagnostic()?;
+        tracing::info!(kind = "source", "exiting: http server");
         Ok(())
     })
 }
 
-#[allow(clippy::expect_used)]
-#[allow(clippy::ignored_unit_patterns)]
-async fn shutdown_signal() {
-    use tokio::signal;
-    let ctrl_c = async {
-        signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
-}
-
-//TODO make route per extractor/sources
 fn app(routes: Vec<Router>) -> Router {
     // build our application with a route
     let mut app = Router::new();

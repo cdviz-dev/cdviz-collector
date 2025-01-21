@@ -99,6 +99,7 @@ pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> Join
                 tracing::warn!(name, ?err, "fail during sending of event");
             }
         }
+        tracing::info!(name, kind = "sink", "exiting");
         Ok(())
     })
 }

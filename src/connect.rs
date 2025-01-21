@@ -6,8 +6,9 @@ use crate::{
 use cdevents_sdk::CDEvent;
 use clap::Args;
 use futures::future::TryJoinAll;
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::LazyLock};
 use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone, Args)]
 #[command(args_conflicts_with_subcommands = true,flatten_help = true, about, long_about = None)]
@@ -40,7 +41,8 @@ impl From<CDEvent> for Message {
     }
 }
 
-//TODO add garcefull shutdown
+static SHUTDOWN_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
+
 //TODO add transformers ( eg file/event info, into cdevents) for sources
 //TODO integrations with cloudevents (sources & sink)
 //TODO integrations with kafka / redpanda, nats,
@@ -72,7 +74,7 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
         .into_iter()
         .filter(|(_name, config)| config.is_enabled())
         .inspect(|(name, _config)| tracing::info!(kind = "source", name, "starting"))
-        .map(|(name, config)| sources::make(&name, &config, tx.clone()))
+        .map(|(name, config)| sources::make(&name, &config, tx.clone(), SHUTDOWN_TOKEN.clone()))
         .collect::<Result<Vec<_>>>()?;
 
     if sources.is_empty() {
@@ -88,9 +90,16 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
         }
     }
 
-    let servers = vec![crate::http::launch(&config.http, routes)];
+    let servers = vec![crate::http::launch(&config.http, routes, &SHUTDOWN_TOKEN)];
 
-    //TODO use tokio JoinSet?
+    // the channel is closed when all (sender / tx) are dropped) and then in cascade the receiver and the sinks
+    // so we can drop the no more useful sender to avoid a leak
+    drop(tx);
+
+    // setup the handler to (try to) shutdown gracefully
+    tokio::spawn(handle_shutdown_signal());
+
+    //TODO use tokio JoinSet or TaskTracker?
     sinks
         .into_iter()
         .chain(join_handles)
@@ -102,7 +111,33 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
     // handlers.append(&mut sources);
     //tokio::try_join!(handlers).await?;
     //futures::try_join!(handlers);
+    tracing::info!("connect exited (gracefully)");
     Ok(true)
+}
+
+#[allow(clippy::expect_used)]
+async fn handle_shutdown_signal() {
+    use tokio::signal;
+    let ctrl_c = async {
+        signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = ctrl_c => {},
+        () = terminate => {},
+    }
+    SHUTDOWN_TOKEN.cancel();
 }
 
 #[cfg(test)]
