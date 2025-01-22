@@ -13,6 +13,7 @@ PG_OFFLINE_URL = "postgres://{{env.PG_OFFLINE_USER}}:{{env.PG_OFFLINE_PWD}}@127.
 # "aqua:hadolint/hadolint" = "2"         # hadolint is a Dockerfile linter
 rust = "1.84.0"                        # the rust tool stack (with cargo, fmt, clippy) to build source
 "aqua:cargo-bins/cargo-binstall" = "1" # do not use cargo-binstall (it's a special name used by mise)
+"ubi:mozilla/grcov" = "0.8"
 "cargo:cargo-hack" = "latest"
 "cargo:cargo-sort" = "latest"
 "cargo:cargo-machete" = "latest"
@@ -22,7 +23,7 @@ rust = "1.84.0"                        # the rust tool stack (with cargo, fmt, c
 [tasks."install:rustcomponents"]
 hide = true
 run = [
-    "rustup component add rustfmt clippy", # not installed by rust-toolchain.toml ??
+    "rustup component add rustfmt clippy llvm-tools-preview", # not installed by rust-toolchain.toml ??
 ]
 
 [tasks."install:sqlx-cli"]
@@ -76,6 +77,19 @@ run = [
     "cargo nextest run",
     # "cargo test --doc",
     # "cargo hack nextest --each-feature -- --test-threads=1",
+]
+
+[tasks."test:coverage"]
+description = "run test coverage to help identify code not executed on tests (!= code tested)"
+depends = ["install:rustcomponents"]
+env = { RUSTFLAGS="-Cinstrument-coverage", LLVM_PROFILE_FILE="target/test-coverage/data/%p-%m.profraw" }
+run = [
+    "rm -rf ./target/test-coverage || true",
+    "mkdir -p ./target/test-coverage",
+    "cargo nextest run",
+    "cargo run -- transform --mode check --config ./examples/assets/cdviz-collector.toml --input ./examples/assets/inputs/cdevents_json --output ./examples/assets/outputs/transform-passthrough",
+    "grcov ./target/test-coverage/data -s . --ignore 'target/*' --binary-path ./target/debug/ -t html --branch --ignore-not-existing -o ./target/test-coverage/html/",
+    "cat ./target/test-coverage/html/coverage.json",
 ]
 
 # # release *arguments: install:cargo-release install:git-cliff
