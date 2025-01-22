@@ -175,10 +175,10 @@ impl IntoResponse for SignatureError {
                     .into_response()
             }
             err => (
-                StatusCode::FORBIDDEN,
+                StatusCode::UNAUTHORIZED,
                 Json(json!({
                     "title": "Invalid Signature",
-                    "status": StatusCode::FORBIDDEN.as_u16(),
+                    "status": StatusCode::UNAUTHORIZED.as_u16(),
                     "detail": err.to_string(),
                 })),
             )
@@ -217,15 +217,16 @@ mod tests {
     async fn test_check_use_build_signature(
         #[any] body_str: String,
         #[any] signature_encoding: Encoding,
+        #[strategy("[a-zA-Z0-9_=-]{0,10}")] signature_prefix: String,
     ) {
         if body_str.is_empty() {
             return Ok(());
         }
         let config = SignatureConfig {
-            header: "X-signature".to_string(),
+            header: "X-Signature".to_string(),
             token: "myToken".to_string().into(),
             token_encoding: None,
-            signature_prefix: Some("prefix".to_string()),
+            signature_prefix: Some(signature_prefix),
             signature_on: SignatureOn::Body,
             signature_encoding,
         };
@@ -240,6 +241,70 @@ mod tests {
             .unwrap();
 
         let_assert!(Ok(_) = check_signature_on_request(request, &config).await);
+    }
+
+    #[tokio::test]
+    async fn test_signature_not_found() {
+        let config = SignatureConfig {
+            header: "X-Signature".to_string(),
+            token: "mySecretToken".to_string().into(),
+            token_encoding: None,
+            signature_prefix: None,
+            signature_on: SignatureOn::Body,
+            signature_encoding: Encoding::Hex,
+        };
+        let body_str = r#"{"action":"in_progress","workflow_job":{ ... }}"#;
+        let request = Request::builder()
+            .uri("/webhook/test")
+            .method("POST")
+            //.header("x-signature", signature.to_string())
+            .body(Body::from(body_str))
+            .unwrap();
+
+        let_assert!(
+            Err(SignatureError::SignatureNotFound) =
+                check_signature_on_request(request, &config).await
+        );
+    }
+
+    #[tokio::test]
+    async fn test_signature_mismatch() {
+        let config = SignatureConfig {
+            header: "X-Signature".to_string(),
+            token: "mySecretToken".to_string().into(),
+            token_encoding: None,
+            signature_prefix: None,
+            signature_on: SignatureOn::Body,
+            signature_encoding: Encoding::Hex,
+        };
+        let body_str = r#"{"action":"in_progress","workflow_job":{ ... }}"#;
+        let request = Request::builder()
+            .uri("/webhook/test")
+            .method("POST")
+            .header("x-signature", "123456789".to_string())
+            .body(Body::from(body_str))
+            .unwrap();
+
+        let_assert!(
+            Err(SignatureError::VerificationMismatch) =
+                check_signature_on_request(request, &config).await
+        );
+    }
+
+    #[test]
+    fn status_code_for_signature_error() {
+        assert_eq!(
+            StatusCode::UNAUTHORIZED,
+            SignatureError::SignatureNotFound.into_response().status()
+        );
+        assert_eq!(
+            StatusCode::UNAUTHORIZED,
+            SignatureError::VerificationMismatch.into_response().status()
+        );
+        assert_eq!(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            SignatureError::HmacCreationFailed(InvalidLength).into_response().status()
+        );
     }
 
     #[test]
