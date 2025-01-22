@@ -64,8 +64,15 @@ impl Sink for HttpSink {
                 req.json(&cd_event)
             }
         };
-        req.send().await.into_diagnostic()?;
-
+        let response = req.send().await.into_diagnostic()?;
+        // TODO handle error, retry, etc
+        if !response.status().is_success() {
+            tracing::warn!(
+                cdevent_id = msg.cdevent.id().as_str(),
+                http_status = response.status().as_u16(),
+                "Failed to send event",
+            );
+        }
         Ok(())
     }
 }
@@ -127,6 +134,42 @@ mod http_cloudevents {
 
         fn end(self) -> Result<RequestBuilder> {
             Ok(self.req)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use proptest::test_runner::TestRunner;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn test_http_sink() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+        .and(path("/events"))
+        .and(header("Content-Type", "application/json"))
+        .and(header("ce-specversion", "1.0"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        // Mounting the mock on the mock server - it's now effective!
+        .mount(&mock_server)
+        .await;
+
+        let config = Config {
+            enabled: true,
+            destination: Url::parse(&format!("{}/events", &mock_server.uri())).unwrap(),
+        };
+
+        let sink = HttpSink::try_from(config).unwrap();
+
+        let mut runner = TestRunner::default();
+        for _ in 0..1 {
+            let val = any::<Message>().new_tree(&mut runner).unwrap();
+            assert!(sink.send(&val.current()).await.is_ok());
         }
     }
 }
