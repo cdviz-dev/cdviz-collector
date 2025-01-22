@@ -87,6 +87,7 @@ vrl = { version = "0.21", optional = true }
 assert2 = "0.3"
 cdevents-sdk = { version = "0.1", features = ["testkit"] }
 figment = { version = "0.10", features = ["toml", "env", "test"] }
+indoc = "2"
 pretty_assertions = "1"
 proptest = "1"
 rstest = "0.24"

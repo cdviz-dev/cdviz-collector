@@ -28,3 +28,40 @@ impl Pipe for Processor {
         self.next.send(output)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pipes::collect_to_vec;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_empty_template() {
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let mut processor = Processor::new(
+            indoc::indoc! { r#"{
+                "metadata": {{ json_to_str metadata }},
+                "header": {{ json_to_str header }},
+                "body": {
+                    "c" : {{ body.a }}{{ body.b }}
+                }
+            }"#},
+            Box::new(collector.create_pipe()),
+        )
+        .unwrap();
+        let input = EventSource {
+            metadata: serde_json::json!({"foo": "bar"}),
+            header: std::collections::HashMap::new(),
+            body: serde_json::json!({"a": 1, "b": 2}),
+        };
+        processor.send(input.clone()).unwrap();
+        let output = collector.try_into_iter().unwrap().next().unwrap();
+        let expected = EventSource {
+            metadata: serde_json::json!({"foo": "bar"}),
+            header: std::collections::HashMap::new(),
+            body: serde_json::json!({"c": 12}),
+        };
+        //dbg!(&output);
+        assert_eq!(output, expected);
+    }
+}
