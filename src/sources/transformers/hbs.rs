@@ -24,8 +24,15 @@ impl Pipe for Processor {
     type Input = EventSource;
     fn send(&mut self, input: Self::Input) -> Result<()> {
         let res = self.renderer.render("tpl", &input).into_diagnostic()?;
-        let output: EventSource = serde_json::from_str(&res).into_diagnostic()?;
-        self.next.send(output)
+        let output: Option<Vec<EventSource>> = serde_json::from_str(&res).into_diagnostic()?;
+        if let Some(outputs) = output {
+            for output in outputs {
+                self.next.send(output)?;
+            }
+            Ok(())
+        } else {
+            self.next.send(input)
+        }
     }
 }
 
@@ -36,16 +43,47 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn test_empty_template() {
+    fn test_drop() {
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let mut processor = Processor::new("[]", Box::new(collector.create_pipe())).unwrap();
+        let input = EventSource {
+            metadata: serde_json::json!({"foo": "bar"}),
+            header: std::collections::HashMap::new(),
+            body: serde_json::json!({"a": 1, "b": 2}),
+        };
+        processor.send(input.clone()).unwrap();
+        let mut outputs = collector.try_into_iter().unwrap();
+        assert_eq!(outputs.next(), None);
+    }
+
+    #[test]
+    fn test_skip() {
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let mut processor = Processor::new("null", Box::new(collector.create_pipe())).unwrap();
+        let input = EventSource {
+            metadata: serde_json::json!({"foo": "bar"}),
+            header: std::collections::HashMap::new(),
+            body: serde_json::json!({"a": 1, "b": 2}),
+        };
+        processor.send(input.clone()).unwrap();
+        let mut outputs = collector.try_into_iter().unwrap();
+        assert_eq!(outputs.next(), Some(input));
+        assert_eq!(outputs.next(), None);
+    }
+
+    #[test]
+    fn test_transform() {
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let mut processor = Processor::new(
-            indoc::indoc! { r#"{
+            indoc::indoc! { r#"[
+            {
                 "metadata": {{ json_to_str metadata }},
                 "header": {{ json_to_str header }},
                 "body": {
                     "c" : {{ body.a }}{{ body.b }}
                 }
-            }"#},
+            }
+            ]"#},
             Box::new(collector.create_pipe()),
         )
         .unwrap();
@@ -55,13 +93,14 @@ mod tests {
             body: serde_json::json!({"a": 1, "b": 2}),
         };
         processor.send(input.clone()).unwrap();
-        let output = collector.try_into_iter().unwrap().next().unwrap();
+
         let expected = EventSource {
             metadata: serde_json::json!({"foo": "bar"}),
             header: std::collections::HashMap::new(),
             body: serde_json::json!({"c": 12}),
         };
-        //dbg!(&output);
-        assert_eq!(output, expected);
+        let mut outputs = collector.try_into_iter().unwrap();
+        assert_eq!(outputs.next(), Some(expected));
+        assert_eq!(outputs.next(), None);
     }
 }
