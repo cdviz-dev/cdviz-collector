@@ -31,34 +31,32 @@ parser = "csv_row"
 [sources.cdevents_webhook]
 enabled = true
 # type = "http"
-# host = "0.0.0.0"
-# port = 8080
 
 [transformers.service_deployed]
-type = "hbs"
+type = "vrl"
 template = """
-{
-    "metadata": {{  json_to_str metadata }},
-    "header": {{  json_to_str header }},
+[{
+    "metadata": .metadata,
+    "header": .header,
     "body": {
         "context": {
             "version": "0.4.0-draft",
             "id": "0",
             "source": "/event/source/123",
             "type": "dev.cdevents.service.deployed.0.1.1",
-            "timestamp": "{{ body.timestamp }}"
+            "timestamp": .body.timestamp,
         },
         "subject": {
-            "id": "{{ body.id }}",
+            "id": .body.id,
             "source": "/event/source/123",
             "type": "service",
             "content": {
                 "environment": {
-                    "id": "{{ body.env }}"
+                    "id": .body.env,
                 },
-                "artifactId": "{{ body.artifact_id }}"
+                "artifactId": .body.artifact_id,
             }
         }
     }
-}
+}]
 """
