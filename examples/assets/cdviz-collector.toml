@@ -60,3 +60,9 @@ template = """
     }
 }]
 """
+
+[transformers.github_events]
+type = "vrl"
+template = """
+[]
+"""

@@ -77,6 +77,8 @@ run = [
     "cargo nextest run",
     # "cargo test --doc",
     # "cargo hack nextest --each-feature -- --test-threads=1",
+    "cargo run -- transform --mode check --config ./examples/assets/cdviz-collector.toml --input ./examples/assets/inputs/cdevents_json --output ./examples/assets/outputs/transform-passthrough",
+    "cargo run -- transform -t github_events --mode check --config ./examples/assets/cdviz-collector.toml --input ./examples/assets/inputs/github_events --output ./examples/assets/outputs/transform-github_events",
 ]
 
 [tasks."test:coverage"]
@@ -86,8 +88,7 @@ env = { RUSTFLAGS="-Cinstrument-coverage", LLVM_PROFILE_FILE="target/test-covera
 run = [
     "rm -rf ./target/test-coverage || true",
     "mkdir -p ./target/test-coverage",
-    "cargo nextest run",
-    "cargo run -- transform --mode check --config ./examples/assets/cdviz-collector.toml --input ./examples/assets/inputs/cdevents_json --output ./examples/assets/outputs/transform-passthrough",
+    "mise run test",
     "grcov ./target/test-coverage/data -s . --ignore 'target/*' --binary-path ./target/debug/ -t html --branch --ignore-not-existing -o ./target/test-coverage/html/",
     "cat ./target/test-coverage/html/coverage.json",
 ]
@@ -158,4 +159,9 @@ run = ["""
 [tasks."examples:transform:passthrough"]
 run = [
     "cargo run -- transform --mode review --config ./examples/assets/cdviz-collector.toml --input ./examples/assets/inputs/cdevents_json --output ./examples/assets/outputs/transform-passthrough",
+]
+
+[tasks."examples:transform:github_events"]
+run = [
+    "cargo run -- transform -t github_events --mode review --config ./examples/assets/cdviz-collector.toml --input ./examples/assets/inputs/github_events --output ./examples/assets/outputs/transform-github_events",
 ]

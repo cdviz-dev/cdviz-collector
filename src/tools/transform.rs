@@ -95,6 +95,12 @@ impl Pipe for OutputToJsonFile {
             .ok_or(miette!("could not extract 'name' field from metadata"))?;
         let filename = filename.replace(".json", ".new.json");
         let path = self.directory.join(filename);
+        // remove fields that can change between runs on different machines
+        let mut input = input;
+        if let Some(metadata) = input.metadata.as_object_mut() {
+            metadata.remove("last_modified");
+            metadata.remove("root");
+        }
         std::fs::write(path, serde_json::to_string_pretty(&input).into_diagnostic()?)
             .into_diagnostic()?;
         Ok(())
