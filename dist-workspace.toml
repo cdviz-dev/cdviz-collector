@@ -26,7 +26,7 @@ install-updater = false
 post-announce-jobs = ["./release-after"]
 github-custom-job-permissions = { "release-after" = { packages = "write", contents = "read" } }
 # Whether CI should trigger releases with dispatches instead of tag pushes
-dispatch-releases = true
+dispatch-releases = false
 
 [dist.github-custom-runners]
 # buildjet could be used to build the binaries (faster, cheaper? than github's runners)
