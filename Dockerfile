@@ -119,8 +119,9 @@ HEALTHCHECK NONE
 # TARGETPLATFORM usage to copy right binary from builder stage
 # ARG populated by docker itself
 FROM scratch AS cdviz-collector
-LABEL org.opencontainers.image.source="https://github.com/cdviz-dev/cdviz"
+LABEL org.opencontainers.image.source="https://github.com/cdviz-dev/cdviz-collector"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL org.opencontainers.image.description="A service & cli to collect SDLC/CI/CD events and to dispatch as cdevents."
 ARG TARGETPLATFORM
 
 # COPY --from=build /etc/passwd /etc/passwd
