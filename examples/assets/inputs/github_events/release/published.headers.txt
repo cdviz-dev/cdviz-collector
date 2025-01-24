@@ -1,0 +1,12 @@
+Request URL: https://webhook.example.com/6477ab47-373e-4da3-8546-96847f1c4911
+Request method: POST
+Accept: */*
+Content-Type: application/json
+User-Agent: GitHub-Hookshot/b58a384
+X-GitHub-Delivery: bf7ad060-da5f-11ef-94e8-d526e2a0a5f2
+X-GitHub-Event: release
+X-GitHub-Hook-ID: 123456789
+X-GitHub-Hook-Installation-Target-ID: 987456321
+X-GitHub-Hook-Installation-Target-Type: organization
+X-Hub-Signature: sha1=1b7c9d383f616f7a09f0a6540375791dcca665cd
+X-Hub-Signature-256: sha256=6904453a4d8e59c2d26fd3890d5ef118344710c829afcfcdab4b110a66e5c4df
