@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.2.3...0.3.0) - 2025-01-24
+
+### Added
+
+- [**breaking**] transformer template/script should return an array or none/null/nil
+- *(webhook)* trace_id reported in json error
+- *(security, webhook)* allow to verify (or reject) request against a signature
+- *(webhook)* forward http's headers into the pipe
+- *(webhook)* enable compression, timeout (3s) and bodylimit (1MB)
+- [**breaking**] replace the single http extractor by a webhook
+
+### Fixed
+
+- return UNAUTHORIZE (and not FORBIDDEN) on invalid signature
+- gracefull shutdown to close sources & sink on kill/ctrl-c
+- content_length was zero for every resources / entry
+- use Secret<T> for sensitive configuration
+- *(deps)* update rust crate vrl to 0.21
+- *(deps)* update rust crate handlebars to v6.3.0
+- *(deps)* update rust crate serde_with to v3.12.0
+- *(deps)* update rust crate init-tracing-opentelemetry to 0.25
+
+### Other
+
+- [MegaLinter] Apply linters fixes
+- add basic test for hbs transformer
+- add basic test for base pipe
+- add a basic test for sink http
+- add a task to estimate "test coverage"
+- *(deps)* upgrade to opendal 0.51
+- configure rust cli to align with rust-analyzer
+- *(webhook)* enable support for multiple compression (gzip, broli, zstd, flat)
+- *(deps)* upgrade cloudevents-sdk to 0.8
+- *(deps)* upgrade to axum 0.8
+- format import/use
+- integrate `miette` for error reporting (to cont.)
+- *(deps)* pin only major for version >=1.0.0
+- fix configuration of release-plz
+- complete the rust upgrade to 1.84
+- upgrade cargo-dist
+- use INTBOT app instead of the pat RELEASE_PLZ_TOKEN
+- *(deps)* update dependency rust to v1.84.0
+- *(deps)* update rust crate rstest to 0.24
+- *(deps)* update rust crate rustainers to 0.13
+- *(deps)* commit the Cargo.lock of executable
+- capture samples of kubewatch events
+- enable renovate as github-action
+
 ## [0.2.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.2.2...0.2.3) - 2024-12-12
 
 ### Other
