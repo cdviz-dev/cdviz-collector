@@ -6,6 +6,7 @@ use figment::{
     providers::{Env, Format, Toml},
     Figment,
 };
+use figment_file_provider_adapter::FileAdapter;
 use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -34,12 +35,12 @@ impl Config {
         }
         let config_file_base = include_str!("assets/cdviz-collector.base.toml");
 
-        let mut figment = Figment::new().merge(Toml::string(config_file_base));
+        let mut figment = Figment::new().merge(FileAdapter::wrap(Toml::string(config_file_base)));
         if let Some(config_file) = config_file {
-            figment = figment.merge(Toml::file(config_file.as_path()));
+            figment = figment.merge(FileAdapter::wrap(Toml::file(config_file.as_path())));
         }
         let mut config: Config = figment
-            .merge(Env::prefixed("CDVIZ_COLLECTOR__").split("__"))
+            .merge(FileAdapter::wrap(Env::prefixed("CDVIZ_COLLECTOR__").split("__")))
             .extract()
             .into_diagnostic()?;
 
@@ -81,6 +82,9 @@ mod tests {
     fn read_samples_config(#[files("./**/cdviz-collector.toml")] path: PathBuf) {
         Jail::expect_with(|_jail| {
             assert!(path.exists());
+            //HACK change the current dir to the parent of the config file, not thread safe/ test isolation
+            //jail.change_dir(path.parent().unwrap()).unwrap();
+            std::env::set_current_dir(path.parent().unwrap()).unwrap();
             let _config: Config = Config::from_file(Some(path)).unwrap();
             Ok(())
         });

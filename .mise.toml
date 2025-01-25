@@ -77,8 +77,8 @@ run = [
     "cargo nextest run",
     # "cargo test --doc",
     # "cargo hack nextest --each-feature -- --test-threads=1",
-    "cargo run -- transform --mode check --config ./examples/assets/cdviz-collector.toml --input ./examples/assets/inputs/cdevents_json --output ./examples/assets/outputs/transform-passthrough",
-    "cargo run -- transform -t github_events --mode check --config ./examples/assets/cdviz-collector.toml --input ./examples/assets/inputs/github_events --output ./examples/assets/outputs/transform-github_events",
+    "cargo run -- transform --mode check --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/cdevents_json --output ./outputs/transform-passthrough",
+    "cargo run -- transform -t github_events --mode check --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/github_events --output ./outputs/transform-github_events",
 ]
 
 [tasks."test:coverage"]
@@ -158,10 +158,10 @@ run = ["""
 
 [tasks."examples:transform:passthrough"]
 run = [
-    "cargo run -- transform --mode review --config ./examples/assets/cdviz-collector.toml --input ./examples/assets/inputs/cdevents_json --output ./examples/assets/outputs/transform-passthrough",
+    "cargo run -- transform --mode review --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/cdevents_json --output ./outputs/transform-passthrough",
 ]
 
 [tasks."examples:transform:github_events"]
 run = [
-    "cargo run -- transform -t github_events --mode review --config ./examples/assets/cdviz-collector.toml --input ./examples/assets/inputs/github_events --output ./examples/assets/outputs/transform-github_events",
+    "cargo run -- transform -t github_events --mode review --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/github_events --output ./outputs/transform-github_events",
 ]
