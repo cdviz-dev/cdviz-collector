@@ -57,7 +57,7 @@ impl OpendalExtractor {
     }
 
     #[instrument(skip(self))]
-    pub(crate) async fn run_once(&mut self) -> Result<()> {
+    pub(crate) async fn run_once(&mut self) -> Result<usize> {
         let op = &self.op;
         let filter = &self.filter;
         let recursive = self.recursive;
@@ -69,15 +69,17 @@ impl OpendalExtractor {
         .recursive(recursive)
         // Make sure content-length and last-modified been fetched.
         .await.into_diagnostic()?;
+        let mut count = 0;
         while let Some(entry) = lister.try_next().await.into_diagnostic()? {
             let resource = Resource::from_entry(op, entry).await;
             if filter.accept(&resource) {
+                count += 1;
                 if let Err(err) = parser.parse(op, &resource).await {
                     tracing::warn!(?err, path = resource.path(), "fail to process, skip");
                 }
             }
         }
-        Ok(())
+        Ok(count)
     }
 
     pub(crate) async fn run(&mut self, cancel_token: CancellationToken) -> Result<()> {
