@@ -1,7 +1,7 @@
 use crate::errors::{IntoDiagnostic, Result};
 use crate::pipes::Pipe;
 use crate::sources::{EventSource, EventSourcePipe};
-use miette::bail;
+use miette::MietteDiagnostic;
 use vrl::compiler::{Program, TargetValue};
 use vrl::core::Value;
 use vrl::diagnostic::Formatter;
@@ -29,8 +29,9 @@ impl Processor {
         match vrl::compiler::compile(src, &fns) {
             Err(err) => {
                 let formatter = Formatter::new(src, err);
-                tracing::error!(diagnostics = %formatter, "VRL compilation error");
-                bail!("VRL compilation error")
+                //tracing::error!(diagnostics = %formatter, "VRL compilation error");
+                Err(MietteDiagnostic::new(formatter.to_string()))?
+                // bail!("VRL compilation error")
             }
             Ok(res) => Ok(Self { next, renderer: res.program }),
         }
