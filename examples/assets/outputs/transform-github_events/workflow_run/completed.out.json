@@ -1,0 +1,25 @@
+{
+  "metadata": {
+    "name": "completed.json",
+    "path": "workflow_run/completed.json"
+  },
+  "header": {},
+  "body": {
+    "context": {
+      "id": "0",
+      "source": "https://api.github.com/repos/cdviz-dev/cdviz-collector/actions/runs/12915191034",
+      "timestamp": "2025-01-22T19:03:50+00:00",
+      "type": "dev.cdevents.pipelinerun.finished.0.2.0",
+      "version": "0.4.1"
+    },
+    "subject": {
+      "content": {
+        "outcome": "success",
+        "pipelineName": "ci",
+        "url": "https://github.com/cdviz-dev/cdviz-collector/actions/runs/12915191034"
+      },
+      "id": 12915191034,
+      "type": "pipelineRun"
+    }
+  }
+}

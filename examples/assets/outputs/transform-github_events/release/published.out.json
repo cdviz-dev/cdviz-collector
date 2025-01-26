@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "name": "published.json",
+    "path": "release/published.json"
+  },
+  "header": {},
+  "body": {
+    "context": {
+      "id": "0",
+      "source": "https://api.github.com/repos/cdviz-dev/cdviz-collector/releases/196651649",
+      "timestamp": "2025-01-24T14:30:24+00:00",
+      "type": "dev.cdevents.artifact.published.0.2.0",
+      "version": "0.4.1"
+    },
+    "subject": {
+      "id": "pkg:github/cdviz-dev/cdviz-collector@0.3.0",
+      "type": "artifact",
+      "user": "github-actions[bot]"
+    }
+  }
+}

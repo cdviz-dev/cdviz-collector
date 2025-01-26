@@ -63,6 +63,4 @@ template = """
 
 [transformers.github_events]
 type = "vrl"
-template = """
-[]
-"""
+template_file = "./cnv_github_events.vrl"
