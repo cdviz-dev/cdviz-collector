@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "name": "in_progress.json",
+    "path": "workflow_run/in_progress.json"
+  },
+  "header": {},
+  "body": {
+    "context": {
+      "id": "0",
+      "source": "https://api.github.com/repos/cdviz-dev/cdviz-collector/actions/runs/12915191049",
+      "timestamp": "2025-01-22T19:01:11+00:00",
+      "type": "dev.cdevents.pipelineRun.started.0.2.0",
+      "version": "0.4.1"
+    },
+    "subject": {
+      "content": {
+        "pipelineName": "MegaLinter",
+        "url": "https://github.com/cdviz-dev/cdviz-collector/actions/runs/12915191049"
+      },
+      "id": 12915191049,
+      "type": "pipelineRun"
+    }
+  }
+}
