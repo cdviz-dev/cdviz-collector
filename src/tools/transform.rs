@@ -7,7 +7,10 @@ use crate::{
 };
 use clap::{Args, ValueEnum};
 use opendal::Scheme;
-use std::{collections::HashMap, path::Path, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone, Args)]
 #[command(args_conflicts_with_subcommands = true,flatten_help = true, about, long_about = None)]
@@ -71,7 +74,7 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
         polling_interval: std::time::Duration::ZERO,
         kind: Scheme::Fs,
         parameters: HashMap::from([("root".to_string(), args.input.to_string_lossy().to_string())]),
-        recursive: false,
+        recursive: true,
         path_patterns: vec![
             "**/*.json".to_string(),
             "!**/*.out.json".to_string(),
@@ -79,14 +82,17 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
         ],
         parser: source_opendal::parsers::Config::Json,
     };
-    source_opendal::OpendalExtractor::try_from(&config_extractor, pipe)?.run_once().await?;
+    let processed =
+        source_opendal::OpendalExtractor::try_from(&config_extractor, pipe)?.run_once().await?;
+    cliclack::log::info(format!("Processed {processed} input files.")).into_diagnostic()?;
     // TODO process .new.json vs .out.json using the self.mode strategy
+    let output_files = list_output_files(&args.output).await?;
     let res = match args.mode {
-        TransformMode::Review => review(&args.output),
-        TransformMode::Check => check(&args.output),
-        TransformMode::Overwrite => overwrite(&args.output),
+        TransformMode::Review => review(&output_files),
+        TransformMode::Check => check(&output_files),
+        TransformMode::Overwrite => overwrite(&output_files),
     };
-    remove_new_files(&args.output)?;
+    remove_new_files(&output_files)?;
     cliclack::outro("Transformation done.").into_diagnostic()?;
     res
 }
@@ -98,7 +104,7 @@ struct OutputToJsonFile {
 impl Pipe for OutputToJsonFile {
     type Input = EventSource;
     fn send(&mut self, input: Self::Input) -> Result<()> {
-        let filename = input.metadata["name"]
+        let filename = input.metadata["path"]
             .as_str()
             .ok_or(miette!("could not extract 'name' field from metadata"))?;
         let filename = filename.replace(".json", ".new.json");
@@ -109,16 +115,44 @@ impl Pipe for OutputToJsonFile {
             metadata.remove("last_modified");
             metadata.remove("root");
         }
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).into_diagnostic()?;
+        }
         std::fs::write(path, serde_json::to_string_pretty(&input).into_diagnostic()?)
             .into_diagnostic()?;
         Ok(())
     }
 }
 
-fn overwrite(output: &PathBuf) -> Result<bool> {
+// recursive iterator over all files in a directory
+async fn list_output_files(path: &Path) -> Result<Vec<PathBuf>> {
+    use opendal::{services::Fs, Operator};
+    let builder = Fs::default()
+        // Set the root for fs, all operations will happen under this root.
+        //
+        // NOTE: the root must be absolute path.
+        .root(&path.to_string_lossy());
+
+    // `Accessor` provides the low level APIs, we will use `Operator` normally.
+    let op: Operator = Operator::new(builder).into_diagnostic()?.finish();
+    let result = op
+        .list_with("")
+        .recursive(true)
+        .await
+        .into_diagnostic()?
+        .iter()
+        .filter(|entry| {
+            entry.metadata().mode().is_file()
+                && (entry.path().ends_with(".out.json") || entry.path().ends_with(".new.json"))
+        })
+        .map(|entry| path.join(entry.path()))
+        .collect::<Vec<PathBuf>>();
+    Ok(result)
+}
+
+fn overwrite(output_files: &Vec<PathBuf>) -> Result<bool> {
     let mut count = 0;
-    for entry in std::fs::read_dir(output).into_diagnostic()? {
-        let path = entry.into_diagnostic()?.path();
+    for path in output_files {
         let filename = path.extract_filename()?;
         if filename.ends_with(".new.json") {
             let out_filename = filename.replace(".new.json", ".out.json");
@@ -131,8 +165,8 @@ fn overwrite(output: &PathBuf) -> Result<bool> {
     Ok(true)
 }
 
-fn check(output: &Path) -> Result<bool> {
-    let differences = crate::tools::difference::search_new_vs_out(output)?;
+fn check(output_files: &Vec<PathBuf>) -> Result<bool> {
+    let differences = crate::tools::difference::search_new_vs_out(output_files)?;
     if differences.is_empty() {
         cliclack::log::success("0 differences found.").into_diagnostic()?;
         Ok(true)
@@ -146,8 +180,8 @@ fn check(output: &Path) -> Result<bool> {
     }
 }
 
-fn review(output: &Path) -> Result<bool> {
-    let differences = crate::tools::difference::search_new_vs_out(output)?;
+fn review(output_files: &Vec<PathBuf>) -> Result<bool> {
+    let differences = crate::tools::difference::search_new_vs_out(output_files)?;
     if differences.is_empty() {
         cliclack::log::success("0 differences found.").into_diagnostic()?;
         Ok(true)
@@ -162,11 +196,10 @@ fn review(output: &Path) -> Result<bool> {
     }
 }
 
-fn remove_new_files(output: &PathBuf) -> Result<()> {
-    for entry in std::fs::read_dir(output).into_diagnostic()? {
-        let path = entry.into_diagnostic()?.path();
+fn remove_new_files(output_files: &Vec<PathBuf>) -> Result<()> {
+    for path in output_files {
         let filename = path.extract_filename()?;
-        if filename.ends_with(".new.json") {
+        if filename.ends_with(".new.json") && std::fs::exists(path).into_diagnostic()? {
             std::fs::remove_file(path).into_diagnostic()?;
         }
     }

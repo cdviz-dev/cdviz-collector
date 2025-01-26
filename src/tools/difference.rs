@@ -21,21 +21,21 @@ pub struct Comparison {
 impl Comparison {
     pub fn from_xxx_json(path: &Path) -> Result<Self> {
         let base_name = path.extract_filename()?.replace(".new.json", "").replace(".out.json", "");
+        let label = path.with_file_name(&base_name).to_string_lossy().to_string();
         Ok(Self {
             expected: path.with_file_name(format!("{base_name}.out.json")),
             actual: path.with_file_name(format!("{base_name}.new.json")),
-            label: base_name,
+            label,
         })
     }
 }
 
-pub fn search_new_vs_out(directory: &Path) -> Result<HashMap<Comparison, Difference>> {
+pub fn search_new_vs_out(files: &Vec<PathBuf>) -> Result<HashMap<Comparison, Difference>> {
     let mut differences = HashMap::new();
-    for entry in std::fs::read_dir(directory).into_diagnostic()? {
-        let path = entry.into_diagnostic()?.path();
+    for path in files {
         let filename = path.extract_filename()?;
         if filename.ends_with(".new.json") {
-            let comparison = Comparison::from_xxx_json(&path)?;
+            let comparison = Comparison::from_xxx_json(path)?;
             if comparison.expected.exists() {
                 let expected_content =
                     std::fs::read_to_string(&comparison.expected).into_diagnostic()?;
@@ -55,7 +55,7 @@ pub fn search_new_vs_out(directory: &Path) -> Result<HashMap<Comparison, Differe
                     .insert(comparison, Difference::Presence { expected: false, actual: true });
             }
         } else if filename.ends_with(".out.json") {
-            let comparison = Comparison::from_xxx_json(&path)?;
+            let comparison = Comparison::from_xxx_json(path)?;
             if !comparison.actual.exists() {
                 differences
                     .insert(comparison, Difference::Presence { expected: true, actual: false });
@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn test_build_comparison() {
         let comparison = Comparison::from_xxx_json(Path::new("toto/bar/foo.new.json")).unwrap();
-        assert_eq!(comparison.label, "foo");
+        assert_eq!(comparison.label, "toto/bar/foo");
         assert_eq!(comparison.actual, Path::new("toto/bar/foo.new.json"));
         assert_eq!(comparison.expected, Path::new("toto/bar/foo.out.json"));
     }
@@ -148,8 +148,9 @@ mod tests {
         std::fs::write(&actual, "{}").unwrap();
         let expected = tmpdir.path().join("foo.out.json");
         std::fs::write(&expected, "{}").unwrap();
+        let files = vec![actual.clone(), expected.clone()];
 
-        let diffs = search_new_vs_out(tmpdir.path()).unwrap();
+        let diffs = search_new_vs_out(&files).unwrap();
         assert_eq!(diffs.len(), 0);
     }
 
@@ -160,11 +161,12 @@ mod tests {
         std::fs::write(&actual, "{}").unwrap();
         let expected = tmpdir.path().join("foo.out.json");
         std::fs::write(&expected, "[]").unwrap();
+        let files = vec![actual.clone(), expected.clone()];
 
-        let diffs = search_new_vs_out(tmpdir.path()).unwrap();
+        let diffs = search_new_vs_out(&files).unwrap();
         assert_eq!(diffs.len(), 1);
         let (comparison, diff) = diffs.into_iter().next().unwrap();
-        assert_eq!(comparison.label, "foo");
+        assert!(comparison.label.ends_with("foo"));
         assert_eq!(comparison.actual, actual);
         assert_eq!(comparison.expected, expected);
         assert_eq!(
@@ -180,11 +182,12 @@ mod tests {
         std::fs::write(&actual, "{}").unwrap();
         // let expected = tmpdir.path().join("foo.out.json");
         // std::fs::write(&expected, "{}").unwrap();
+        let files = vec![actual.clone()];
 
-        let diffs = search_new_vs_out(tmpdir.path()).unwrap();
+        let diffs = search_new_vs_out(&files).unwrap();
         assert_eq!(diffs.len(), 1);
         let (comparison, diff) = diffs.into_iter().next().unwrap();
-        assert_eq!(comparison.label, "foo");
+        assert!(comparison.label.ends_with("foo"));
         assert_eq!(comparison.actual, actual);
         assert_eq!(diff, Difference::Presence { actual: true, expected: false });
     }
@@ -196,11 +199,12 @@ mod tests {
         // std::fs::write(&actual, "{}").unwrap();
         let expected = tmpdir.path().join("foo.out.json");
         std::fs::write(&expected, "{}").unwrap();
+        let files = vec![expected.clone()];
 
-        let diffs = search_new_vs_out(tmpdir.path()).unwrap();
+        let diffs = search_new_vs_out(&files).unwrap();
         assert_eq!(diffs.len(), 1);
         let (comparison, diff) = diffs.into_iter().next().unwrap();
-        assert_eq!(comparison.label, "foo");
+        assert!(comparison.label.ends_with("foo"));
         assert_eq!(comparison.expected, expected);
         assert_eq!(diff, Difference::Presence { actual: false, expected: true });
     }
