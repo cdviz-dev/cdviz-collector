@@ -332,7 +332,8 @@ mod tests {
     fn test_check_manual_svix_signature() {
         let config = SignatureConfig {
             header: "X-Hub-Signature-256".to_string(),
-            token: "C2FVsBQIhrscChlQIMV+b5sSYspob7oD".to_string().into(), // from secret "whsec_C2FVsBQIhrscChlQIMV+b5sSYspob7oD"
+            // from secret "whsec_C2FVsBQIhrscChlQIMV+b5sSYspob7oD"
+            token: "C2FVsBQIhrscChlQIMV+b5sSYspob7oD".to_string().into(), //gitleaks:allow
             token_encoding: Some(Encoding::Base64),
             signature_prefix: Some("v1,".to_string()),
             signature_on: SignatureOn::HeadersThenBody {
@@ -343,7 +344,7 @@ mod tests {
         };
         let body_str = r#"{"email":"test@example.com","username":"test_user"}"#;
         let headers = vec![
-            ("svix-id", "msg_27UH4WbU6Z5A5EzD8u03UvzRbpk"),
+            ("svix-id", "msg_27UH4WbU6Z5A5EzD8u03UvzRbpk"), //gitleaks:allow
             ("svix-timestamp", "1649367553"),
             ("x-foo", "bar"),
         ]
