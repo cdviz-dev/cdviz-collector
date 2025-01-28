@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.3.0...0.4.0) - 2025-01-28
+
+### Added
+
+- *(transform)* tool transform support multi-level of folder
+- *(config)* allow field of configuration to read from a file
+
+### Fixed
+
+- wrong secret leak
+
+### Other
+
+- start example to convert github events
+- try to better format error reported by vrl (in log,...)
+- include transformation as part of the test flow
+- store examples of github_events (for examples & test)
+- release & package on git tag
+- *(deps)* update rust crate rustainers to 0.15
+
 ## [0.3.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.2.3...0.3.0) - 2025-01-24
 
 ### Added
