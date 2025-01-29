@@ -157,8 +157,9 @@ mod tests {
                 .url()
                 .await
                 .expect("find db url")
-                .replace("localhost", "127.0.0.1")
-                .into(), // replace localhost by 127.0.0.1 because localhost in ipv6 doesn't work
+                // replace localhost by 127.0.0.1 because localhost in ipv6 doesn't work (fixed with rustainers 0.15)
+                //.replace("localhost", "127.0.0.1")
+                .into(),
             pool_connections_min: 1,
             pool_connections_max: 30,
         };
