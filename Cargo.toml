@@ -26,7 +26,7 @@ cliclack = { version = "0.3", optional = true }
 cloudevents-sdk = { version = "0.8", features = ["http-binding"] }
 console = { version = "0.15", optional = true }
 csv = { version = "1", optional = true }
-derive_more = { version = "1", features = ["display", "from", "error"] }
+derive_more = { version = "2", features = ["display", "from", "error"] }
 enum_dispatch = "0.3"
 faster-hex = "0.10"
 figment = { version = "0.10", features = ["toml", "env"] }
