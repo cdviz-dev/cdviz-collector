@@ -140,11 +140,12 @@ depends = ["lint", "test", "deny"]
 description = "set of tasks run by CI"
 
 [tasks."build:container"]
+description = "build container image `cdviz-collector:wip` by downloading binary from github release (e.g. `mise run build:container --version 0.4.0`)"
 run = ["""
     docker buildx build \
         --output type=image,compression=zstd,oci-mediatypes=true \
         --platform linux/amd64,linux/arm64 \
-        --build-arg VERSION={{arg(name="version")}} \
+        --build-arg VERSION={{option(name="version")}} \
         --target cdviz-collector \
         -t cdviz-collector:wip .
     """, "docker image list --tree cdviz-collector"]
