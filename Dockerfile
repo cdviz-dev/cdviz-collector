@@ -133,6 +133,7 @@ COPY --from=download /etc/passwd /etc/passwd
 COPY --from=download /etc/group /etc/group
 USER nonroot
 COPY --from=download /app/${TARGETPLATFORM} /cdviz-collector
+COPY ./config /etc/cdviz-collector
 
 ENV \
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="http://127.0.0.1:4317" \

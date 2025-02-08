@@ -128,7 +128,7 @@ if exists(.body.package) {
             "timestamp": ts,
         },
         "subject": {
-            "id": .body.workflow_run.id, # or .body.workflow_run.workflow_id ? 
+            "id": .body.workflow_run.id, # or .body.workflow_run.workflow_id ?
             "type": "pipelineRun",
             "content": {
                 "pipelineName": .body.workflow_run.name,
@@ -145,7 +145,7 @@ if exists(.body.package) {
     } else if .body.action == "completed" {
         body = base_body
         body.context.type = "dev.cdevents.pipelinerun.finished.0.2.0"
-        body.subject.content.outcome = .body.workflow_run.conclusion # action_required, cancelled, failure, neutral, skipped, stale, success, timed_out, startup_failure, null 
+        body.subject.content.outcome = .body.workflow_run.conclusion # action_required, cancelled, failure, neutral, skipped, stale, success, timed_out, startup_failure, null
     }
 } else if exists(.body.workflow_job) {
     # https://docs.github.com/en/webhooks/webhook-events-and-payloads#workflow_job
@@ -156,7 +156,7 @@ if exists(.body.package) {
             "source": .body.workflow_job.url,
         },
         "subject": {
-            "id": .body.workflow_job.id, # or .body.workflow_run.workflow_id ? 
+            "id": .body.workflow_job.id, # or .body.workflow_run.workflow_id ?
             "type": "taskRun",
             "content": {
                 "taskName": .body.workflow_job.name,
