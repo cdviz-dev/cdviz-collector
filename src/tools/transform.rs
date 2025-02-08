@@ -5,11 +5,16 @@ use crate::{
     sources::{opendal as source_opendal, transformers, EventSource, EventSourcePipe},
     utils::PathExt,
 };
+use cdevents_sdk::CDEvent;
 use clap::{Args, ValueEnum};
 use opendal::Scheme;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicU16, Ordering},
+        Arc,
+    },
 };
 
 #[derive(Debug, Clone, Args)]
@@ -38,6 +43,10 @@ pub(crate) struct TransformArgs {
     /// How to handle new vs existing output files
     #[clap(short = 'm', long = "mode", value_enum, default_value_t = TransformMode::Review)]
     mode: TransformMode,
+
+    /// Do not check if output's body is a cdevent
+    #[clap(long)]
+    no_check_cdevent: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Default)]
@@ -52,18 +61,22 @@ enum TransformMode {
 }
 
 pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
-    if let Some(dir) = args.directory {
+    if let Some(dir) = &args.directory {
         std::env::set_current_dir(dir).into_diagnostic()?;
     }
 
-    cliclack::intro("Transforming files...").into_diagnostic()?;
     let config = config::Config::from_file(args.config)?;
+    cliclack::intro("Transforming files...").into_diagnostic()?;
 
     if !args.output.exists() {
         std::fs::create_dir_all(&args.output).into_diagnostic()?;
     }
-
-    let mut pipe: EventSourcePipe = Box::new(OutputToJsonFile { directory: args.output.clone() });
+    let check_cdevent_failures_counter = Arc::new(AtomicU16::new(0));
+    let mut pipe: EventSourcePipe = Box::new(OutputToJsonFile {
+        directory: args.output.clone(),
+        check_cdevent: !args.no_check_cdevent,
+        check_cdevent_failures_counter: Arc::clone(&check_cdevent_failures_counter),
+    });
     let mut tconfigs =
         transformers::resolve_transformer_refs(&args.transformer_refs, &config.transformers)?;
     tconfigs.reverse();
@@ -93,12 +106,23 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
         TransformMode::Overwrite => overwrite(&output_files),
     };
     remove_new_files(&output_files)?;
+
+    let check_cdevent_failures_count = check_cdevent_failures_counter.load(Ordering::Acquire);
+    if check_cdevent_failures_count > 0 {
+        cliclack::log::warning(format!(
+            "could not parse body as a cdevent {check_cdevent_failures_count} times"
+        ))
+        .into_diagnostic()?;
+    }
+
     cliclack::outro("Transformation done.").into_diagnostic()?;
-    res
+    res.map(|ok| ok && (check_cdevent_failures_count == 0))
 }
 
 struct OutputToJsonFile {
     directory: PathBuf,
+    check_cdevent: bool,
+    check_cdevent_failures_counter: Arc<AtomicU16>,
 }
 
 impl Pipe for OutputToJsonFile {
@@ -108,7 +132,7 @@ impl Pipe for OutputToJsonFile {
             .as_str()
             .ok_or(miette!("could not extract 'name' field from metadata"))?;
         let filename = filename.replace(".json", ".new.json");
-        let path = self.directory.join(filename);
+        let path = self.directory.join(&filename);
         // remove fields that can change between runs on different machines
         let mut input = input;
         if let Some(metadata) = input.metadata.as_object_mut() {
@@ -120,6 +144,16 @@ impl Pipe for OutputToJsonFile {
         }
         std::fs::write(path, serde_json::to_string_pretty(&input).into_diagnostic()?)
             .into_diagnostic()?;
+        if self.check_cdevent {
+            let maybe_cdevents = CDEvent::try_from(input);
+            if let Err(err) = maybe_cdevents {
+                self.check_cdevent_failures_counter.fetch_add(1, Ordering::SeqCst);
+                cliclack::log::warning(format!(
+                    "{filename}: could not parse body as a cdevent: {err}"
+                ))
+                .into_diagnostic()?;
+            }
+        }
         Ok(())
     }
 }
