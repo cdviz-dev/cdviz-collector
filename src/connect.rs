@@ -48,11 +48,11 @@ static SHUTDOWN_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationT
 //TODO integrations with kafka / redpanda, nats,
 /// retuns true if the connection service ran successfully
 pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
-    let config = config::Config::from_file(args.config)?;
-
-    if let Some(dir) = args.directory {
+    if let Some(dir) = &args.directory {
         std::env::set_current_dir(dir).into_diagnostic()?;
     }
+
+    let config = config::Config::from_file(args.config)?;
 
     let (tx, _) = broadcast::channel::<Message>(100);
 
