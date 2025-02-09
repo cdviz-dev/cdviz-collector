@@ -76,7 +76,7 @@ parser = "json"
 
 [sources.github_webhook]
 enabled = true
-transformers_ref = ["github_events"]
+transformer_refs = ["github_events"]
 
 [sources.github_webhook.extractor]
 type = "webhook"
