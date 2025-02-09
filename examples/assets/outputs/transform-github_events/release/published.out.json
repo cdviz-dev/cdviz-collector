@@ -13,9 +13,11 @@
       "version": "0.4.1"
     },
     "subject": {
+      "content": {
+        "user": "github-actions[bot]"
+      },
       "id": "pkg:github/cdviz-dev/cdviz-collector@0.3.0",
-      "type": "artifact",
-      "user": "github-actions[bot]"
+      "type": "artifact"
     }
   }
 }

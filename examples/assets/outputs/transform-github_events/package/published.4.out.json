@@ -13,10 +13,12 @@
       "version": "0.4.1"
     },
     "subject": {
+      "content": {
+        "user": "github-actions[bot]"
+      },
       "id": "pkg:oci/cdviz-collector@sha256%3Aadf450ad2a44e7cf94a9ba15378ad66f3b906ebd88d541f980d3b3e2b33f2399?repository_url=ghcr.io/cdviz-dev&tag=0%2E3%2E0",
       "source": "ghcr.io/cdviz-dev/cdviz-collector:0.3.0",
-      "type": "artifact",
-      "user": "github-actions[bot]"
+      "type": "artifact"
     }
   }
 }
