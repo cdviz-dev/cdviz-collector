@@ -87,7 +87,9 @@ if exists(.body.package) {
                     "id": pkg,
                     "source": .body.package.package_version.package_url,
                     "type": "artifact",
-                    "user": sender,
+                    "content": {
+                        "user": sender,
+                    }
                 }
             }
         }
@@ -112,7 +114,9 @@ if exists(.body.package) {
             "subject": {
                 "id": pkg,
                 "type": "artifact",
-                "user": sender,
+                "content": {
+                    "user": sender,
+                }
             }
         }
     }
@@ -128,7 +132,7 @@ if exists(.body.package) {
             "timestamp": ts,
         },
         "subject": {
-            "id": .body.workflow_run.id, # or .body.workflow_run.workflow_id ?
+            "id": to_string(.body.workflow_run.id) ?? "", # or .body.workflow_run.workflow_id ?
             "type": "pipelineRun",
             "content": {
                 "pipelineName": .body.workflow_run.name,
@@ -138,10 +142,10 @@ if exists(.body.package) {
     }
     if .body.action == "requested" {
         body = base_body
-        body.context.type = "dev.cdevents.pipelineRun.queued.0.2.0"
+        body.context.type = "dev.cdevents.pipelinerun.queued.0.2.0"
     } else if .body.action == "in_progress" {
         body = base_body
-        body.context.type = "dev.cdevents.pipelineRun.started.0.2.0"
+        body.context.type = "dev.cdevents.pipelinerun.started.0.2.0"
     } else if .body.action == "completed" {
         body = base_body
         body.context.type = "dev.cdevents.pipelinerun.finished.0.2.0"
@@ -156,13 +160,13 @@ if exists(.body.package) {
             "source": .body.workflow_job.url,
         },
         "subject": {
-            "id": .body.workflow_job.id, # or .body.workflow_run.workflow_id ?
+            "id": to_string(.body.workflow_job.id) ?? "", # or .body.workflow_run.workflow_id ?
             "type": "taskRun",
             "content": {
                 "taskName": .body.workflow_job.name,
                 "url": .body.workflow_job.html_url,
                 "pipelineRun": {
-                    "id": .body.workflow_job.run_id
+                    "id": to_string(.body.workflow_job.run_id) ?? ""
                 }
             }
         }

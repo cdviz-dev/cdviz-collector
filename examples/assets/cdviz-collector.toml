@@ -6,14 +6,14 @@
 # pool_connections_max = 10
 
 [sinks.cdevents_local_json]
-enabled = true
+enabled = false
 parameters = { root = "./sinks.off" }
 
 [sources.cdevents_local_json]
 enabled = true
 
 [sources.cdevents_local_json.extractor]
-parameters = { root = "./inputs" }
+parameters = { root = "./inputs/cdevents_json" }
 
 [sources.cdevents_local_csv]
 enabled = true
@@ -60,6 +60,30 @@ template = """
     }
 }]
 """
+
+[sources.github_local_json]
+enabled = true
+transformer_refs = ["github_events"]
+
+[sources.github_local_json.extractor]
+type = "opendal"
+kind = "fs"
+parameters = { root = "./inputs/github_events" }
+polling_interval = "10s"
+recursive = true
+path_patterns = ["**/*.json"]
+parser = "json"
+
+[sources.github_webhook]
+enabled = true
+transformers_ref = ["github_events"]
+
+[sources.github_webhook.extractor]
+type = "webhook"
+id = "001"
+headers_to_keep = []
+# token override by environment variable reads from the secret
+signature = { signature_encoding = "hex", signature_on = "body", signature_prefix = "sha256=", header = "x-hub-signature-256", token = "changeme" }
 
 [transformers.github_events]
 type = "vrl"

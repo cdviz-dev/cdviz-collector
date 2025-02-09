@@ -18,7 +18,7 @@
         "pipelineName": "ci",
         "url": "https://github.com/cdviz-dev/cdviz-collector/actions/runs/12915191034"
       },
-      "id": 12915191034,
+      "id": "12915191034",
       "type": "pipelineRun"
     }
   }

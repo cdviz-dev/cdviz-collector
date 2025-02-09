@@ -9,7 +9,7 @@
       "id": "0",
       "source": "https://api.github.com/repos/cdviz-dev/cdviz-collector/actions/runs/12915191052",
       "timestamp": "2025-01-22T19:01:00+00:00",
-      "type": "dev.cdevents.pipelineRun.queued.0.2.0",
+      "type": "dev.cdevents.pipelinerun.queued.0.2.0",
       "version": "0.4.1"
     },
     "subject": {
@@ -17,7 +17,7 @@
         "pipelineName": "Release",
         "url": "https://github.com/cdviz-dev/cdviz-collector/actions/runs/12915191052"
       },
-      "id": 12915191052,
+      "id": "12915191052",
       "type": "pipelineRun"
     }
   }
