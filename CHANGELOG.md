@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.4.0...0.5.0) - 2025-02-09
+
+### Added
+
+- `transform`  command check by if a valid cdevent is generated
+- include transformer files (vrl) into container
+
+### Fixed
+
+- transformer github_events
+- apply `--directory` before loading config files
+- *(deps)* update rust crates
+- *(deps)* update rust crates
+- *(deps)* update rust crate miette to v7.5.0
+
+### Other
+
+- document the task `build:container`
+- *(deps)* update crates dependencies
+- *(deps)* complete upgrade to rustainers 0.15
+
 ## [0.4.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.3.0...0.4.0) - 2025-01-28
 
 ### Added
