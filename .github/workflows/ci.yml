@@ -21,8 +21,10 @@ permissions:
 
 jobs:
   ci:
-    # "ubuntu-22.04-arm" faster? but fewer available than "ubuntu-latest"
-    runs-on: "ubuntu-22.04-arm"
+    # "ubuntu-22.04-arm" vs "ubuntu-latest"
+    # - faster? (not sure 10min for both with cold cache, and 4min (+1min) for arm on 90% cache'hit)
+    # - fewer available => longer "queued times"
+    runs-on: "ubuntu-latest"
     env:
       CARGO_TERM_COLOR: always
       # to help debug on failure (maybe conflict with disable of test debug)
