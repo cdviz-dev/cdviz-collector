@@ -15,6 +15,7 @@ use errors::{IntoDiagnostic, Result};
 use init_tracing_opentelemetry::tracing_subscriber_ext::TracingGuard;
 
 // Use Jemalloc only for musl-64 bits platforms
+// see [Default musl allocator considered harmful (to performance)](https://nickb.dev/blog/default-musl-allocator-considered-harmful-to-performance/)
 #[cfg(all(target_env = "musl", target_pointer_width = "64"))]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;

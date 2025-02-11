@@ -29,24 +29,28 @@ run = [
 [tasks."install:sqlx-cli"]
 hide = true
 run = [
-    "cargo install sqlx-cli --no-default-features --features rustls,postgres --locked",
+    "cargo --locked install sqlx-cli --no-default-features --features rustls,postgres",
 ]
 
+[tasks."deps:update"]
+description = "update dependencies, other calls to cargo will be `locked` for faster & reproducible builds"
+run = "cargo update"
+
 [tasks."check"]
-run = "cargo hack check --each-feature --no-dev-deps"
+run = "cargo --locked hack check --each-feature --no-dev-deps"
 
 [tasks."build"]
 depends = ["install:rustcomponents"]
-run = "cargo build"
+run = "cargo --locked build"
 
 [tasks."format"]
 depends = ["install:rustcomponents"]
 description = "Format the code and sort dependencies"
-run = ["cargo fmt", "cargo sort --grouped"]
+run = ["cargo --locked fmt", "cargo --locked sort --grouped"]
 
 [tasks."deny"]
 depends = ["install:rustcomponents"]
-run = ["cargo tree -i opentelemetry", "cargo deny --all-features check"]
+run = ["cargo --locked tree -i opentelemetry", "cargo --locked deny --all-features check"]
 
 [tasks."lint"]
 depends = ["lint:rust"]
@@ -59,26 +63,26 @@ description = "Lint all the code (megalinter + lint_rust)"
 [tasks."lint:rust"]
 depends = ["install:rustcomponents"]
 run = [
-    "cargo fmt --all -- --check",
-    "cargo sort --grouped --check",
-    "cargo clippy --workspace --all-features --all-targets",
+    "cargo --locked fmt --all -- --check",
+    "cargo --locked sort --grouped --check",
+    "cargo --locked clippy --workspace --all-features --all-targets",
 ]
 
 
 [tasks."lint:dependencies"]
 depends = ["install:rustcomponents"]
-run = ["cargo machete --with-metadata"]
+run = ["cargo --locked machete --with-metadata"]
 # check unused with cargo-machete or cargo-udeps
 # TODO check outdated
 
 [tasks."test"]
 depends = ["install:rustcomponents"]
 run = [
-    "cargo nextest run",
+    "cargo --locked nextest run",
     # "cargo test --doc",
     # "cargo hack nextest --each-feature -- --test-threads=1",
-    "cargo run -- transform --mode check --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/cdevents_json --output ./outputs/transform-passthrough",
-    "cargo run -- transform -t github_events --mode check --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/github_events --output ./outputs/transform-github_events",
+    "cargo --locked run -- transform --mode check --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/cdevents_json --output ./outputs/transform-passthrough",
+    "cargo --locked run -- transform -t github_events --mode check --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/github_events --output ./outputs/transform-github_events",
 ]
 
 [tasks."test:coverage"]
@@ -124,7 +128,7 @@ run = [
     "mise run db:start",
     "sleep 5",
     "sqlx database create --database-ur \"$PG_OFFLINE_URL\"",
-    "cargo sqlx prepare --workspace --database-url \"$PG_OFFLINE_URL\"",
+    "cargo --locked sqlx prepare --workspace --database-url \"$PG_OFFLINE_URL\"",
     "sqlx database drop -y --database-url \"PG_OFFLINE_URL\"",
     "mise run db:stop",
 ]
@@ -160,10 +164,10 @@ run = ["""
 
 [tasks."examples:transform:passthrough"]
 run = [
-    "cargo run -- transform --mode review --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/cdevents_json --output ./outputs/transform-passthrough",
+    "cargo --locked run -- transform --mode review --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/cdevents_json --output ./outputs/transform-passthrough",
 ]
 
 [tasks."examples:transform:github_events"]
 run = [
-    "cargo run -- transform -t github_events --mode review --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/github_events --output ./outputs/transform-github_events",
+    "cargo --locked run -- transform -t github_events --mode review --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/github_events --output ./outputs/transform-github_events",
 ]
