@@ -21,7 +21,8 @@ permissions:
 
 jobs:
   ci:
-    runs-on: "ubuntu-latest-arm64" # faster? but fewer available than "ubuntu-latest"
+    # "ubuntu-latest-arm64" faster? but fewer available than "ubuntu-latest"
+    runs-on: "ubuntu-22.04-arm"
     env:
       CARGO_TERM_COLOR: always
       # to help debug on failure (maybe conflict with disable of test debug)
