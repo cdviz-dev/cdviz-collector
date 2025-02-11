@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   ci:
-    # "ubuntu-latest-arm64" faster? but fewer available than "ubuntu-latest"
+    # "ubuntu-22.04-arm" faster? but fewer available than "ubuntu-latest"
     runs-on: "ubuntu-22.04-arm"
     env:
       CARGO_TERM_COLOR: always
