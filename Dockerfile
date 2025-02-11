@@ -50,10 +50,14 @@ WORKDIR /work
 
 COPY ./ .
 
+# reduce size of target (good for caching)
+ENV CARGO_PROFILE_TEST_DEBUG=0
+# disable incremental compilation for faster from-scratch builds
+ENV CARGO_INCREMENTAL=0
 # TODO `upx /work/target/*/${PROFILE}/cdviz-collector`
 RUN <<EOT
   set -eux
-  cargo zigbuild --target x86_64-unknown-linux-musl --target aarch64-unknown-linux-musl "--$PROFILE"
+  cargo zigbuild --locked --target x86_64-unknown-linux-musl --target aarch64-unknown-linux-musl "--$PROFILE"
   mkdir -p /app/linux
   ls target
   cp "target/aarch64-unknown-linux-musl/${PROFILE}/cdviz-collector" /app/linux/arm64

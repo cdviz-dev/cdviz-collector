@@ -1,4 +1,6 @@
 ---
+# inspiration:
+# - [Tips for Faster Rust CI Builds | corrode Rust Consulting](https://corrode.dev/blog/tips-for-faster-ci-builds/)
 name: ci
 
 on:
@@ -19,10 +21,19 @@ permissions:
 
 jobs:
   ci:
+    # "ubuntu-22.04-arm" vs "ubuntu-latest"
+    # - faster? (not sure 10min for both with cold cache, and 4min (+1min) for arm on 90% cache'hit)
+    # - fewer available => longer "queued times"
     runs-on: "ubuntu-latest"
     env:
       CARGO_TERM_COLOR: always
+      # to help debug on failure (maybe conflict with disable of test debug)
       RUST_BACKTRACE: full
+      # reduce size of target (good for caching)
+      CARGO_PROFILE_TEST_DEBUG: 0
+      # disable incremental compilation faster from-scratch builds & sccache
+      CARGO_INCREMENTAL: 0
+      # configure sccache to cache the build artifacts (on github caches)
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
     steps:

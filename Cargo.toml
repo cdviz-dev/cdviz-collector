@@ -188,7 +188,11 @@ unnecessary_safety_doc = "warn"
 unwrap_used = "warn"
 module_name_repetitions = "allow"
 
+[profile.release]
+lto = "thin"      # see https://doc.rust-lang.org/cargo/reference/profiles.html#lto
+codegen-units = 1
+strip = "symbols" # "none", "debuginfo", "symbols"
+
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
-lto = "thin"
