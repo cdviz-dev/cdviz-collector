@@ -34,7 +34,9 @@ run = [
 
 [tasks."deps:update"]
 description = "update dependencies, other calls to cargo will be `locked` for faster & reproducible builds"
-run = "cargo update"
+run = [
+  "cargo update",
+]
 
 [tasks."check"]
 run = "cargo --locked hack check --each-feature --no-dev-deps"
@@ -70,10 +72,13 @@ run = [
 
 
 [tasks."lint:dependencies"]
+description = "check if dependencies are unused, outdated,..."
 depends = ["install:rustcomponents"]
-run = ["cargo --locked machete --with-metadata"]
-# check unused with cargo-machete or cargo-udeps
-# TODO check outdated
+run = ["cargo --locked machete --with-metadata",
+  "cargo outdated -wR",
+  # "cargo tree --duplicate", # managed by cargo deny
+  # "cargo audit", # check security, maybe done by cargo deny
+]
 
 [tasks."test"]
 depends = ["install:rustcomponents"]
