@@ -29,7 +29,7 @@ jobs:
       # reduce size of target (good for caching)
       CARGO_PROFILE_TEST_DEBUG: 0
       # disable incremental compilation faster from-scratch builds & sccache
-      # CARGO_INCREMENTAL: 0
+      CARGO_INCREMENTAL: 0
       # configure sccache to cache the build artifacts (on github caches)
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
