@@ -81,7 +81,7 @@ tower-http = { version = "0.6", features = [
 ] }
 tracing = "0.1"
 tracing-opentelemetry-instrumentation-sdk = { version = "0.26" }
-vrl = { version = "0.21", optional = true }
+vrl = { version = "0.22", optional = true }
 
 [dev-dependencies]
 assert2 = "0.3"
