@@ -1,7 +1,7 @@
 use super::EventSource;
+use crate::Message;
 use crate::errors::{IntoDiagnostic, Result};
 use crate::pipes::Pipe;
-use crate::Message;
 use cdevents_sdk::CDEvent;
 
 use tokio::sync::broadcast::Sender;

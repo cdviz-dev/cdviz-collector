@@ -1,9 +1,9 @@
 use super::Sink;
-use crate::errors::{IntoDiagnostic, Report, Result};
 use crate::Message;
+use crate::errors::{IntoDiagnostic, Report, Result};
 use opendal::{Operator, Scheme};
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
 use std::collections::HashMap;
 
 #[serde_as]

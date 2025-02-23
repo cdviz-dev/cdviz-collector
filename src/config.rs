@@ -3,8 +3,8 @@ use crate::{
     http, sinks, sources,
 };
 use figment::{
-    providers::{Env, Format, Toml},
     Figment,
+    providers::{Env, Format, Toml},
 };
 use figment_file_provider_adapter::FileAdapter;
 use serde::Deserialize;

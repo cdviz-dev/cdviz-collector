@@ -1,12 +1,12 @@
 use super::Sink;
 use crate::{
-    errors::{IntoDiagnostic, Report, Result},
     Message,
+    errors::{IntoDiagnostic, Report, Result},
 };
-use secrecy::{zeroize::Zeroize, ExposeSecret, SecretString};
+use secrecy::{ExposeSecret, SecretString, zeroize::Zeroize};
 use serde::Deserialize;
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use tracing::Instrument;
 
 /// The database client config
@@ -113,9 +113,9 @@ mod tests {
 
     use super::*;
     use rstest::*;
+    use rustainers::Container;
     use rustainers::images::Postgres;
     use rustainers::runner::{RunOption, Runner};
-    use rustainers::Container;
 
     struct TestContext {
         pub sink: DbSink,

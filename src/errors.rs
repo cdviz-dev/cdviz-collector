@@ -1,4 +1,4 @@
-pub(crate) use miette::{miette, IntoDiagnostic, Report, Result};
+pub(crate) use miette::{IntoDiagnostic, Report, Result, miette};
 
 // Nightly requires enabling this feature:
 // #![feature(error_generic_member_access)]

@@ -1,4 +1,4 @@
-use crate::errors::{miette, Result};
+use crate::errors::{Result, miette};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 

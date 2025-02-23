@@ -1,6 +1,6 @@
 #[allow(dead_code)]
 use super::Pipe;
-use crate::errors::{miette, Result};
+use crate::errors::{Result, miette};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Debug,
