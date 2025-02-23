@@ -13,7 +13,7 @@ use futures::TryStreamExt;
 use opendal::{Operator, Scheme};
 use serde::Deserialize;
 use serde::Serialize;
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;

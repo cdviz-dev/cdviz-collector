@@ -1,6 +1,6 @@
 use super::Sink;
-use crate::errors::{Report, Result};
 use crate::Message;
+use crate::errors::{Report, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

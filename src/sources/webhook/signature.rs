@@ -4,14 +4,14 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use bytes::{Bytes, BytesMut};
 use faster_hex::{hex_decode, hex_string};
 //use futures::future::BoxFuture;
 //use futures::future::TryFutureExt;
 use hmac::{
-    digest::{InvalidLength, MacError},
     Hmac, Mac,
+    digest::{InvalidLength, MacError},
 };
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
@@ -193,7 +193,7 @@ mod tests {
     use super::*;
     use assert2::let_assert;
     use axum::{
-        body::{to_bytes, Body},
+        body::{Body, to_bytes},
         http::Request,
     };
     use pretty_assertions::assert_eq;

@@ -1,4 +1,4 @@
-use super::{opendal, webhook, EventSourcePipe};
+use super::{EventSourcePipe, opendal, webhook};
 use crate::errors::Result;
 use axum::Router;
 use serde::Deserialize;

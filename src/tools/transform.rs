@@ -1,8 +1,8 @@
 use crate::{
     config,
-    errors::{miette, IntoDiagnostic, Result},
+    errors::{IntoDiagnostic, Result, miette},
     pipes::Pipe,
-    sources::{opendal as source_opendal, transformers, EventSource, EventSourcePipe},
+    sources::{EventSource, EventSourcePipe, opendal as source_opendal, transformers},
     utils::PathExt,
 };
 use cdevents_sdk::CDEvent;
@@ -12,8 +12,8 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicU16, Ordering},
         Arc,
+        atomic::{AtomicU16, Ordering},
     },
 };
 
@@ -160,7 +160,7 @@ impl Pipe for OutputToJsonFile {
 
 // recursive iterator over all files in a directory
 async fn list_output_files(path: &Path) -> Result<Vec<PathBuf>> {
-    use opendal::{services::Fs, Operator};
+    use opendal::{Operator, services::Fs};
     let builder = Fs::default()
         // Set the root for fs, all operations will happen under this root.
         //

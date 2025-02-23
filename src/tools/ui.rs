@@ -1,7 +1,7 @@
 use crate::errors::{IntoDiagnostic, Result};
 
 pub fn show_difference_text(old: &str, new: &str, show_whitespace: bool) -> Result<()> {
-    use console::{style, Style};
+    use console::{Style, style};
     use similar::{ChangeTag, TextDiff};
 
     let diff = TextDiff::from_lines(old, new);

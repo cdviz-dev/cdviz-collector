@@ -1,5 +1,5 @@
 use crate::errors::{Error, IntoDiagnostic, ReportWrapper, Result};
-use axum::{extract::DefaultBodyLimit, http, response::IntoResponse, routing::get, Json, Router};
+use axum::{Json, Router, extract::DefaultBodyLimit, http, response::IntoResponse, routing::get};
 use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
 use serde::{Deserialize, Serialize};
 use serde_json::json;

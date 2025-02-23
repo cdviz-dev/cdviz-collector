@@ -1,6 +1,6 @@
 use super::Sink;
-use crate::errors::{IntoDiagnostic, Report, Result};
 use crate::Message;
+use crate::errors::{IntoDiagnostic, Report, Result};
 use cdevents_sdk::cloudevents::BuilderExt;
 use cloudevents::{EventBuilder, EventBuilderV10};
 use http_cloudevents::RequestBuilderExt;
@@ -79,14 +79,14 @@ impl Sink for HttpSink {
 //
 
 mod http_cloudevents {
-    use cloudevents::binding::http::header_prefix;
+    use cloudevents::Event;
     use cloudevents::binding::http::SPEC_VERSION_HEADER;
+    use cloudevents::binding::http::header_prefix;
     use cloudevents::event::SpecVersion;
     use cloudevents::message::BinaryDeserializer;
     use cloudevents::message::BinarySerializer;
     use cloudevents::message::MessageAttributeValue;
     use cloudevents::message::Result;
-    use cloudevents::Event;
     use reqwest_middleware::RequestBuilder;
 
     pub trait RequestBuilderExt {
