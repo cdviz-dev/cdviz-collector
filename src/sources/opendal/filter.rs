@@ -92,8 +92,8 @@ impl FilePatternMatcher {
     where
         P: AsRef<std::path::Path>,
     {
-        self.include.as_ref().map_or(true, |globset| globset.is_match(&path))
-            && self.exclude.as_ref().map_or(true, |globset| !globset.is_match(&path))
+        self.include.as_ref().is_none_or(|globset| globset.is_match(&path))
+            && self.exclude.as_ref().is_none_or(|globset| !globset.is_match(&path))
     }
 }
 

@@ -50,16 +50,9 @@ enum Command {
 
 //TODO use logfmt
 fn init_log(verbose: Verbosity) -> Result<TracingGuard> {
-    let level = verbose.log_level().map(|level| level.to_string());
-    std::env::set_var(
-        "RUST_LOG",
-        std::env::var("RUST_LOG")
-            .ok()
-            .or_else(|| level.map(|level| format!("{level},otel::setup={level}")))
-            .unwrap_or_else(|| "off".to_string()),
-    );
-    // very opinionated init of tracing, look as is source to make your own
-    init_tracing_opentelemetry::tracing_subscriber_ext::init_subscribers().into_diagnostic()
+    let level = verbose.log_level().map(|level| level.to_string()).unwrap_or_default();
+    init_tracing_opentelemetry::tracing_subscriber_ext::init_subscribers_and_loglevel(&level)
+        .into_diagnostic()
 }
 
 //TODO document the architecture and the configuration
