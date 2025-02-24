@@ -3,7 +3,7 @@ name = "cdviz-collector"
 description = "A service & cli to collect SDLC/CI/CD events and to dispatch as cdevents."
 keywords = ["cd", "cdevents", "sdlc"]
 categories = []
-edition = "2021"
+edition = "2024"
 version = "0.5.0"
 authors = ["David Bernard"]
 license = "Apache-2.0"
@@ -41,7 +41,7 @@ handlebars_misc_helpers = { version = "0.17", optional = true, default-features 
 ] }
 hmac = "0.12"
 humantime-serde = "1"
-init-tracing-opentelemetry = { version = "0.26", features = [
+init-tracing-opentelemetry = { version = "0.27", features = [
   "otlp",
   "tracing_subscriber_ext",
   "logfmt",

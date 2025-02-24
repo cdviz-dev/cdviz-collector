@@ -14,7 +14,7 @@
 #
 # checkov:skip=CKV_DOCKER_7:Ensure the base image uses a non latest version tag
 # trivy:ignore:AVD-DS-0001
-FROM --platform=$BUILDPLATFORM rust:1.84.0-alpine AS build
+FROM --platform=$BUILDPLATFORM rust:1.85.0-alpine AS build
 ARG PROFILE=release
 
 ENV PKG_CONFIG_SYSROOT_DIR=/
