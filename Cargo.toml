@@ -90,7 +90,7 @@ figment = { version = "0.10", features = ["toml", "env", "test"] }
 indoc = "2"
 pretty_assertions = "1"
 proptest = "1"
-rstest = "0.24"
+rstest = "0.25"
 rustainers = "0.15"
 tempfile = "3"
 test-strategy = "0.4"
