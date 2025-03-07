@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.5.0...0.5.1) - 2025-03-07
+
+### Fixed
+
+- *(deps)* update rust crate opendal to 0.52
+- *(deps)* update rust crate vrl to 0.22
+- *(deps)* update opentelemetry to 0.26
+- misconfiguration of the github webhook example
+
+### Other
+
+- *(deps)* update
+- *(deps)* update rust crate rstest to 0.25
+- *(deps)* update rust crate uuid to v1.15.0
+- *(deps)* upgrade to rust 1.85 (edition 2024)
+- format code (using rust 1.85)
+- *(deps)* update rust crate uuid to v1.14.0
+- *(deps)* update rust crate tempfile to v3.17.1
+- try to speed-up ci workflow ([#52](https://github.com/cdviz-dev/cdviz-collector/pull/52))
+
 ## [0.5.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.4.0...0.5.0) - 2025-02-09
 
 ### Added
