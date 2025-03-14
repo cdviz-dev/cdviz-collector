@@ -132,10 +132,10 @@ if exists(.body.package) {
             "timestamp": ts,
         },
         "subject": {
-            "id": to_string(.body.workflow_run.id) ?? "", # or .body.workflow_run.workflow_id ?
+            "id": to_string!(.body.workflow_run.id) + "/" + to_string!(.body.workflow_run.run_attempt) , # or .body.workflow_run.workflow_id, integration of run_number ?
             "type": "pipelineRun",
             "content": {
-                "pipelineName": .body.workflow_run.name,
+                "pipelineName": (repo_full_name + "/" + .body.workflow_run.name) ?? "",
                 "url": .body.workflow_run.html_url
             }
         }
@@ -160,13 +160,14 @@ if exists(.body.package) {
             "source": .body.workflow_job.url,
         },
         "subject": {
-            "id": to_string(.body.workflow_job.id) ?? "", # or .body.workflow_run.workflow_id ?
+            "id": to_string!(.body.workflow_job.id) + "/" + to_string!(.body.workflow_job.run_attempt),
             "type": "taskRun",
             "content": {
-                "taskName": .body.workflow_job.name,
+                # define an "absolute" name to avoid conflicts with other entities from other contexts
+                "taskName": (repo_full_name + "/" + .body.workflow_job.workflow_name + "/" + .body.workflow_job.name) ?? .body.workflow_job.name,
                 "url": .body.workflow_job.html_url,
                 "pipelineRun": {
-                    "id": to_string(.body.workflow_job.run_id) ?? ""
+                    "id": to_string!(.body.workflow_job.run_id) + "/" + to_string!(.body.workflow_job.run_attempt),
                 }
             }
         }
