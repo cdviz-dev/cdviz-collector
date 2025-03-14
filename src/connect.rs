@@ -93,7 +93,8 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
     let servers = vec![crate::http::launch(&config.http, routes, &SHUTDOWN_TOKEN)];
 
     // the channel is closed when all (sender / tx) are dropped) and then in cascade the receiver and the sinks
-    // so we can drop the no more useful sender to avoid a leak
+    // so we drop the no more useful sender to avoid a leak
+    // TODO Alternative (since tokio 1.44): look at WeakSender & Sender.closed()
     drop(tx);
 
     // setup the handler to (try to) shutdown gracefully
