@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.5.1...0.5.2) - 2025-03-14
+
+### Added
+
+- feat!(github): change the computation of workflow_xxx ids & name
+
+### Other
+
+- *(renovate)* try to disable update of  just lock file
+- *(deps)* update dependencies
+
 ## [0.5.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.5.0...0.5.1) - 2025-03-07
 
 ### Fixed
