@@ -11,7 +11,13 @@
   rebaseWhen: "conflicted",
   labels: ["dependencies"],
   prHourlyLimit: 2,
+  lockFileMaintenance: { enabled: false },
   packageRules: [
+    {
+      // Do not look at Cargo.lock
+      "matchFileNames": ["**/Cargo.toml"],
+      "labels": ["cargo"]
+    },
     {
       matchUpdateTypes: ["patch", "pin", "digest"],
       enabled: false,
