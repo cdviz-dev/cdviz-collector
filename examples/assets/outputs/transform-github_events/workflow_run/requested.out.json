@@ -14,10 +14,10 @@
     },
     "subject": {
       "content": {
-        "pipelineName": "Release",
+        "pipelineName": "cdviz-dev/cdviz-collector/Release",
         "url": "https://github.com/cdviz-dev/cdviz-collector/actions/runs/12915191052"
       },
-      "id": "12915191052",
+      "id": "12915191052/1",
       "type": "pipelineRun"
     }
   }

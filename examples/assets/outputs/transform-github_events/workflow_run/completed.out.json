@@ -15,10 +15,10 @@
     "subject": {
       "content": {
         "outcome": "success",
-        "pipelineName": "ci",
+        "pipelineName": "cdviz-dev/cdviz-collector/ci",
         "url": "https://github.com/cdviz-dev/cdviz-collector/actions/runs/12915191034"
       },
-      "id": "12915191034",
+      "id": "12915191034/1",
       "type": "pipelineRun"
     }
   }

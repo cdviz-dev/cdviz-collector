@@ -16,12 +16,12 @@
       "content": {
         "outcome": "success",
         "pipelineRun": {
-          "id": "12915191034"
+          "id": "12915191034/1"
         },
-        "taskName": "ci",
+        "taskName": "cdviz-dev/cdviz-collector/ci/ci",
         "url": "https://github.com/cdviz-dev/cdviz-collector/actions/runs/12915191034/job/36016488174"
       },
-      "id": "36016488174",
+      "id": "36016488174/1",
       "type": "taskRun"
     }
   }
