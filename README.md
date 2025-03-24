@@ -14,7 +14,29 @@ Goals:
 
 cdviz-collector is configured via a config file + override by environment variables.
 
+see [documentation](https://cdviz.dev/docs/cdviz-collector/)
+
 ```mermaid
+---
+config:
+  theme: 'base'
+  look: 'handDrawn'
+  themeVariables:
+    darkMode: true
+    mainBkg: '#00000000'
+    background: '#00000000'
+    primaryColor: '#00000000'
+    primaryTextColor: '#f08c00'
+    secondaryTextColor: '#f08c00'
+    tertiaryTextColor: '#f08c00'
+    primaryBorderColor: '#f08c00'
+    secondaryBorderColor: '#f08c00'
+    tertiaryBorderColor: '#f08c00'
+    noteTextColor: '#f08c00'
+    noteBorderColor: '#f08c00'
+    lineColor: '#f08c00'
+    lineWidth: 2
+---
 flowchart LR
   classDef future stroke-dasharray: 5 5
 
