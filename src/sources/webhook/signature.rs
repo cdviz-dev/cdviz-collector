@@ -46,12 +46,14 @@ pub struct SignatureConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
+//#[serde(untagged)]
 pub enum SignatureOn {
     #[serde(rename = "body")]
     #[default]
     Body,
-    #[serde(rename = "headers-then-body")]
-    HeadersThenBody { separator: char, headers: Vec<String> },
+    #[serde(rename = "headers_then_body")]
+    HeadersThenBody { separator: String, headers: Vec<String> },
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -190,6 +192,7 @@ impl IntoResponse for SignatureError {
 #[cfg(test)]
 #[allow(clippy::min_ident_chars)]
 mod tests {
+
     use super::*;
     use assert2::let_assert;
     use axum::{
@@ -198,6 +201,7 @@ mod tests {
     };
     use pretty_assertions::assert_eq;
     use test_strategy::proptest;
+    use toml;
 
     /// Check if the signature is valid.
     /// Use hmac-sha256 algorithm + token as secret.
@@ -338,7 +342,7 @@ mod tests {
             signature_prefix: Some("v1,".to_string()),
             signature_on: SignatureOn::HeadersThenBody {
                 headers: vec!["svix-id".to_string(), "svix-timestamp".to_string()],
-                separator: '.',
+                separator: ".".to_string(),
             },
             signature_encoding: Encoding::Base64,
         };
@@ -353,5 +357,48 @@ mod tests {
         .collect::<HeaderMap<_>>();
         let_assert!(Ok(signature) = build_signature(&config, &headers, body_str.as_bytes()));
         assert_eq!(signature, "v1,tZ1I4/hDygAJgO5TYxiSd6Sd0kDW6hPenDe+bTa3Kkw=");
+    }
+
+    #[test]
+    fn test_parse_signature_on_headers_then_body() {
+        let toml_str = r#"
+            header = "X-Signature"
+            token = "myToken"
+            token_encoding = "base64"
+            signature_prefix = "v1,"
+            signature_on = { headers_then_body = {separator = ".", headers = ["header1", "header2"] }}
+            signature_encoding = "hex"
+        "#;
+
+        let config: SignatureConfig = toml::from_str(toml_str).unwrap();
+
+        assert_eq!(config.header, "X-Signature");
+        assert_eq!(config.token.expose_secret(), "myToken");
+        let_assert!(Some(Encoding::Base64) = config.token_encoding);
+        assert_eq!(config.signature_prefix, Some("v1,".to_string()));
+        let_assert!(Encoding::Hex = config.signature_encoding);
+        let_assert!(SignatureOn::HeadersThenBody { separator, headers } = config.signature_on);
+        assert_eq!(separator, ".");
+        assert_eq!(headers, ["header1", "header2"]);
+    }
+
+    #[test]
+    fn test_parse_signature_on_body() {
+        let toml_str = r#"
+            header = "X-Signature"
+            token = "myToken"
+            token_encoding = "hex"
+            signature_on = "body"
+            signature_encoding = "hex"
+        "#;
+
+        let config: SignatureConfig = toml::from_str(toml_str).unwrap();
+
+        assert_eq!(config.header, "X-Signature");
+        assert_eq!(config.token.expose_secret(), "myToken");
+        let_assert!(Some(Encoding::Hex) = config.token_encoding);
+        assert_eq!(config.signature_prefix, None);
+        let_assert!(Encoding::Hex = config.signature_encoding);
+        let_assert!(SignatureOn::Body = config.signature_on);
     }
 }
