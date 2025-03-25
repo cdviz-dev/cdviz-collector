@@ -1,7 +1,6 @@
-mod signature;
-
 use super::EventSourcePipe;
 use crate::errors::ReportWrapper;
+use crate::security::signature;
 use crate::sources::EventSource;
 use axum::Json;
 use axum::extract::State;
