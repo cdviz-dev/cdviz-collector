@@ -3,6 +3,7 @@ mod connect;
 mod errors;
 mod http;
 mod pipes;
+mod security;
 mod sinks;
 mod sources;
 mod tools;
