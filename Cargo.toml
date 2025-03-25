@@ -12,6 +12,7 @@ repository = "https://github.com/cdviz-dev/cdviz-collector"
 publish = true
 
 [dependencies]
+async-trait = "0.1"
 axum = "0.8"
 axum-tracing-opentelemetry = "0.28"
 base64 = "0.22"
