@@ -637,6 +637,7 @@ name = "cdviz-collector"
 version = "0.5.1"
 dependencies = [
  "assert2",
+ "async-trait",
  "axum",
  "axum-tracing-opentelemetry",
  "base64 0.22.1",
