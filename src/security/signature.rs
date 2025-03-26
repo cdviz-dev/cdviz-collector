@@ -23,32 +23,32 @@ use sha2::Sha256;
 // Create alias for HMAC-SHA256
 type HmacSha256 = Hmac<Sha256>;
 
-#[derive(Debug, Clone, Deserialize, Default)]
-pub(crate) struct SignatureConfig {
+#[derive(Debug, Clone, Deserialize)]
+pub struct SignatureConfig {
     /// The header name of the signature to check
-    pub(crate) header: String,
+    header: String,
     /// The token used to sign the request (hmac-sha256)
     #[serde(default)]
-    pub(crate) token: SecretString,
+    token: SecretString,
     /// Encoding of the token (how bytes are encoded in chars)
     /// If not set the bytes of the token are used.
     #[serde(default)]
-    pub(crate) token_encoding: Option<Encoding>,
+    token_encoding: Option<Encoding>,
     /// The prefix of the signature. If not set, the signature is not prefixed.
     #[serde(default)]
-    pub(crate) signature_prefix: Option<String>,
+    signature_prefix: Option<String>,
     /// On which part of the request the signature is computed
     #[serde(default)]
-    pub(crate) signature_on: SignatureOn,
+    signature_on: SignatureOn,
     /// Encoding of the signature (how bytes are encoded in chars)
     #[serde(default)]
-    pub(crate) signature_encoding: Encoding,
+    signature_encoding: Encoding,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 //#[serde(untagged)]
-pub(crate) enum SignatureOn {
+pub enum SignatureOn {
     #[serde(rename = "body")]
     #[default]
     Body,
@@ -58,19 +58,13 @@ pub(crate) enum SignatureOn {
 
 #[derive(Debug, Clone, Deserialize, Default)]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
-pub(crate) enum Encoding {
+pub enum Encoding {
     /// base64 encoding (with padding and case sensitive)
     #[serde(rename = "base64")]
     Base64,
     #[serde(rename = "hex")]
     #[default]
     Hex,
-}
-
-impl SignatureConfig {
-    pub fn header(&self) -> &str {
-        self.header.as_str()
-    }
 }
 
 pub(crate) fn build_signature(

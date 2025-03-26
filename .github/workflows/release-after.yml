@@ -37,12 +37,8 @@ jobs:
           username: ${{github.actor}}
           password: ${{secrets.GITHUB_TOKEN}}
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
-        with:
-          push: true
-          build-args: VERSION=${{ steps.version.outputs.VERSION }}
-          platforms: linux/amd64,linux/arm64
-          target: cdviz-collector
-          tags: ghcr.io/cdviz-dev/cdviz-collector:${{ steps.version.outputs.VERSION }}
-          # cache-from: type=gha
-          # cache-to: type=gha,mode=max
+      - uses: jdx/mise-action@v2
+      - run: mise install
+        shell: bash
+      - run: mise run publish:container --version "${{ steps.version.outputs.VERSION }}"
+        shell: bash

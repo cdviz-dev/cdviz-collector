@@ -148,24 +148,35 @@ run = [
 depends = ["lint", "test", "deny"]
 description = "set of tasks run by CI"
 
+[tasks."list:containers"]
+description = "list all containers images"
+run = ["""docker image ls --tree --filter "reference=*/*/cdviz-collector*""""]
+
+[tasks."debug:bake"]
+description = "show the 'resolved' bake definition"
+run = ["docker buildx bake --print"]
+
 [tasks."build:container"]
 description = "build container image `cdviz-collector:wip` by downloading binary from github release (e.g. `mise run build:container --version 0.4.0`)"
 run = ["""
-    docker buildx build \
-        --output type=image,compression=zstd,oci-mediatypes=true \
-        --platform linux/amd64,linux/arm64 \
-        --build-arg VERSION={{option(name="version")}} \
-        --target cdviz-collector \
-        -t cdviz-collector:wip .
-    """, "docker image list --tree cdviz-collector"]
+    export VERSION={{option(name="version")}}
+    docker buildx bake --progress=plain cdviz-collector
+"""]
 
 [tasks."run:container"]
 run = ["""
-    docker run \
-        --name cdviz-collector \
-        --rm -it \
-        cdviz-collector:wip
-    """]
+  docker run \
+      --name cdviz-collector \
+      --rm -it \
+      ghcr.io/cdviz-dev/cdviz-collector:latest
+"""]
+
+[tasks."publish:container"]
+description = "build the container image `cdviz-collector` and push it to ghcr.io"
+run = ["""
+    export VERSION={{option(name="version")}}
+    docker buildx bake --push cdviz-collector
+"""]
 
 [tasks."examples:transform:passthrough"]
 run = [
