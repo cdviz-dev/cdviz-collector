@@ -1,30 +1,26 @@
 use super::Sink;
 use crate::Message;
 use crate::errors::{IntoDiagnostic, Report, Result};
-use crate::security::signature;
 use cdevents_sdk::cloudevents::BuilderExt;
 use cloudevents::{EventBuilder, EventBuilderV10};
 use http_cloudevents::RequestBuilderExt;
 use reqwest::Url;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_tracing::TracingMiddleware;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct Config {
     /// Is the sink is enabled?
     pub(crate) enabled: bool,
     destination: Url,
-    /// Add header with signature to the outgoing request
-    #[serde(default)]
-    pub(crate) signature: Option<signature::SignatureConfig>,
 }
 
 impl TryFrom<Config> for HttpSink {
     type Error = Report;
 
     fn try_from(value: Config) -> Result<Self> {
-        Ok(HttpSink::new(value.destination, value.signature))
+        Ok(HttpSink::new(value.destination))
     }
 }
 
@@ -35,19 +31,16 @@ pub(crate) struct HttpSink {
 }
 
 impl HttpSink {
-    pub(crate) fn new(url: Url, signature_config: Option<signature::SignatureConfig>) -> Self {
+    pub(crate) fn new(url: Url) -> Self {
         // Retry up to 3 times with increasing intervals between attempts.
         //let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
-        let mut client_builder = ClientBuilder::new(reqwest::Client::new())
+        let client = ClientBuilder::new(reqwest::Client::new())
             // Trace HTTP requests. See the tracing crate to make use of these traces.
             .with(TracingMiddleware::default())
             // Retry failed requests.
             //.with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            ;
-        if let Some(config) = signature_config {
-            client_builder = client_builder.with(http_signature::SignatureMiddleware::new(config));
-        }
-        Self { dest: url, client: client_builder.build() }
+            .build();
+        Self { dest: url, client }
     }
 }
 
@@ -145,59 +138,12 @@ mod http_cloudevents {
     }
 }
 
-mod http_signature {
-    use axum::http::{Extensions, HeaderName}; // axum::http is a reexport of http crate
-    use reqwest::{Request, Response};
-    use reqwest_middleware::{Error, Middleware, Next, Result};
-    use std::str::FromStr;
-
-    use crate::security::signature;
-
-    pub(super) struct SignatureMiddleware {
-        config: signature::SignatureConfig,
-    }
-
-    impl SignatureMiddleware {
-        pub fn new(config: signature::SignatureConfig) -> Self {
-            Self { config }
-        }
-
-        fn sign_request(&self, req: Request) -> Result<Request> {
-            let body_bytes = req.body().and_then(|body| body.as_bytes()).unwrap_or(&[]);
-            let signature = signature::build_signature(&self.config, req.headers(), body_bytes)
-                .map_err(Error::middleware)?;
-            let mut req = req;
-            {
-                let header_name =
-                    HeaderName::from_str(self.config.header()).map_err(Error::middleware)?;
-                let val = signature.parse().map_err(Error::middleware)?;
-                req.headers_mut().insert(header_name, val);
-            };
-            Ok(req)
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl Middleware for SignatureMiddleware {
-        async fn handle(
-            &self,
-            req: Request,
-            extensions: &mut Extensions,
-            next: Next<'_>,
-        ) -> Result<Response> {
-            let req = self.sign_request(req)?;
-            next.run(req, extensions).await
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::security::signature;
     use proptest::prelude::*;
     use proptest::test_runner::TestRunner;
-    use wiremock::matchers::{header, header_exists, method, path};
+    use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -216,40 +162,6 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", &mock_server.uri())).unwrap(),
-            signature: None,
-        };
-
-        let sink = HttpSink::try_from(config).unwrap();
-
-        let mut runner = TestRunner::default();
-        for _ in 0..1 {
-            let val = any::<Message>().new_tree(&mut runner).unwrap();
-            assert!(sink.send(&val.current()).await.is_ok());
-        }
-    }
-
-    #[tokio::test]
-    async fn test_http_sink_with_signature() {
-        let mock_server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/events"))
-            .and(header("Content-Type", "application/json"))
-            .and(header_exists("X-Signature"))
-            .respond_with(ResponseTemplate::new(200))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-
-        let signature_config = signature::SignatureConfig {
-            header: "X-Signature".to_string(),
-            token: "mySecretToken".to_string().into(),
-            ..Default::default()
-        };
-
-        let config = Config {
-            enabled: true,
-            destination: Url::parse(&format!("{}/events", &mock_server.uri())).unwrap(),
-            signature: Some(signature_config.clone()),
         };
 
         let sink = HttpSink::try_from(config).unwrap();
