@@ -16,11 +16,11 @@ target "cdviz-collector" {
     "ghcr.io/cdviz-dev/cdviz-collector:latest",
   ]
   output = [
-    {type="image" , compression="zstd", oci-mediatypes="true"},
+    { type = "image", compression = "zstd", oci-mediatypes = "true" },
   ]
   attest = [
-    {type = "provenance", mode="max"},
-    {type = "sbom"},
+    { type = "provenance", mode = "max" },
+    { type = "sbom" },
   ]
   platforms = [
     "linux/amd64",
