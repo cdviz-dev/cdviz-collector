@@ -88,3 +88,37 @@ signature = { signature_encoding = "hex", signature_on = "body", signature_prefi
 [transformers.github_events]
 type = "vrl"
 template_file = "../../config/transformers/github_events.vrl"
+
+[transformers.vrl_identity]
+type = "vrl"
+template = """
+[.]
+"""
+
+[transformers.vrl_copy_l1]
+type = "vrl"
+template = """
+[{
+  "metadata": .metadata,
+  "header": .header,
+  "body": .body,
+}]
+"""
+
+[transformers.kubewatch_metadata]
+type = "vrl"
+template = """
+.metadata = object!(.metadata)
+
+[{
+  "metadata": merge(.metadata, {
+    "environment_id": "cluster/A-dev",
+  }),
+  "header": .header,
+  "body": .body,
+}]
+"""
+
+[transformers.kubewatch_cloudevents]
+type = "vrl"
+template_file = "../../config/transformers/kubewatch_cloudevents.vrl"

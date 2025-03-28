@@ -81,13 +81,17 @@ run = ["cargo --locked machete --with-metadata",
 ]
 
 [tasks."test"]
+# using `depends_post = ["examples:transform:*"]` trigger an error
+# > Infinitive loop detected, all tasks are finished but the graph isn't empty examples:...
+# So as workaround a wait_for is added to every task examples:transform:...
+depends = ["test:unit", "examples:transform:*"]
+
+[tasks."test:unit"]
 depends = ["install:rustcomponents"]
 run = [
     "cargo --locked nextest run",
     # "cargo test --doc",
     # "cargo hack nextest --each-feature -- --test-threads=1",
-    "cargo --locked run -- transform --mode check --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/cdevents_json --output ./outputs/transform-passthrough",
-    "cargo --locked run -- transform -t github_events --mode check --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/github_events --output ./outputs/transform-github_events",
 ]
 
 [tasks."test:coverage"]
@@ -107,9 +111,6 @@ run = [
 # #   # git-cliff could not be used as `pre-release-hook` of cargo-release because it uses tag
 # #   git-cliff -o "CHANGELOG.md"
 # #   git add CHANGELOG.md && git commit -m "📝 update CHANGELOG" && git push
-
-[vars]
-
 
 [tasks."db:start"]
 description = "start a local db"
@@ -179,11 +180,16 @@ run = ["""
 """]
 
 [tasks."examples:transform:passthrough"]
-run = [
-    "cargo --locked run -- transform --mode review --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/cdevents_json --output ./outputs/transform-passthrough",
-]
+description = "run the transformation example passthrough (use `--mode review` to review and update)"
+wait_for = ["test:unit"]
+run = """cargo --locked run -- transform --mode {{option(name="mode", default="check")}} --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/cdevents_json --output ./outputs/transform-passthrough"""
 
 [tasks."examples:transform:github_events"]
-run = [
-    "cargo --locked run -- transform -t github_events --mode review --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/github_events --output ./outputs/transform-github_events",
-]
+description = "run the transformation example github_events (use `--mode review` to review and update)"
+wait_for = ["test:unit"]
+run = """cargo --locked run -- transform -t github_events --mode {{option(name="mode", default="check")}} --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/github_events --output ./outputs/transform-github_events"""
+
+[tasks."examples:transform:kubewatch_cloudevents"]
+description = "run the transformation example kubewatch_cloudevents (cloudevents) (use `--mode review` to review and update)"
+wait_for = ["test:unit"]
+run = """cargo --locked run -- transform -vv -t kubewatch_metadata -t kubewatch_cloudevents --mode {{option(name="mode", default="check")}} --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/kubewatch_cloudevents --output ./outputs/transform-kubewatch_cloudevents --no-check-cdevent"""
