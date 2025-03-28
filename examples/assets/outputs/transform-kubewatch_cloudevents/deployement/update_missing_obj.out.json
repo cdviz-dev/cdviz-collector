@@ -1,0 +1,26 @@
+{
+  "metadata": {
+    "environment_id": "cluster/A-dev",
+    "name": "update_missing_obj.json",
+    "path": "deployement/update_missing_obj.json"
+  },
+  "header": {},
+  "body": {
+    "context": {
+      "id": "0",
+      "source": "/kubewatch",
+      "timestamp": "2024-12-18T17:58:39.674637507+00:00",
+      "type": "dev.cdevents.service.removed.0.2.0",
+      "version": "0.4.1"
+    },
+    "subject": {
+      "content": {
+        "environment": {
+          "id": "cluster/A-dev"
+        }
+      },
+      "id": "kubewatch/kubewatch/kubewatch",
+      "type": "service"
+    }
+  }
+}
