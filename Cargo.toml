@@ -13,7 +13,7 @@ publish = true
 
 [dependencies]
 axum = "0.8"
-axum-tracing-opentelemetry = "0.26"
+axum-tracing-opentelemetry = "0.28"
 base64 = "0.22"
 bytes = { version = "1", optional = true }
 cdevents-sdk = "0.1"
@@ -41,7 +41,7 @@ handlebars_misc_helpers = { version = "0.17", optional = true, default-features 
 ] }
 hmac = "0.12"
 humantime-serde = "1"
-init-tracing-opentelemetry = { version = "0.27", features = [
+init-tracing-opentelemetry = { version = "0.28", features = [
   "otlp",
   "tracing_subscriber_ext",
   "logfmt",
@@ -80,7 +80,7 @@ tower-http = { version = "0.6", features = [
   "validate-request",
 ] }
 tracing = "0.1"
-tracing-opentelemetry-instrumentation-sdk = { version = "0.26" }
+tracing-opentelemetry-instrumentation-sdk = { version = "0.28" }
 vrl = { version = "0.22", optional = true }
 
 [dev-dependencies]
