@@ -1,7 +1,7 @@
 - name: Install Rust toolchain
   uses: dtolnay/rust-toolchain@stable
 - name: Install Sccache
-  uses: mozilla-actions/sccache-action@v0.0.6
+  uses: mozilla-actions/sccache-action@v0.0.9
   env:
     SCCACHE_GHA_ENABLED: "true"
     RUSTC_WRAPPER: "sccache"
