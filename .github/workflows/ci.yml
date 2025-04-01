@@ -38,7 +38,7 @@ jobs:
       RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.6
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: jdx/mise-action@v2
       - run: mise install
         shell: bash
