@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.5.1...0.6.0) - 2025-04-01
+
+### Added
+
+- add basic vrl template to transform cloudevent from kubewatch
+- add a parser for jsonl
+- allow http sink to sign request (same configuration as source)
+- feat!(github): change the computation of workflow_xxx ids & name
+
+### Fixed
+
+- MegaLinter apply linters fixes
+- pin version of transitive dependency 'time' to allow compilation of domain
+- conistency of configuration for  `signature_on`
+- *(deps)* update opentelemetry to 0.28
+
+### Other
+
+- update sccache-action (fix error or cache ?)
+- use `docker bake` to build & push container
+- move `signature` to module `security`
+- *(deps)* update to rust 1.85.1
+- Add link to documentation site
+- *(renovate)* try to disable update of  just lock file
+- *(deps)* update dependencies
+
 ## [0.5.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.5.0...0.5.1) - 2025-03-07
 
 ### Fixed
