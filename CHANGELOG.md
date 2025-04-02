@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.6.1...0.6.2) - 2025-04-02
+
+### Fixed
+
+- use `RUST_LOG` or `OTEL_LOG_LEVEL` to define log level (default to `info`) when no cli flags is defined
+
 ## [0.6.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.6.0...0.6.1) - 2025-04-01
 
 ### Other
