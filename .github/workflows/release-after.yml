@@ -26,7 +26,7 @@ jobs:
       - id: version
         shell: bash
         run: |
-          cat >plan.json << EOF
+          cat >plan.json << 'EOF'
           ${{ inputs.plan }}
           EOF
           VERSION=$(yq -r '.releases[0].app_version' < plan.json)
