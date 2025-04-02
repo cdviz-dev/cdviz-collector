@@ -51,7 +51,12 @@ enum Command {
 
 //TODO use logfmt
 fn init_log(verbose: Verbosity) -> Result<TracingGuard> {
-    let level = verbose.log_level().map(|level| level.to_string()).unwrap_or_default();
+    let level = if verbose.is_present() {
+        verbose.log_level().map(|level| level.to_string()).unwrap_or_default()
+    } else {
+        // in this case environment variable RUST_LOG (or OTEL_LOG_LEVEL) will be used, else "info"
+        String::new()
+    };
     init_tracing_opentelemetry::tracing_subscriber_ext::init_subscribers_and_loglevel(&level)
         .into_diagnostic()
 }
