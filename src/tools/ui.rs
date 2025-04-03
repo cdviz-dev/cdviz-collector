@@ -3,6 +3,7 @@ use crate::errors::{IntoDiagnostic, Result};
 pub fn show_difference_text(old: &str, new: &str, show_whitespace: bool) -> Result<()> {
     use console::{Style, style};
     use similar::{ChangeTag, TextDiff};
+    use std::fmt::Write as _;
 
     let diff = TextDiff::from_lines(old, new);
     let mut message = String::new();
@@ -17,12 +18,13 @@ pub fn show_difference_text(old: &str, new: &str, show_whitespace: bool) -> Resu
                     ChangeTag::Insert => ("+", Style::new().green()),
                     ChangeTag::Equal => (" ", Style::new().dim()),
                 };
-                message.push_str(&format!(
+                let _ = write!(
+                    message,
                     "{}{} |{}",
                     style(Line(change.old_index())).dim(),
                     style(Line(change.new_index())).dim(),
                     styl.apply_to(sign).bold(),
-                ));
+                );
                 for (emphasized, value) in change.iter_strings_lossy() {
                     let value = if show_whitespace {
                         replace_blank_char(&value)
