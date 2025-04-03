@@ -80,7 +80,7 @@ transformer_refs = ["github_events"]
 
 [sources.github_webhook.extractor]
 type = "webhook"
-id = "001"
+id = "000-github"
 headers_to_keep = []
 # token override by environment variable reads from the secret
 signature = { signature_encoding = "hex", signature_on = "body", signature_prefix = "sha256=", header = "x-hub-signature-256", token = "changeme" }
@@ -88,6 +88,32 @@ signature = { signature_encoding = "hex", signature_on = "body", signature_prefi
 [transformers.github_events]
 type = "vrl"
 template_file = "../../config/transformers/github_events.vrl"
+
+[sources.kubewatch_webhook]
+enabled = true
+transformer_refs = [ "log", "kubewatch_metadata", "log", "kubewatch_cloudevents", "log" ]
+
+[sources.kubewatch_webhook.extractor]
+type = "webhook"
+id = "000-kubewatch"
+
+[transformers.kubewatch_metadata]
+type = "vrl"
+template = """
+.metadata = object(.metadata) ?? {}
+
+[{
+  "metadata": merge(.metadata, {
+    "environment_id": "cluster/A-dev",
+  }),
+  "header": .header,
+  "body": .body,
+}]
+"""
+
+[transformers.kubewatch_cloudevents]
+type = "vrl"
+template_file = "../../config/transformers/kubewatch_cloudevents.vrl"
 
 [transformers.vrl_identity]
 type = "vrl"
@@ -104,21 +130,3 @@ template = """
   "body": .body,
 }]
 """
-
-[transformers.kubewatch_metadata]
-type = "vrl"
-template = """
-.metadata = object!(.metadata)
-
-[{
-  "metadata": merge(.metadata, {
-    "environment_id": "cluster/A-dev",
-  }),
-  "header": .header,
-  "body": .body,
-}]
-"""
-
-[transformers.kubewatch_cloudevents]
-type = "vrl"
-template_file = "../../config/transformers/kubewatch_cloudevents.vrl"

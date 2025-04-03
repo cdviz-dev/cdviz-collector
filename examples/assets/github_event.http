@@ -1,6 +1,5 @@
 @host = http://localhost:8080
-@github_webhook_path = /webhook/001
-
+@github_webhook_path = /webhook/000-github
 
 # code to execute after request is buil and before sending the request
 {{@request

@@ -154,7 +154,7 @@ description = "set of tasks run by CI"
 
 [tasks."list:containers"]
 description = "list all containers images"
-run = ["""docker image ls --tree --filter "reference=*/*/cdviz-collector*""""]
+run = ["""docker image ls --tree --filter 'reference=*/*/cdviz-collector*'"""]
 
 [tasks."debug:bake"]
 description = "show the 'resolved' bake definition"
@@ -195,4 +195,9 @@ run = """cargo --locked run -- transform -t github_events --mode {{option(name="
 [tasks."examples:transform:kubewatch_cloudevents"]
 description = "run the transformation example kubewatch_cloudevents (cloudevents) (use `--mode review` to review and update)"
 wait_for = ["test:unit"]
-run = """cargo --locked run -- transform -vv -t kubewatch_metadata -t kubewatch_cloudevents --mode {{option(name="mode", default="check")}} --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/kubewatch_cloudevents --output ./outputs/transform-kubewatch_cloudevents --no-check-cdevent"""
+run = """cargo --locked run -- transform -vv -t kubewatch_metadata -t kubewatch_cloudevents --mode {{option(name="mode", default="check")}} --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/kubewatch_cloudevents --output ./outputs/transform-kubewatch_cloudevents"""
+
+[tasks."examples:httpyac"]
+description = "run the httpyac on `examples/assets` (default to `**/*.http`, eg. `mise run examples:httpyac '**/*.http'`)"
+dir = "examples/assets"
+run = """docker run -it --rm --network=host -v ${PWD}:/data ghcr.io/anweber/httpyac:latest '{{arg(default="**/*.http", var=true)}}'"""

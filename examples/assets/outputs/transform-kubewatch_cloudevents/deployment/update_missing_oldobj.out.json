@@ -1,8 +1,8 @@
 {
   "metadata": {
     "environment_id": "cluster/A-dev",
-    "name": "update.json",
-    "path": "deployement/update.json"
+    "name": "update_missing_oldobj.json",
+    "path": "deployment/update_missing_oldobj.json"
   },
   "header": {},
   "body": {
@@ -10,7 +10,7 @@
       "id": "0",
       "source": "/kubewatch",
       "timestamp": "2024-12-18T17:58:39.674637507+00:00",
-      "type": "dev.cdevents.service.updated.0.2.0",
+      "type": "dev.cdevents.service.deployed.0.2.0",
       "version": "0.4.1"
     },
     "subject": {

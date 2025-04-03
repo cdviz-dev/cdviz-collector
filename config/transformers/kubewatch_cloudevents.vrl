@@ -92,7 +92,7 @@ if includes(["Deployment", "StatefulSet", "DaemonSet"], .body.data.kind) && (.bo
       type = if is_empty(previous) {
         type = "dev.cdevents.service.deployed.0.2.0"
       } else if (previous[0].repository_url != container.repository_url) || (previous[0].tag != container.tag) || (previous[0].version != container.version) {
-        type = "dev.cdevents.service.updated.0.2.0"
+        type = "dev.cdevents.service.upgraded.0.2.0"
       } else {
         null
       }
