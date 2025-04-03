@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.4](https://github.com/cdviz-dev/cdviz-collector/compare/0.6.3...0.6.4) - 2025-04-03
+
+### Fixed
+
+- kubewatch failed to generate valid cdevent (on webhook)
+
+### Other
+
+- try to reduce the "ci" time & re-compilation by using same
+- *(deps)* upgrade rust to 1.86.0
+
 ## [0.6.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.6.2...0.6.3) - 2025-04-02
 
 ### Other
