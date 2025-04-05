@@ -77,4 +77,19 @@ flowchart LR
   q --> sink_nats
 ```
 
+## License
+
+This software is distributed under a dual-licensing model:
+
+1. Affero General Public License Version 3.0 ([AGPL-3.0-only](LICENSE)):
+  - The software is available under the AGPL 3.0 license. This means you can use, modify, and distribute the software under the terms of the AGPL 3.0. Any modifications or derivative works must also be licensed under AGPL 3.0.
+  - For more details, see the [AGPL-3.0-only](LICENSE).
+2. Proprietary License:
+  - Alternatively, the software is available under a proprietary license. This option is suitable for users who require different terms or additional permissions not granted by the AGPL 3.0.
+  - For more information about obtaining a proprietary license, please contact us at <contact@cdviz.dev>.
+
+By using this software, you agree to comply with the terms of one of the above licenses.
+
+For exceptions, see [LICENSING.md](LICENSING.md).
+
 [cdevents]: <https://cdevents.dev/>
