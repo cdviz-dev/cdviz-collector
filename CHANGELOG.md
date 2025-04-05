@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.6.4...0.7.0) - 2025-04-05
+
+### Fixed
+
+- *(deps)* update rust crate vrl to 0.23
+
+### Other
+
+- [**breaking**] move to from ApacheLicense v2.0 to AGPLv3
+
 ## [0.6.4](https://github.com/cdviz-dev/cdviz-collector/compare/0.6.3...0.6.4) - 2025-04-03
 
 ### Fixed
