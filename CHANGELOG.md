@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.7.0...0.7.1) - 2025-04-07
+
+### Other
+
+- try a workaround to build on x86_64
+- *(deps)* update rust crate opendal to 0.53
+
 ## [0.7.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.6.4...0.7.0) - 2025-04-07
 
 ### Added
