@@ -8,8 +8,11 @@ use std::time::Duration;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tower_http::{
-    compression::CompressionLayer, decompression::RequestDecompressionLayer,
-    sensitive_headers::SetSensitiveRequestHeadersLayer, timeout::TimeoutLayer,
+    compression::CompressionLayer,
+    cors::{Any, CorsLayer},
+    decompression::RequestDecompressionLayer,
+    sensitive_headers::SetSensitiveRequestHeadersLayer,
+    timeout::TimeoutLayer,
     validate_request::ValidateRequestHeaderLayer,
 };
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
@@ -57,6 +60,13 @@ fn app(routes: Vec<Router>) -> Router {
     for route in routes {
         app = app.merge(route);
     }
+
+    let cors = CorsLayer::new()
+        // allow `GET` and `POST` when accessing the resource
+        .allow_methods([http::Method::GET, http::Method::POST])
+        // allow requests from any origin
+        .allow_origin(Any);
+
     app
         // include trace context as header into the response
         .layer(OtelInResponseLayer)
@@ -65,6 +75,7 @@ fn app(routes: Vec<Router>) -> Router {
         .route("/healthz", get(health)) // request processed without span / trace
         .route("/readyz", get(health)) // request processed without span / trace
         .layer((
+            cors,
             SetSensitiveRequestHeadersLayer::new(std::iter::once(http::header::AUTHORIZATION)),
             ValidateRequestHeaderLayer::accept("application/json"),
             RequestDecompressionLayer::new(),
@@ -137,6 +148,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get(http::header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(), "*",);
     }
 
     #[rstest]

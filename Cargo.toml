@@ -74,6 +74,7 @@ tokio-util = "0.7"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = [
   "compression-full",
+  "cors",
   "decompression-full",
   "timeout",
   "sensitive-headers",
