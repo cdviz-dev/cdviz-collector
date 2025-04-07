@@ -9,3 +9,11 @@
   run: |
     echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
     echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+- name: workaround x86_64-linux-musl-gcc
+  run: |
+    if [ -f /usr/bin/musl-gcc && ! -f /usr/local/bin/x86_64-linux-musl-gcc ]; then
+      ln -s /usr/bin/musl-gcc /usr/local/bin/x86_64-linux-musl-gcc
+    fi
+    if [ ! -f /usr/bin/musl-gcc && -f /usr/local/bin/x86_64-linux-musl-gcc ]; then
+      ln -s /usr/local/bin/x86_64-linux-musl-gcc /usr/bin/musl-gcc
+    fi
