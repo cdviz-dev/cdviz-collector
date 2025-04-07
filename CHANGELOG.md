@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.6.4...0.7.0) - 2025-04-07
+
+### Added
+
+- allow CORS on http endpoint
+
+### Fixed
+
+- *(deps)* update rust crate vrl to 0.23
+
+### Other
+
+- update deny rules following update of dependencies `vrl`
+- [**breaking**] move to from ApacheLicense v2.0 to AGPLv3
+
 ## [0.6.4](https://github.com/cdviz-dev/cdviz-collector/compare/0.6.3...0.6.4) - 2025-04-03
 
 ### Fixed
