@@ -48,7 +48,7 @@ init-tracing-opentelemetry = { version = "0.28", features = [
 ] }
 miette = { version = "7", features = ["fancy"] }
 multihash = "0.19"
-opendal = { version = "0.52", default-features = false, features = [
+opendal = { version = "0.53", default-features = false, features = [
   "services-fs",
   "services-s3",
 ], optional = true }
