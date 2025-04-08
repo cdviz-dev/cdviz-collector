@@ -153,6 +153,28 @@ mod tests {
 
     #[rstest]
     #[tokio::test(flavor = "multi_thread")]
+    // test health endpoint
+    async fn test_call_option_for_cors() {
+        let app = app(vec![]);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/webhook/000-cdevents")
+                    .method(http::Method::OPTIONS)
+                    .header(http::header::ORIGIN, "http://example.com")
+                    .header(http::header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                    .header(http::header::ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get(http::header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(), "*",);
+    }
+
+    #[rstest]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_post_webhook_not_found() {
         let app = app(vec![]);
 
