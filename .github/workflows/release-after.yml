@@ -42,3 +42,8 @@ jobs:
         shell: bash
       - run: mise run publish:container --version "${{ steps.version.outputs.VERSION }}"
         shell: bash
+      - name: run container (for testing)
+        run: |
+          # mise run run:container
+          docker run --rm --name test "ghcr.io/cdviz-dev/cdviz-collector:${{ steps.version.outputs.VERSION }}" --help
+        shell: bash

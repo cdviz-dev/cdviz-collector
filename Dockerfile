@@ -2,7 +2,9 @@
 # see [Multi-platform | Docker Docs](https://docs.docker.com/build/building/multi-platform/)
 # see [Fast multi-arch Docker build for Rust projects - DEV Community](https://dev.to/vladkens/fast-multi-arch-docker-build-for-rust-projects-an1)
 # see [How to create small Docker images for Rust](https://kerkour.com/rust-small-docker-image)
-# alternative: https://edu.chainguard.dev/chainguard/chainguard-images/reference/rust/image_specs/
+# alternative:
+# - https://edu.chainguard.dev/chainguard/chainguard-images/reference/rust/overview
+# - https://images.chainguard.dev/directory/image/static/overview
 
 #---------------------------------------------------------------------------------------------------
 # Buinding 'build' on CI takes ~30min
@@ -106,6 +108,7 @@ RUN <<EOT
   tar -xvf cdviz-collector.tar.xz --strip-components=1
   mv cdviz-collector /app/linux/amd64
   cd ..
+  # ldd /app/linux/amd64
 
   mkdir aarch64
   cd aarch64
@@ -113,6 +116,7 @@ RUN <<EOT
   tar -xvf cdviz-collector.tar.xz --strip-components=1
   mv cdviz-collector /app/linux/arm64
   cd ..
+  # ldd /app/linux/arm64
 EOT
 
 HEALTHCHECK NONE
@@ -122,7 +126,13 @@ HEALTHCHECK NONE
 # trivy:ignore:AVD-DS-0001
 # TARGETPLATFORM usage to copy right binary from builder stage
 # ARG populated by docker itself
-FROM scratch AS cdviz-collector
+
+# !! musl is not fully staticlly linked (ldd =>  /lib/ld-musl-x86_64.so.1) So scratch and chainguard/static do not work as is
+
+# FROM scratch AS cdviz-collector
+# FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/static:latest AS cdviz-collector
+FROM --platform=$BUILDPLATFORM alpine:3 AS cdviz-collector
+
 LABEL org.opencontainers.image.source="https://github.com/cdviz-dev/cdviz-collector"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.description="A service & cli to collect SDLC/CI/CD events and to dispatch as cdevents."
@@ -136,7 +146,7 @@ ARG TARGETPLATFORM
 COPY --from=download /etc/passwd /etc/passwd
 COPY --from=download /etc/group /etc/group
 USER nonroot
-COPY --from=download /app/${TARGETPLATFORM} /cdviz-collector
+COPY --from=download /app/${TARGETPLATFORM} /usr/local/bin/cdviz-collector
 COPY ./config /etc/cdviz-collector
 
 ENV \
@@ -144,5 +154,5 @@ ENV \
   OTEL_TRACES_SAMPLER="always_off"
 HEALTHCHECK NONE
 #see https://stackoverflow.com/questions/21553353/what-is-the-difference-between-cmd-and-entrypoint-in-a-dockerfile
-ENTRYPOINT ["/cdviz-collector"]
+ENTRYPOINT ["/usr/local/bin/cdviz-collector"]
 CMD []

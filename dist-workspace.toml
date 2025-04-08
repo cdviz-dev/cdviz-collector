@@ -14,7 +14,7 @@ installers = ["shell", "homebrew"]
 # A GitHub repo to push Homebrew formulas to
 tap = "cdviz-dev/homebrew-tap"
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-unknown-linux-musl", "x86_64-unknown-linux-musl"]
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-unknown-linux-musl", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl", "x86_64-pc-windows-msvc"]
 github-build-setup = "release-build-setup.yml.part"
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
@@ -26,7 +26,7 @@ install-updater = false
 post-announce-jobs = ["./release-after"]
 github-custom-job-permissions = { "release-after" = { packages = "write", contents = "read" } }
 # Whether CI should trigger releases with dispatches instead of tag pushes
-dispatch-releases = false
+dispatch-releases = true
 
 [dist.github-custom-runners]
 # buildjet could be used to build the binaries (faster, cheaper? than github's runners)
