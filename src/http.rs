@@ -63,7 +63,8 @@ fn app(routes: Vec<Router>) -> Router {
 
     let cors = CorsLayer::new()
         // allow `GET` and `POST` when accessing the resource
-        .allow_methods([http::Method::GET, http::Method::POST])
+        .allow_methods([http::Method::GET, http::Method::OPTIONS, http::Method::PATCH, http::Method::PUT, http::Method::POST])
+        .allow_headers(Any)
         // allow requests from any origin
         .allow_origin(Any);
 
@@ -170,7 +171,15 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(response.headers().get(http::header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(), "*",);
+        assert_eq!(response.headers().get(http::header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(), "*");
+        assert_eq!(
+            response.headers().get(http::header::ACCESS_CONTROL_ALLOW_METHODS).unwrap(),
+            "GET,OPTIONS,PATCH,PUT,POST"
+        );
+        assert_eq!(
+            response.headers().get(http::header::ACCESS_CONTROL_ALLOW_HEADERS).unwrap(),
+            "*"
+        );
     }
 
     #[rstest]
