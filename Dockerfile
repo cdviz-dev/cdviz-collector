@@ -128,10 +128,14 @@ HEALTHCHECK NONE
 # ARG populated by docker itself
 
 # !! musl is not fully staticlly linked (ldd =>  /lib/ld-musl-x86_64.so.1) So scratch and chainguard/static do not work as is
+# issue above seems to be fixed by `rustflags = ["-C", "target-feature=+crt-static"]` in `.cargo/config.toml`
+# but keep the comments for reminder
 
-# FROM scratch AS cdviz-collector
+FROM scratch AS cdviz-collector
+# # use chainguard if need certificates,...
 # FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/static:latest AS cdviz-collector
-FROM --platform=$BUILDPLATFORM alpine:3 AS cdviz-collector
+# # use alpine if need certificates, lib/ld-musl-x86_64.so.1, shell,...
+# FROM --platform=$BUILDPLATFORM alpine:3 AS cdviz-collector
 
 LABEL org.opencontainers.image.source="https://github.com/cdviz-dev/cdviz-collector"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
