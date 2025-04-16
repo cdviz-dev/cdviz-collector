@@ -566,7 +566,7 @@ dependencies = [
 
 [[package]]
 name = "cdviz-collector"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "assert2",
  "axum",
