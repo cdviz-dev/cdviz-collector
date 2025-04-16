@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5](https://github.com/cdviz-dev/cdviz-collector/compare/0.7.4...0.7.5) - 2025-04-16
+
+### Other
+
+- *(deps)* update dependencies
+
 ## [0.7.4](https://github.com/cdviz-dev/cdviz-collector/compare/0.7.3...0.7.4) - 2025-04-08
 
 ### Fixed
