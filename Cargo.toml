@@ -16,7 +16,7 @@ axum = "0.8"
 axum-tracing-opentelemetry = "0.28"
 base64 = "0.22"
 bytes = { version = "1", optional = true }
-cdevents-sdk = "0.1"
+cdevents-sdk = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
 cid = "0.11"
 clap = { version = "4", features = ["derive", "env"] }
