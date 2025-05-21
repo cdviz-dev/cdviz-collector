@@ -15,7 +15,7 @@
     },
     "subject": {
       "content": {
-        "artifactId": "pkg:oci/kubewatch?repository_url=docker.io/robustadev/kubewatch&tag=v2.9.0",
+        "artifactId": "pkg:oci/kubewatch?repository_url=docker.io/robustadev/kubewatch&tag=v2%2E9%2E0",
         "environment": {
           "id": "cluster/A-dev"
         }

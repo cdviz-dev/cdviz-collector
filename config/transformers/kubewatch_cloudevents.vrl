@@ -102,7 +102,7 @@ if includes(["Deployment", "StatefulSet", "DaemonSet"], .body.data.kind) && (.bo
         name = container.name
         version = container.version
         repository_url = container.repository_url
-        tag = container.tag
+        tag = encode_percent!(container.tag)
         output = push(output, {
           "metadata": .metadata,
           "header": .header,
