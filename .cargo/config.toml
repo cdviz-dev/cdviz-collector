@@ -1,3 +1,8 @@
+[env]
+# to compile oniguruma (deps of vrl/grok/oni-rs) with gcc >= 15
+# see https://github.com/rust-onig/rust-onig/issues/196
+CFLAGS='-std=gnu17'
+
 # use an other linker for compile time speed
 # see [How-to compile rust faster - Rust.Careers Rust Blog](https://blog.rust.careers/post/compile_rust_faster/)
 
