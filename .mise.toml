@@ -19,6 +19,7 @@ rust = "1.87.0"                        # the rust tool stack (with cargo, fmt, c
 "cargo:cargo-machete" = "latest"
 "cargo:cargo-deny" = "latest"
 "cargo:cargo-nextest" = "latest"
+"biome" = "latest"
 
 [tasks."install:rustcomponents"]
 hide = true
@@ -48,7 +49,11 @@ run = "cargo --locked build"
 [tasks."format"]
 depends = ["install:rustcomponents"]
 description = "Format the code and sort dependencies"
-run = ["cargo --locked fmt", "cargo --locked sort --grouped"]
+run = [
+  "cargo --locked fmt",
+  "cargo --locked sort --grouped",
+  "biome check --write",
+]
 
 [tasks."deny"]
 depends = ["install:rustcomponents"]

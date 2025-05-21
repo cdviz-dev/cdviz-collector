@@ -243,9 +243,7 @@
                           "app.kubernetes.io/name": "kubewatch"
                         }
                       },
-                      "namespaces": [
-                        "kubewatch"
-                      ],
+                      "namespaces": ["kubewatch"],
                       "topologyKey": "kubernetes.io/hostname"
                     }
                   }
