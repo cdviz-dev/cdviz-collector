@@ -40,6 +40,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: jdx/mise-action@v2
+        with:
+          experimental: true
       - run: mise install
         shell: bash
       - run: mise run --jobs 1 ci

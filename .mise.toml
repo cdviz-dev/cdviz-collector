@@ -11,7 +11,7 @@ PG_OFFLINE_URL = "postgres://{{env.PG_OFFLINE_USER}}:{{env.PG_OFFLINE_PWD}}@127.
 
 [tools]
 # "aqua:hadolint/hadolint" = "2"         # hadolint is a Dockerfile linter
-rust = "1.87.0"                        # the rust tool stack (with cargo, fmt, clippy) to build source
+rust = { version = "1.87.0", profile="minimal", components="rustfmt,clippy,llvm-tools"} # the rust tool stack (with cargo, fmt, clippy) to build source
 "aqua:cargo-bins/cargo-binstall" = "1" # do not use cargo-binstall (it's a special name used by mise)
 "ubi:mozilla/grcov" = "0.8"
 "cargo:cargo-hack" = "latest"
@@ -20,12 +20,6 @@ rust = "1.87.0"                        # the rust tool stack (with cargo, fmt, c
 "cargo:cargo-deny" = "latest"
 "cargo:cargo-nextest" = "latest"
 "biome" = "latest"
-
-[tasks."install:rustcomponents"]
-hide = true
-run = [
-    "rustup component add rustfmt clippy llvm-tools-preview", # not installed by rust-toolchain.toml ??
-]
 
 [tasks."install:sqlx-cli"]
 hide = true
@@ -43,11 +37,9 @@ run = [
 run = "cargo --locked hack check --each-feature --no-dev-deps"
 
 [tasks."build"]
-depends = ["install:rustcomponents"]
 run = "cargo --locked build"
 
 [tasks."format"]
-depends = ["install:rustcomponents"]
 description = "Format the code and sort dependencies"
 run = [
   "cargo --locked fmt",
@@ -56,7 +48,6 @@ run = [
 ]
 
 [tasks."deny"]
-depends = ["install:rustcomponents"]
 run = [
     # "cargo --locked tree -i opentelemetry",
     "cargo --locked deny --all-features check",
@@ -71,7 +62,6 @@ description = "Lint all the code (megalinter + lint_rust)"
 # - lint:megalinter
 
 [tasks."lint:rust"]
-depends = ["install:rustcomponents"]
 run = [
     "cargo --locked fmt --all -- --check",
     "cargo --locked sort --grouped --check",
@@ -81,7 +71,6 @@ run = [
 
 [tasks."lint:dependencies"]
 description = "check if dependencies are unused, outdated,..."
-depends = ["install:rustcomponents"]
 run = ["cargo --locked machete --with-metadata",
   "cargo outdated -wR",
   # "cargo tree --duplicate", # managed by cargo deny
@@ -95,7 +84,6 @@ run = ["cargo --locked machete --with-metadata",
 depends = ["test:unit", "examples:transform:*"]
 
 [tasks."test:unit"]
-depends = ["install:rustcomponents"]
 run = [
     "cargo --locked nextest run",
     # "cargo test --doc",
@@ -104,7 +92,6 @@ run = [
 
 [tasks."test:coverage"]
 description = "run test coverage to help identify code not executed on tests (!= code tested)"
-depends = ["install:rustcomponents"]
 env = { RUSTFLAGS="-Cinstrument-coverage", LLVM_PROFILE_FILE="target/test-coverage/data/%p-%m.profraw" }
 run = [
     "rm -rf ./target/test-coverage || true",
