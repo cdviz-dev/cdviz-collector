@@ -19,7 +19,9 @@
     "name": "ci",
     "steps": [],
     "check_run_url": "https://api.github.com/repos/cdviz-dev/cdviz-collector/check-runs/36016488174",
-    "labels": ["ubuntu-latest"],
+    "labels": [
+      "ubuntu-latest"
+    ],
     "runner_id": null,
     "runner_name": null,
     "runner_group_id": null,
@@ -125,7 +127,11 @@
     "allow_forking": true,
     "is_template": false,
     "web_commit_signoff_required": true,
-    "topics": ["cdevents", "cicd", "sdlc"],
+    "topics": [
+      "cdevents",
+      "cicd",
+      "sdlc"
+    ],
     "visibility": "public",
     "forks": 0,
     "open_issues": 3,

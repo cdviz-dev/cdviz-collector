@@ -68,7 +68,10 @@
                 },
                 "f:template": {
                   "f:metadata": {
-                    "f:annotations": { ".": {}, "f:checksum/config-map": {} },
+                    "f:annotations": {
+                      ".": {},
+                      "f:checksum/config-map": {}
+                    },
                     "f:labels": {
                       ".": {},
                       "f:app.kubernetes.io/instance": {},
@@ -137,7 +140,9 @@
             "fieldsType": "FieldsV1",
             "fieldsV1": {
               "f:metadata": {
-                "f:annotations": { "f:deployment.kubernetes.io/revision": {} }
+                "f:annotations": {
+                  "f:deployment.kubernetes.io/revision": {}
+                }
               },
               "f:status": {
                 "f:availableReplicas": {},
@@ -196,7 +201,10 @@
             "volumes": [
               {
                 "name": "configuration",
-                "configMap": { "name": "kubewatch-config", "defaultMode": 420 }
+                "configMap": {
+                  "name": "kubewatch-config",
+                  "defaultMode": 420
+                }
               }
             ],
             "containers": [
@@ -234,7 +242,9 @@
                           "app.kubernetes.io/name": "kubewatch"
                         }
                       },
-                      "namespaces": ["kubewatch"],
+                      "namespaces": [
+                        "kubewatch"
+                      ],
                       "topologyKey": "kubernetes.io/hostname"
                     }
                   }
@@ -246,7 +256,10 @@
         },
         "strategy": {
           "type": "RollingUpdate",
-          "rollingUpdate": { "maxUnavailable": "25%", "maxSurge": "25%" }
+          "rollingUpdate": {
+            "maxUnavailable": "25%",
+            "maxSurge": "25%"
+          }
         },
         "revisionHistoryLimit": 10,
         "progressDeadlineSeconds": 600
@@ -333,7 +346,10 @@
                 },
                 "f:template": {
                   "f:metadata": {
-                    "f:annotations": { ".": {}, "f:checksum/config-map": {} },
+                    "f:annotations": {
+                      ".": {},
+                      "f:checksum/config-map": {}
+                    },
                     "f:labels": {
                       ".": {},
                       "f:app.kubernetes.io/instance": {},
@@ -402,7 +418,9 @@
             "fieldsType": "FieldsV1",
             "fieldsV1": {
               "f:metadata": {
-                "f:annotations": { "f:deployment.kubernetes.io/revision": {} }
+                "f:annotations": {
+                  "f:deployment.kubernetes.io/revision": {}
+                }
               },
               "f:status": {
                 "f:availableReplicas": {},
@@ -462,7 +480,10 @@
             "volumes": [
               {
                 "name": "configuration",
-                "configMap": { "name": "kubewatch-config", "defaultMode": 420 }
+                "configMap": {
+                  "name": "kubewatch-config",
+                  "defaultMode": 420
+                }
               }
             ],
             "containers": [
@@ -500,7 +521,9 @@
                           "app.kubernetes.io/name": "kubewatch"
                         }
                       },
-                      "namespaces": ["kubewatch"],
+                      "namespaces": [
+                        "kubewatch"
+                      ],
                       "topologyKey": "kubernetes.io/hostname"
                     }
                   }
@@ -512,7 +535,10 @@
         },
         "strategy": {
           "type": "RollingUpdate",
-          "rollingUpdate": { "maxUnavailable": "25%", "maxSurge": "25%" }
+          "rollingUpdate": {
+            "maxUnavailable": "25%",
+            "maxSurge": "25%"
+          }
         },
         "revisionHistoryLimit": 10,
         "progressDeadlineSeconds": 600

@@ -126,9 +126,18 @@
           "name": "Markdown",
           "fs_name": null,
           "type": "prose",
-          "types": ["data", "markup", "programming", "prose"],
+          "types": [
+            "data",
+            "markup",
+            "programming",
+            "prose"
+          ],
           "color": "#083fa1",
-          "aliases": ["markdown", "md", "pandoc"],
+          "aliases": [
+            "markdown",
+            "md",
+            "pandoc"
+          ],
           "tm_scope": "text.md",
           "ace_mode": "markdown",
           "codemirror_mode": "gfm",
@@ -149,7 +158,9 @@
             ".workbook"
           ],
           "interpreters": [],
-          "filenames": ["contents.lr"],
+          "filenames": [
+            "contents.lr"
+          ],
           "popular": false,
           "group_name": "Markdown"
         },
@@ -306,7 +317,11 @@
     "allow_forking": true,
     "is_template": false,
     "web_commit_signoff_required": true,
-    "topics": ["cdevents", "cicd", "sdlc"],
+    "topics": [
+      "cdevents",
+      "cicd",
+      "sdlc"
+    ],
     "visibility": "public",
     "forks": 0,
     "open_issues": 2,

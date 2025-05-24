@@ -491,7 +491,11 @@
     "allow_forking": true,
     "is_template": false,
     "web_commit_signoff_required": true,
-    "topics": ["cdevents", "cicd", "sdlc"],
+    "topics": [
+      "cdevents",
+      "cicd",
+      "sdlc"
+    ],
     "visibility": "public",
     "forks": 0,
     "open_issues": 2,

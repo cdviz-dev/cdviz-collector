@@ -49,7 +49,10 @@
             "fieldsType": "FieldsV1",
             "fieldsV1": {
               "f:metadata": {
-                "f:annotations": { ".": {}, "f:checksum/config-map": {} },
+                "f:annotations": {
+                  ".": {},
+                  "f:checksum/config-map": {}
+                },
                 "f:generateName": {},
                 "f:labels": {
                   ".": {},
@@ -160,7 +163,10 @@
                 "f:podIP": {},
                 "f:podIPs": {
                   ".": {},
-                  "k:{\"ip\":\"10.244.0.22\"}": { ".": {}, "f:ip": {} }
+                  "k:{\"ip\":\"10.244.0.22\"}": {
+                    ".": {},
+                    "f:ip": {}
+                  }
                 },
                 "f:startTime": {}
               }
@@ -172,7 +178,10 @@
         "volumes": [
           {
             "name": "configuration",
-            "configMap": { "name": "kubewatch-config", "defaultMode": 420 }
+            "configMap": {
+              "name": "kubewatch-config",
+              "defaultMode": 420
+            }
           },
           {
             "name": "kube-api-access-9dtzp",
@@ -187,7 +196,12 @@
                 {
                   "configMap": {
                     "name": "kube-root-ca.crt",
-                    "items": [{ "key": "ca.crt", "path": "ca.crt" }]
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ]
                   }
                 },
                 {
@@ -249,7 +263,9 @@
                       "app.kubernetes.io/name": "kubewatch"
                     }
                   },
-                  "namespaces": ["kubewatch"],
+                  "namespaces": [
+                    "kubewatch"
+                  ],
                   "topologyKey": "kubernetes.io/hostname"
                 }
               }
@@ -311,12 +327,20 @@
         ],
         "hostIP": "172.20.0.2",
         "podIP": "10.244.0.22",
-        "podIPs": [{ "ip": "10.244.0.22" }],
+        "podIPs": [
+          {
+            "ip": "10.244.0.22"
+          }
+        ],
         "startTime": "2024-12-18T17:58:38Z",
         "containerStatuses": [
           {
             "name": "kubewatch",
-            "state": { "running": { "startedAt": "2024-12-18T17:58:38Z" } },
+            "state": {
+              "running": {
+                "startedAt": "2024-12-18T17:58:38Z"
+              }
+            },
             "lastState": {},
             "ready": true,
             "restartCount": 0,
@@ -366,7 +390,10 @@
             "fieldsType": "FieldsV1",
             "fieldsV1": {
               "f:metadata": {
-                "f:annotations": { ".": {}, "f:checksum/config-map": {} },
+                "f:annotations": {
+                  ".": {},
+                  "f:checksum/config-map": {}
+                },
                 "f:generateName": {},
                 "f:labels": {
                   ".": {},
@@ -487,7 +514,10 @@
         "volumes": [
           {
             "name": "configuration",
-            "configMap": { "name": "kubewatch-config", "defaultMode": 420 }
+            "configMap": {
+              "name": "kubewatch-config",
+              "defaultMode": 420
+            }
           },
           {
             "name": "kube-api-access-9dtzp",
@@ -502,7 +532,12 @@
                 {
                   "configMap": {
                     "name": "kube-root-ca.crt",
-                    "items": [{ "key": "ca.crt", "path": "ca.crt" }]
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ]
                   }
                 },
                 {
@@ -564,7 +599,9 @@
                       "app.kubernetes.io/name": "kubewatch"
                     }
                   },
-                  "namespaces": ["kubewatch"],
+                  "namespaces": [
+                    "kubewatch"
+                  ],
                   "topologyKey": "kubernetes.io/hostname"
                 }
               }
@@ -633,7 +670,11 @@
         "containerStatuses": [
           {
             "name": "kubewatch",
-            "state": { "waiting": { "reason": "ContainerCreating" } },
+            "state": {
+              "waiting": {
+                "reason": "ContainerCreating"
+              }
+            },
             "lastState": {},
             "ready": false,
             "restartCount": 0,
