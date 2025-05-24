@@ -1,35 +1,35 @@
 {
   "specversion": "1.0",
   "type": "KUBERNETES_TOPOLOGY_CHANGE",
-  "source": "https://github.com/aantn/kubewatch",
+  "source": "https://github.com/aantn/aaaaaaaaa",
   "subject": "",
-  "id": "1734544718-3",
+  "id": "1111111111-1",
   "time": "2024-12-18T17:58:39.674637507Z",
   "datacontenttype": "application/json",
   "data": {
     "operation": "update",
     "kind": "Deployment",
     "clusterUid": "TODO",
-    "description": "A `Deployment` in namespace `kubewatch` has been `Updated`:\n`kubewatch`",
+    "description": "A `Deployment` in namespace `aaaaaaaaa` has been `Updated`:\n`aaaaaaaaa`",
     "apiVersion": "apps/v1",
     "obj": {
       "metadata": {
-        "name": "kubewatch",
-        "namespace": "kubewatch",
+        "name": "aaaaaaaaa",
+        "namespace": "aaaaaaaaa",
         "uid": "c33b4bb5-4086-49d6-8557-7994b862983a",
         "resourceVersion": "131503",
         "generation": 5,
         "creationTimestamp": "2024-12-18T16:48:14Z",
         "labels": {
-          "app.kubernetes.io/instance": "kubewatch",
+          "app.kubernetes.io/instance": "aaaaaaaaa",
           "app.kubernetes.io/managed-by": "Helm",
-          "app.kubernetes.io/name": "kubewatch",
-          "helm.sh/chart": "kubewatch-3.5.0"
+          "app.kubernetes.io/name": "aaaaaaaaa",
+          "helm.sh/chart": "aaaaaaaaa-3.5.0"
         },
         "annotations": {
           "deployment.kubernetes.io/revision": "5",
-          "meta.helm.sh/release-name": "kubewatch",
-          "meta.helm.sh/release-namespace": "kubewatch"
+          "meta.helm.sh/release-name": "aaaaaaaaa",
+          "meta.helm.sh/release-namespace": "aaaaaaaaa"
         },
         "managedFields": [
           {
@@ -89,7 +89,7 @@
                       }
                     },
                     "f:containers": {
-                      "k:{\"name\":\"kubewatch\"}": {
+                      "k:{\"name\":\"aaaaaaaaa\"}": {
                         ".": {},
                         "f:image": {},
                         "f:imagePullPolicy": {},
@@ -99,7 +99,7 @@
                         "f:terminationMessagePolicy": {},
                         "f:volumeMounts": {
                           ".": {},
-                          "k:{\"mountPath\":\"/opt/bitnami/kubewatch/.kubewatch.yaml\"}": {
+                          "k:{\"mountPath\":\"/opt/bitnami/aaaaaaaaa/.aaaaaaaaa.yaml\"}": {
                             ".": {},
                             "f:mountPath": {},
                             "f:name": {},
@@ -180,18 +180,18 @@
         "replicas": 1,
         "selector": {
           "matchLabels": {
-            "app.kubernetes.io/instance": "kubewatch",
-            "app.kubernetes.io/name": "kubewatch"
+            "app.kubernetes.io/instance": "aaaaaaaaa",
+            "app.kubernetes.io/name": "aaaaaaaaa"
           }
         },
         "template": {
           "metadata": {
             "creationTimestamp": null,
             "labels": {
-              "app.kubernetes.io/instance": "kubewatch",
+              "app.kubernetes.io/instance": "aaaaaaaaa",
               "app.kubernetes.io/managed-by": "Helm",
-              "app.kubernetes.io/name": "kubewatch",
-              "helm.sh/chart": "kubewatch-3.5.0"
+              "app.kubernetes.io/name": "aaaaaaaaa",
+              "helm.sh/chart": "aaaaaaaaa-3.5.0"
             },
             "annotations": {
               "checksum/config-map": "ad86558008da08db7477b8f29f89b1e096c7ec9db05c6e1f0db18c7fffbcea2f"
@@ -202,21 +202,21 @@
               {
                 "name": "configuration",
                 "configMap": {
-                  "name": "kubewatch-config",
+                  "name": "aaaaaaaaa-config",
                   "defaultMode": 420
                 }
               }
             ],
             "containers": [
               {
-                "name": "kubewatch",
-                "image": "robustadev/kubewatch:v2.9.0",
+                "name": "aaaaaaaaa",
+                "image": "robustadev/aaaaaaaaa:v2.9.0",
                 "resources": {},
                 "volumeMounts": [
                   {
                     "name": "configuration",
-                    "mountPath": "/opt/bitnami/kubewatch/.kubewatch.yaml",
-                    "subPath": ".kubewatch.yaml"
+                    "mountPath": "/opt/bitnami/aaaaaaaaa/.aaaaaaaaa.yaml",
+                    "subPath": ".aaaaaaaaa.yaml"
                   }
                 ],
                 "terminationMessagePath": "/dev/termination-log",
@@ -227,8 +227,8 @@
             "restartPolicy": "Always",
             "terminationGracePeriodSeconds": 30,
             "dnsPolicy": "ClusterFirst",
-            "serviceAccountName": "kubewatch",
-            "serviceAccount": "kubewatch",
+            "serviceAccountName": "aaaaaaaaa",
+            "serviceAccount": "aaaaaaaaa",
             "securityContext": {},
             "affinity": {
               "podAntiAffinity": {
@@ -238,20 +238,18 @@
                     "podAffinityTerm": {
                       "labelSelector": {
                         "matchLabels": {
-                          "app.kubernetes.io/instance": "kubewatch",
-                          "app.kubernetes.io/name": "kubewatch"
+                          "app.kubernetes.io/instance": "aaaaaaaaa",
+                          "app.kubernetes.io/name": "aaaaaaaaa"
                         }
                       },
-                      "namespaces": [
-                        "kubewatch"
-                      ],
+                      "namespaces": ["aaaaaaaaa"],
                       "topologyKey": "kubernetes.io/hostname"
                     }
                   }
                 ]
               }
             },
-            "schedulerName": "default-scheduler"
+            "schedulerName": "aaaaaaa-aaaaaaaaa"
           }
         },
         "strategy": {
@@ -285,7 +283,7 @@
             "lastUpdateTime": "2024-12-18T17:58:39Z",
             "lastTransitionTime": "2024-12-18T16:48:14Z",
             "reason": "ReplicaSetUpdated",
-            "message": "ReplicaSet \"kubewatch-57d9989bd\" is progressing."
+            "message": "ReplicaSet \"aaaaaaaaa-57d9989bd\" is progressing."
           }
         ]
       }

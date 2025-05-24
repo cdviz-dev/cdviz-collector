@@ -1,32 +1,32 @@
 {
   "specversion": "1.0",
   "type": "KUBERNETES_TOPOLOGY_CHANGE",
-  "source": "https://github.com/aantn/kubewatch",
+  "source": "https://github.com/aantn/aaaaaaaaa",
   "subject": "",
-  "id": "1734544718-10",
+  "id": "1111111111-11",
   "time": "2024-12-18T17:58:40.787314783Z",
   "datacontenttype": "application/json",
   "data": {
     "operation": "delete",
     "kind": "Pod",
     "clusterUid": "TODO",
-    "description": "A `Pod` in namespace `kubewatch` has been `Deleted`:\n`kubewatch-598d5c9c5f-6c9gs`",
+    "description": "A `Pod` in namespace `aaaaaaaaa` has been `Deleted`:\n`aaaaaaaaa-111a1a1a1a-1a1aa`",
     "apiVersion": "v1",
     "obj": {
       "metadata": {
-        "name": "kubewatch-598d5c9c5f-6c9gs",
-        "generateName": "kubewatch-598d5c9c5f-",
-        "namespace": "kubewatch",
+        "name": "aaaaaaaaa-111a1a1a1a-1a1aa",
+        "generateName": "aaaaaaaaa-111a1a1a1a-",
+        "namespace": "aaaaaaaaa",
         "uid": "8a966a72-f625-4d4f-bcfc-1f82fa707862",
         "resourceVersion": "131517",
         "creationTimestamp": "2024-12-18T17:48:56Z",
         "deletionTimestamp": "2024-12-18T17:58:39Z",
         "deletionGracePeriodSeconds": 0,
         "labels": {
-          "app.kubernetes.io/instance": "kubewatch",
+          "app.kubernetes.io/instance": "aaaaaaaaa",
           "app.kubernetes.io/managed-by": "Helm",
-          "app.kubernetes.io/name": "kubewatch",
-          "helm.sh/chart": "kubewatch-3.5.0",
+          "app.kubernetes.io/name": "aaaaaaaaa",
+          "helm.sh/chart": "aaaaaaaaa-3.5.0",
           "pod-template-hash": "598d5c9c5f"
         },
         "annotations": {
@@ -36,7 +36,7 @@
           {
             "apiVersion": "apps/v1",
             "kind": "ReplicaSet",
-            "name": "kubewatch-598d5c9c5f",
+            "name": "aaaaaaaaa-598d5c9c5f",
             "uid": "8d4da537-1ac6-444f-8014-d5f5c5a9dbcb",
             "controller": true,
             "blockOwnerDeletion": true
@@ -78,7 +78,7 @@
                   }
                 },
                 "f:containers": {
-                  "k:{\"name\":\"kubewatch\"}": {
+                  "k:{\"name\":\"aaaaaaaaa\"}": {
                     ".": {},
                     "f:image": {},
                     "f:imagePullPolicy": {},
@@ -88,7 +88,7 @@
                     "f:terminationMessagePolicy": {},
                     "f:volumeMounts": {
                       ".": {},
-                      "k:{\"mountPath\":\"/opt/bitnami/kubewatch/.kubewatch.yaml\"}": {
+                      "k:{\"mountPath\":\"/opt/bitnami/aaaaaaaaa/.aaaaaaaaa.yaml\"}": {
                         ".": {},
                         "f:mountPath": {},
                         "f:name": {},
@@ -184,7 +184,7 @@
           {
             "name": "configuration",
             "configMap": {
-              "name": "kubewatch-config",
+              "name": "aaaaaaaaa-config",
               "defaultMode": 420
             }
           },
@@ -229,14 +229,14 @@
         ],
         "containers": [
           {
-            "name": "kubewatch",
-            "image": "robustadev/kubewatch:v2.9.0",
+            "name": "aaaaaaaaa",
+            "image": "robustadev/aaaaaaaaa:v2.9.0",
             "resources": {},
             "volumeMounts": [
               {
                 "name": "configuration",
-                "mountPath": "/opt/bitnami/kubewatch/.kubewatch.yaml",
-                "subPath": ".kubewatch.yaml"
+                "mountPath": "/opt/bitnami/aaaaaaaaa/.aaaaaaaaa.yaml",
+                "subPath": ".aaaaaaaaa.yaml"
               },
               {
                 "name": "kube-api-access-vqbjd",
@@ -252,9 +252,9 @@
         "restartPolicy": "Always",
         "terminationGracePeriodSeconds": 30,
         "dnsPolicy": "ClusterFirst",
-        "serviceAccountName": "kubewatch",
-        "serviceAccount": "kubewatch",
-        "nodeName": "local-control-plane",
+        "serviceAccountName": "aaaaaaaaa",
+        "serviceAccount": "aaaaaaaaa",
+        "nodeName": "aaaaa-aaaaaaa-aaaaa",
         "securityContext": {},
         "affinity": {
           "podAntiAffinity": {
@@ -264,20 +264,18 @@
                 "podAffinityTerm": {
                   "labelSelector": {
                     "matchLabels": {
-                      "app.kubernetes.io/instance": "kubewatch",
-                      "app.kubernetes.io/name": "kubewatch"
+                      "app.kubernetes.io/instance": "aaaaaaaaa",
+                      "app.kubernetes.io/name": "aaaaaaaaa"
                     }
                   },
-                  "namespaces": [
-                    "kubewatch"
-                  ],
+                  "namespaces": ["aaaaaaaaa"],
                   "topologyKey": "kubernetes.io/hostname"
                 }
               }
             ]
           }
         },
-        "schedulerName": "default-scheduler",
+        "schedulerName": "aaaaaaa-aaaaaaaaa",
         "tolerations": [
           {
             "key": "node.kubernetes.io/not-ready",
@@ -343,7 +341,7 @@
         "startTime": "2024-12-18T17:48:56Z",
         "containerStatuses": [
           {
-            "name": "kubewatch",
+            "name": "aaaaaaaaa",
             "state": {
               "terminated": {
                 "exitCode": 0,
@@ -356,8 +354,8 @@
             "lastState": {},
             "ready": false,
             "restartCount": 0,
-            "image": "docker.io/robustadev/kubewatch:v2.9.0",
-            "imageID": "docker.io/robustadev/kubewatch@sha256:0457a51e36e8c082376bef001925f8327945252135090661480522732e154b10",
+            "image": "docker.io/robustadev/aaaaaaaaa:v2.9.0",
+            "imageID": "docker.io/robustadev/aaaaaaaaa@sha256:0457a51e36e8c082376bef001925f8327945252135090661480522732e154b10",
             "containerID": "containerd://a275682d4eb42d956ee817b3b48f3d15b2a197bd4ba32b0a5c7be9010133ddd7",
             "started": false
           }
