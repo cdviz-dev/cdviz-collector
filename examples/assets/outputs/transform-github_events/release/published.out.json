@@ -7,16 +7,16 @@
   "body": {
     "context": {
       "id": "0",
-      "source": "https://api.github.com/repos/cdviz-dev/cdviz-collector/releases/196651649",
+      "source": "https://api.github.com/repos/aaaaa-aaa/aaaaa-aaaaaaaaa/releases/111111111",
       "timestamp": "2025-01-24T14:30:24+00:00",
       "type": "dev.cdevents.artifact.published.0.2.0",
       "version": "0.4.1"
     },
     "subject": {
       "content": {
-        "user": "github-actions[bot]"
+        "user": "aaaaaa-aaaaaaa[aaa]"
       },
-      "id": "pkg:github/cdviz-dev/cdviz-collector@0.3.0",
+      "id": "pkg:github/aaaaa-aaa/aaaaa-aaaaaaaaa@1.1.1",
       "type": "artifact"
     }
   }
