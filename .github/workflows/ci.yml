@@ -5,6 +5,8 @@ name: ci
 
 on:
   pull_request:
+    branches-ignore:
+      - "release-plz-**"
   push:
     branches:
       - main
@@ -41,10 +43,9 @@ jobs:
       - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: jdx/mise-action@v2
         with:
-          experimental: true
-      - run: mise install
-        shell: bash
+          # version 2025.5.11, a symlink is created for rust setup
+          # without cache, missing components are installed
+          # with cache, nothing is installed, but as rust tool is symlinked, it is not cached => missing components failure
+          cache: false
       - run: mise run --jobs 1 ci
-        shell: bash
-      - run: ${SCCACHE_PATH} --show-stats
         shell: bash
