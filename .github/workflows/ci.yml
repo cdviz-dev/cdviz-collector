@@ -4,14 +4,9 @@
 name: ci
 
 on:
-  pull_request:
-    branches-ignore:
-      - "release-plz-**"
   push:
-    branches:
-      - main
-      - master
-      - "releases/*"
+    branches-ignore:
+      - "release-plz-*"
   workflow_dispatch:
 
 concurrency:
