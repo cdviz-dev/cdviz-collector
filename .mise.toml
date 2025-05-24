@@ -44,11 +44,19 @@ run = "cargo --locked build"
 
 [tasks."format"]
 alias = "fmt"
+depends = ["obfuscate"]
 description = "Format the code and sort dependencies"
 run = [
   "cargo --locked fmt",
   "cargo --locked sort --grouped",
   "biome check --write",
+]
+
+[tasks.obfuscate]
+description = "obfuscate some data into the samples"
+run = [
+    "json-simple-obfuscator examples/assets/inputs/kubewatch_cloudevents/*/*.json",
+    "json-simple-obfuscator examples/assets/inputs/github_events/*/*.json",
 ]
 
 [tasks."deny"]

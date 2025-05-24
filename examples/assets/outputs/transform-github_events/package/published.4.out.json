@@ -7,17 +7,17 @@
   "body": {
     "context": {
       "id": "0",
-      "source": "/api.github.com/repos/cdviz-dev/cdviz-collector/packages",
+      "source": "/api.github.com/repos/aaaaa-aaa/aaaaa-aaaaaaaaa/packages",
       "timestamp": "2025-01-24T14:31:36+00:00",
       "type": "dev.cdevents.artifact.published.0.2.0",
       "version": "0.4.1"
     },
     "subject": {
       "content": {
-        "user": "github-actions[bot]"
+        "user": "aaaaaa-aaaaaaa[aaa]"
       },
-      "id": "pkg:oci/cdviz-collector@sha256%3Aadf450ad2a44e7cf94a9ba15378ad66f3b906ebd88d541f980d3b3e2b33f2399?repository_url=ghcr.io/cdviz-dev&tag=0%2E3%2E0",
-      "source": "ghcr.io/cdviz-dev/cdviz-collector:0.3.0",
+      "id": "pkg:oci/aaaaa-aaaaaaaaa@aaa111%3Aaaa111aa1a11a1aa11a1aa11111aa11a1a111aaa11a111a111a1a1a1a11a1111?repository_url=ghcr.io/aaaaa-aaa&tag=1%2E1%2E1",
+      "source": "ghcr.io/aaaaa-aaa/aaaaa-aaaaaaaaa:1.1.1",
       "type": "artifact"
     }
   }
