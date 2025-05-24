@@ -1,7 +1,9 @@
+[settings]
+experimental = true
+idiomatic_version_file_enable_tools = ["rust"]
+
 [env]
-RUST_WITHOUT = "rust-docs"
 RUSTC_BOOTSTRAP= "1" # workaround to reduce cli full rebuild / conflict with rust-analyzer (see [VSCode Test Explorer regularly requires a full rebuild · Issue #17149 · rust-lang/rust-analyzer](https://github.com/rust-lang/rust-analyzer/issues/17149))
-# ASDF_RUST_PROFILE = "minimal"
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = "http://127.0.0.1:4317"
 # OTEL_EXPORTER_OTLP_TRACES_PROTOCOL = "grpc"
 OTEL_TRACES_SAMPLER = "always_off"
@@ -65,7 +67,9 @@ description = "Lint all the code (megalinter + lint_rust)"
 run = [
     "cargo --locked fmt --all -- --check",
     "cargo --locked sort --grouped --check",
-    "cargo --locked clippy --workspace --all-features --all-targets --no-deps",
+    # using the profile 'test' to reduce the number of compilation when running with test
+    # => faster CI, less space used (and network for remote cache)
+    "cargo --locked clippy --workspace --all-features --all-targets --no-deps --profile test",
 ]
 
 
@@ -82,8 +86,10 @@ run = ["cargo --locked machete --with-metadata",
 # > Infinitive loop detected, all tasks are finished but the graph isn't empty examples:...
 # So as workaround a wait_for is added to every task examples:transform:...
 depends = ["test:unit", "examples:transform:*"]
+wait_for = ["lint", "lint:*"]
 
 [tasks."test:unit"]
+wait_for = ["lint", "lint:*"]
 run = [
     "cargo --locked nextest run",
     # "cargo test --doc",

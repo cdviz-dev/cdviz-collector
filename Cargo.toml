@@ -11,6 +11,54 @@ homepage = "https://cdviz.dev"
 repository = "https://github.com/cdviz-dev/cdviz-collector"
 publish = true
 
+[package.metadata.cargo-machete]
+ignored = [
+    # "handlebars_misc_helpers",
+    "humantime-serde",
+] # auto-registered and used at runtime
+
+[features]
+## default is "full" feature set
+default = [
+    "sink_db",
+    "sink_folder",
+    "sink_http",
+    "source_opendal",
+    "tool_transform",
+]
+#! ### Sinks
+sink_db = ["dep:sqlx"]
+sink_folder = ["dep:opendal"]
+sink_http = [
+    "dep:reqwest",
+    "dep:reqwest-middleware",
+    "dep:reqwest-tracing",
+    # reqwest is also used as transitive dependencies
+    "reqwest/charset",
+    "reqwest/http2",
+    "reqwest/json",
+    "reqwest/rustls-tls",
+]
+#! ### Sources
+source_opendal = [
+    "dep:bytes",
+    "dep:csv",
+    "dep:globset",
+    "dep:handlebars",
+    "dep:handlebars_misc_helpers",
+    "dep:opendal",
+    "transformer_hbs",
+    "transformer_vrl",
+]
+
+#! ### Transformers
+transformer_hbs = ["dep:handlebars", "dep:handlebars_misc_helpers"]
+transformer_vrl = ["dep:vrl"]
+
+#! ### Tools
+tool_ui = ["dep:cliclack", "dep:console", "dep:similar"]
+tool_transform = ["source_opendal", "tool_ui", "transformer_hbs", "transformer_vrl"]
+
 [dependencies]
 axum = "0.8"
 axum-tracing-opentelemetry = "0.28"
@@ -84,6 +132,9 @@ tracing = "0.1"
 tracing-opentelemetry-instrumentation-sdk = { version = "0.28" }
 vrl = { version = "0.24", optional = true }
 
+[target.'cfg(all(target_env = "musl", target_pointer_width = "64"))'.dependencies.jemallocator]
+version = "0.5"
+
 [dev-dependencies]
 assert2 = "0.3"
 cdevents-sdk = { version = "0.2", features = ["testkit"] }
@@ -102,68 +153,6 @@ tower = { version = "0.5", features = ["util"] }
 tracing-subscriber = "0.3"
 uuid = "1"
 wiremock = "0.6"
-
-[features]
-## default is "full" feature set
-default = [
-  "sink_db",
-  "sink_folder",
-  "sink_http",
-  "source_opendal",
-  "tool_transform",
-]
-#! ### Sinks
-sink_db = ["dep:sqlx"]
-sink_folder = ["dep:opendal"]
-sink_http = [
-  "dep:reqwest",
-  "dep:reqwest-middleware",
-  "dep:reqwest-tracing",
-  # reqwest is also used as transitive dependencies
-  "reqwest/charset",
-  "reqwest/http2",
-  "reqwest/json",
-  "reqwest/rustls-tls",
-]
-#! ### Sources
-source_opendal = [
-  "dep:bytes",
-  "dep:csv",
-  "dep:globset",
-  "dep:handlebars",
-  "dep:handlebars_misc_helpers",
-  "dep:opendal",
-  "transformer_hbs",
-  "transformer_vrl",
-]
-
-#! ### Transformers
-transformer_hbs = ["dep:handlebars", "dep:handlebars_misc_helpers"]
-transformer_vrl = ["dep:vrl"]
-
-#! ### Tools
-tool_ui = ["dep:cliclack", "dep:console", "dep:similar"]
-tool_transform = [
-  "source_opendal",
-  "tool_ui",
-  "transformer_hbs",
-  "transformer_vrl",
-]
-
-[target.'cfg(all(target_env = "musl", target_pointer_width = "64"))'.dependencies.jemallocator]
-version = "0.5"
-
-[package.metadata.release]
-pre-release-commit-message = "🚀 (cargo-release) version {{version}}"
-tag-prefix = ""
-tag-name = "{{prefix}}{{version}}"
-tag-message = "🔖 {{version}}"
-
-[package.metadata.cargo-machete]
-ignored = [
-  # "handlebars_misc_helpers",
-  "humantime-serde",
-] # auto-registered and used at runtime
 
 [lints.rust]
 unsafe_code = "forbid"
