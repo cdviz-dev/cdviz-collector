@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.7](https://github.com/cdviz-dev/cdviz-collector/compare/0.7.6...0.7.7) - 2025-05-24
+
+### Fixed
+
+- *(kubewatch)* encode_percent of `tag` in `packageId`
+- workaround to compile transitive dependency 'oniguruma' with gcc >= 15
+- *(deps)* update rust crate vrl to 0.24
+
+### Other
+
+- remove concurrency on releasz-plz to fix pre-mature cancellation
+- tune trigger of workflow
+- tune mise & rust configuration
+- *(deps)* update
+- replace task `install:rustcomponents` by experimental setting `tools.rust.components`
+- format json
+- *(github)* allow 1 github event to generate 0-n cdevents
+- update mega-linter workflow
+- *(deps)* update dependency rust to v1.87.0
+
 ## [0.7.6](https://github.com/cdviz-dev/cdviz-collector/compare/0.7.5...0.7.6) - 2025-04-16
 
 ### Fixed
