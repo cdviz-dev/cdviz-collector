@@ -22,6 +22,7 @@ rust = { version = "1.87.0", profile="minimal", components="rustfmt,clippy,llvm-
 "cargo:cargo-deny" = "latest"
 "cargo:cargo-nextest" = "latest"
 "biome" = "latest"
+"ubi:davidB/json-simple-obfuscator" = "latest"
 
 [tasks."install:sqlx-cli"]
 hide = true
@@ -42,6 +43,7 @@ run = "cargo --locked hack check --each-feature --no-dev-deps"
 run = "cargo --locked build"
 
 [tasks."format"]
+alias = "fmt"
 description = "Format the code and sort dependencies"
 run = [
   "cargo --locked fmt",

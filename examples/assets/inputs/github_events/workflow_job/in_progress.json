@@ -28,7 +28,9 @@
       }
     ],
     "check_run_url": "https://api.github.com/repos/cdviz-dev/cdviz-collector/check-runs/36016488192",
-    "labels": ["ubuntu-latest"],
+    "labels": [
+      "ubuntu-latest"
+    ],
     "runner_id": 4,
     "runner_name": "GitHub Actions 4",
     "runner_group_id": 2,
@@ -134,7 +136,11 @@
     "allow_forking": true,
     "is_template": false,
     "web_commit_signoff_required": true,
-    "topics": ["cdevents", "cicd", "sdlc"],
+    "topics": [
+      "cdevents",
+      "cicd",
+      "sdlc"
+    ],
     "visibility": "public",
     "forks": 0,
     "open_issues": 3,

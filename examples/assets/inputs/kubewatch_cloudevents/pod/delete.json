@@ -51,7 +51,10 @@
             "fieldsType": "FieldsV1",
             "fieldsV1": {
               "f:metadata": {
-                "f:annotations": { ".": {}, "f:checksum/config-map": {} },
+                "f:annotations": {
+                  ".": {},
+                  "f:checksum/config-map": {}
+                },
                 "f:generateName": {},
                 "f:labels": {
                   ".": {},
@@ -165,7 +168,10 @@
                 "f:podIP": {},
                 "f:podIPs": {
                   ".": {},
-                  "k:{\"ip\":\"10.244.0.21\"}": { ".": {}, "f:ip": {} }
+                  "k:{\"ip\":\"10.244.0.21\"}": {
+                    ".": {},
+                    "f:ip": {}
+                  }
                 },
                 "f:startTime": {}
               }
@@ -177,7 +183,10 @@
         "volumes": [
           {
             "name": "configuration",
-            "configMap": { "name": "kubewatch-config", "defaultMode": 420 }
+            "configMap": {
+              "name": "kubewatch-config",
+              "defaultMode": 420
+            }
           },
           {
             "name": "kube-api-access-vqbjd",
@@ -192,7 +201,12 @@
                 {
                   "configMap": {
                     "name": "kube-root-ca.crt",
-                    "items": [{ "key": "ca.crt", "path": "ca.crt" }]
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ]
                   }
                 },
                 {
@@ -254,7 +268,9 @@
                       "app.kubernetes.io/name": "kubewatch"
                     }
                   },
-                  "namespaces": ["kubewatch"],
+                  "namespaces": [
+                    "kubewatch"
+                  ],
                   "topologyKey": "kubernetes.io/hostname"
                 }
               }
@@ -319,7 +335,11 @@
         ],
         "hostIP": "172.20.0.2",
         "podIP": "10.244.0.21",
-        "podIPs": [{ "ip": "10.244.0.21" }],
+        "podIPs": [
+          {
+            "ip": "10.244.0.21"
+          }
+        ],
         "startTime": "2024-12-18T17:48:56Z",
         "containerStatuses": [
           {
