@@ -14,6 +14,9 @@
 # | [x] | workflow_run:completed | pipelineRun:finished |
 # | [x] | workflow_job:in_progress | taskRun:started |
 # | [x] | workflow_job:completed | taskRun:finished |
+# | [x] | issue:opened | ticket:created |
+# | [x] | issue:closed | ticket:closed |
+# | [x] | issue:* | ticket:updated |
 #
 
 bodies = []
@@ -194,6 +197,64 @@ if exists(.body.package) {
     body.context.timestamp = ts
     body.context.type = "dev.cdevents.taskrun.finished.0.2.0"
     body.subject.content.outcome = .body.workflow_job.conclusion # success, failure, null, skipped, cancelled, action_required, neutral, timed_out
+    bodies = [body]
+  }
+} else if exists(.body.issue) {
+  # !! field "issue" is present for issue & issue_comment events and some actions are shared
+  # ignore if draft or not
+  body = {
+    "context": {
+      "version": "0.4.1",
+      "id": id,
+      "source": .body.issue.url,
+      # "chainId": ??
+      # "links": ??
+    },
+    "subject": {
+      "id": .body.issue.url,
+      "type": "ticket",
+      "content": {
+        "summary": .body.issue.title,
+        "ticketType": .body.issue.type.name,
+        # group": "security",
+        "creator": .body.issue.user.login,
+        "assignees": map_values(array!(.body.issue.assignees || [])) -> |assignee| {
+          assignee.login
+        },
+        #"priority": "high",
+        "labels": map_values(array!(.body.issue.labels || [])) -> |label| {
+          label.name
+        },
+        "milestone": .body.issue.milestone.title,
+        "uri": .body.issue.html_url,
+      }
+    }
+  }
+  if .body.action == "opened" {
+    ts = parse_timestamp(.body.issue.created_at, "%+") ?? now()
+    ts = format_timestamp!(ts, format: "%+")
+    body.context.type = "dev.cdevents.ticket.created.0.1.0"
+    body.context.timestamp = ts
+    bodies = [body]
+  } else if .body.action == "closed" {
+    ts = parse_timestamp(.body.issue.closed_at, "%+") ?? now()
+    ts = format_timestamp!(ts, format: "%+")
+    body.context.type = "dev.cdevents.ticket.closed.0.1.0"
+    body.context.timestamp = ts
+    body.subject.content.updatedBy = .body.sender.login
+    body.subject.content.resolution = .body.issue.state_reason # completed, cancelled, duplicate, not_planned, fixed, invalid, wont_fix
+    bodies = [body]
+  } else {
+    ts = parse_timestamp(.body.issue.updated_at, "%+") ?? now()
+    ts = format_timestamp!(ts, format: "%+")
+    body.context.type = "dev.cdevents.ticket.updated.0.1.0"
+    body.context.timestamp = ts
+    body.subject.content.updatedBy = .body.sender.login
+    body.customData = {
+      "issue": {
+        "action": .body.action # edited, transferred, reopened, locked, unlocked, milestoned, demilestoned
+      }
+    }
     bodies = [body]
   }
 }
