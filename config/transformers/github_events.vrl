@@ -22,191 +22,191 @@ repo_full_name = .body.repository.full_name
 sender = .body.sender.login
 # test existance of a field to determine the event type (alternative: .headers["X-GitHub-Event"])
 if exists(.body.package) {
-    if .body.action == "published" {
-        ts = parse_timestamp(.body.package.updated_at, "%+") ?? now()
-        ts = format_timestamp!(ts, format: "%+")
-        name = .body.package.name || "noname"
-        namespace = .body.package.namespace || "nonamespace"
-        # [purl-spec/PURL-TYPES.rst at master · package-url/purl-spec](https://github.com/package-url/purl-spec/blob/master/PURL-TYPES.rst)
-        pkgs = []
-        # the case of the value seems inconsitent
-        # see [List packages for an organization](https://docs.github.com/en/rest/packages/packages?apiVersion=2022-11-28#list-packages-for-an-organization)
-        # see https://github.com/octokit/webhooks.net/blob/main/src/Octokit.Webhooks/Models/PackageType.cs
-        package_type = downcase(.body.package.package_type) ?? .body.package.package_type
-        if package_type == "container" && .body.package.package_version.container_metadata.tag.name != "" {
-            # [Container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
-            # if no tag, it could be an intermediate layer => no package
-            # github generate 1 event per tag
-            digest = (.body.package.package_version.container_metadata.tag.digest || .body.package.package_version.version)
-            version = encode_percent(digest) ?? ""
-            tag_name = .body.package.package_version.container_metadata.tag.name
-            tag = encode_percent(tag_name) ?? ""
-            pkgs = ["pkg:oci/{{ name }}@{{ version }}?repository_url=ghcr.io/{{ namespace }}&tag={{ tag }}"] ?? []
-        } else if package_type == "docker" {
-            # if no tag, it could be an intermediate layer => no package
-            # [Docker registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-docker-registry)
-            version = encode_percent(.body.package.package_version.version) ?? ""
-            tag_names = filter(array!(.body.package.package_version.docker_metadata.tags || [])) -> |_index, tag_name| {
-              !is_nullish(tag_name)
-            }
-            pkgs = map_values(tag_names) -> |tag_name|{
-              tag = encode_percent(tag_name) ?? ""
-              "pkg:oci/{{ name }}@{{ version }}?repository_url=ghcr.io/{{ namespace }}&tag={{ tag }}" ?? ""
-            }
-            pkgs = filter(pkgs) -> |_index, pkg| {
-              !is_nullish(pkg)
-            }
-        } else if package_type == "maven" {
-            # [Apache Maven registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry)
-            # [Gradle registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-gradle-registry)
-            version = .body.package.package_version.version
-            # version = encode_percent(version) ?? ""
-            repository_url = encode_percent("https://maven.pkg.github.com/{{ repo_full_name}}" ?? "")
-            pkgs = ["pkg:maven/{{ namespace }}/{{ name }}@{{ version }}?repository_url={{ repository_url }}"] ?? []
-        } else if package_type == "npm" && .body.package.package_version.npm_metadata.tag.name != "" {
-            # [npm registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry)
-            version = (.body.package.package_version.npm_metadata.version || .body.package.package_version.npm_metadata.npm_version || .body.package.package_version.version)
-            # version = encode_percent(version) ?? ""
-            repository_url = encode_percent("https://npm.pkg.github.com")
-            pkgs = ["pkg:npm/{{ namespace }}/{{ name }}@{{ version }}?repository_url={{ repository_url }}"] ?? []
-        } else if package_type == "nuget" {
-            # [NuGet registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry)
-            version = .body.package.package_version.version
-            # version = encode_percent(version) ?? ""
-            repository_url = encode_percent("https://nuget.pkg.github.com/{{ namespace }}" ?? "")
-            pkgs = ["pkg:nuget/{{ name }}@{{ version }}?repository_url={{ repository_url }}"] ?? []
-        } else if package_type == "rubygems" {
-            # [RubyGems registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-rubygems-registry)
-            version = (.body.package.package_version.rugygems_metadata.version_info.version || .body.package.package_version.version)
-            # version = encode_percent(version) ?? ""
-            repository_url = encode_percent("https://rubygems.pkg.github.com/{{ namespace }}" ?? "")
-            pkgs = ["pkg:gem/{{ name }}@{{ version }}?repository_url={{ repository_url }}"] ?? []
-        }
-        bodies = map_values(pkgs) -> |pkg|{
-          {
-              "context": {
-                  "version": "0.4.1",
-                  "id": id,
-                  "source": "/api.github.com/repos/{{ repo_full_name }}/packages" ?? "",
-                  "type": "dev.cdevents.artifact.published.0.2.0",
-                  "timestamp": ts,
-                  # "chainId": ??
-                  # "links": ??
-              },
-              "subject": {
-                  "id": pkg,
-                  "source": .body.package.package_version.package_url,
-                  "type": "artifact",
-                  "content": {
-                      "user": sender,
-                  }
-              }
+  if .body.action == "published" {
+    ts = parse_timestamp(.body.package.updated_at, "%+") ?? now()
+    ts = format_timestamp!(ts, format: "%+")
+    name = .body.package.name || "noname"
+    namespace = .body.package.namespace || "nonamespace"
+    # [purl-spec/PURL-TYPES.rst at master · package-url/purl-spec](https://github.com/package-url/purl-spec/blob/master/PURL-TYPES.rst)
+    pkgs = []
+    # the case of the value seems inconsitent
+    # see [List packages for an organization](https://docs.github.com/en/rest/packages/packages?apiVersion=2022-11-28#list-packages-for-an-organization)
+    # see https://github.com/octokit/webhooks.net/blob/main/src/Octokit.Webhooks/Models/PackageType.cs
+    package_type = downcase(.body.package.package_type) ?? .body.package.package_type
+    if package_type == "container" && .body.package.package_version.container_metadata.tag.name != "" {
+      # [Container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+      # if no tag, it could be an intermediate layer => no package
+      # github generate 1 event per tag
+      digest = (.body.package.package_version.container_metadata.tag.digest || .body.package.package_version.version)
+      version = encode_percent(digest) ?? ""
+      tag_name = .body.package.package_version.container_metadata.tag.name
+      tag = encode_percent(tag_name) ?? ""
+      pkgs = ["pkg:oci/{{ name }}@{{ version }}?repository_url=ghcr.io/{{ namespace }}&tag={{ tag }}"] ?? []
+    } else if package_type == "docker" {
+      # if no tag, it could be an intermediate layer => no package
+      # [Docker registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-docker-registry)
+      version = encode_percent(.body.package.package_version.version) ?? ""
+      tag_names = filter(array!(.body.package.package_version.docker_metadata.tags || [])) -> |_index, tag_name| {
+        !is_nullish(tag_name)
+      }
+      pkgs = map_values(tag_names) -> |tag_name|{
+        tag = encode_percent(tag_name) ?? ""
+        "pkg:oci/{{ name }}@{{ version }}?repository_url=ghcr.io/{{ namespace }}&tag={{ tag }}" ?? ""
+      }
+      pkgs = filter(pkgs) -> |_index, pkg| {
+        !is_nullish(pkg)
+      }
+    } else if package_type == "maven" {
+      # [Apache Maven registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry)
+      # [Gradle registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-gradle-registry)
+      version = .body.package.package_version.version
+      # version = encode_percent(version) ?? ""
+      repository_url = encode_percent("https://maven.pkg.github.com/{{ repo_full_name}}" ?? "")
+      pkgs = ["pkg:maven/{{ namespace }}/{{ name }}@{{ version }}?repository_url={{ repository_url }}"] ?? []
+    } else if package_type == "npm" && .body.package.package_version.npm_metadata.tag.name != "" {
+      # [npm registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry)
+      version = (.body.package.package_version.npm_metadata.version || .body.package.package_version.npm_metadata.npm_version || .body.package.package_version.version)
+      # version = encode_percent(version) ?? ""
+      repository_url = encode_percent("https://npm.pkg.github.com")
+      pkgs = ["pkg:npm/{{ namespace }}/{{ name }}@{{ version }}?repository_url={{ repository_url }}"] ?? []
+    } else if package_type == "nuget" {
+      # [NuGet registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry)
+      version = .body.package.package_version.version
+      # version = encode_percent(version) ?? ""
+      repository_url = encode_percent("https://nuget.pkg.github.com/{{ namespace }}" ?? "")
+      pkgs = ["pkg:nuget/{{ name }}@{{ version }}?repository_url={{ repository_url }}"] ?? []
+    } else if package_type == "rubygems" {
+      # [RubyGems registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-rubygems-registry)
+      version = (.body.package.package_version.rugygems_metadata.version_info.version || .body.package.package_version.version)
+      # version = encode_percent(version) ?? ""
+      repository_url = encode_percent("https://rubygems.pkg.github.com/{{ namespace }}" ?? "")
+      pkgs = ["pkg:gem/{{ name }}@{{ version }}?repository_url={{ repository_url }}"] ?? []
+    }
+    bodies = map_values(pkgs) -> |pkg|{
+      {
+        "context": {
+          "version": "0.4.1",
+          "id": id,
+          "source": "/api.github.com/repos/{{ repo_full_name }}/packages" ?? "",
+          "type": "dev.cdevents.artifact.published.0.2.0",
+          "timestamp": ts,
+          # "chainId": ??
+          # "links": ??
+        },
+        "subject": {
+          "id": pkg,
+          "source": .body.package.package_version.package_url,
+          "type": "artifact",
+          "content": {
+            "user": sender,
           }
         }
+      }
     }
+  }
 } else if exists(.body.release) {
-    if .body.action == "published" {
-        ts = parse_timestamp(.body.release.published_at, "%+") ?? now()
-        ts = format_timestamp!(ts, format: "%+")
-        version = .body.release.tag_name
-        # version = encode_percent(version) ?? ""
-        pkg = "pkg:github/{{ repo_full_name }}@{{ version }}" ?? ""
-        bodies = [{
-            "context": {
-                "version": "0.4.1",
-                "id": id,
-                "source": .body.release.url,
-                "type": "dev.cdevents.artifact.published.0.2.0",
-                "timestamp": ts,
-                # "chainId": ??
-                # "links": ??
-            },
-            "subject": {
-                "id": pkg,
-                "type": "artifact",
-                "content": {
-                    "user": sender,
-                }
-            }
-        }]
-    }
-} else if exists(.body.workflow_run) {
-    # https://docs.github.com/en/webhooks/webhook-events-and-payloads#workflow_run
-    ts = parse_timestamp(.body.workflow_run.updated_at, "%+") ?? now()
+  if .body.action == "published" {
+    ts = parse_timestamp(.body.release.published_at, "%+") ?? now()
     ts = format_timestamp!(ts, format: "%+")
-    base_body = {
-        "context": {
-            "version": "0.4.1",
-            "id": id,
-            "source": .body.workflow_run.url,
-            "timestamp": ts,
-        },
-        "subject": {
-            "id": to_string!(.body.workflow_run.id) + "/" + to_string!(.body.workflow_run.run_attempt) , # or .body.workflow_run.workflow_id, integration of run_number ?
-            "type": "pipelineRun",
-            "content": {
-                "pipelineName": (repo_full_name + "/" + .body.workflow_run.name) ?? "",
-                "url": .body.workflow_run.html_url
-            }
+    version = .body.release.tag_name
+    # version = encode_percent(version) ?? ""
+    pkg = "pkg:github/{{ repo_full_name }}@{{ version }}" ?? ""
+    bodies = [{
+      "context": {
+        "version": "0.4.1",
+        "id": id,
+        "source": .body.release.url,
+        "type": "dev.cdevents.artifact.published.0.2.0",
+        "timestamp": ts,
+        # "chainId": ??
+        # "links": ??
+      },
+      "subject": {
+        "id": pkg,
+        "type": "artifact",
+        "content": {
+          "user": sender,
         }
+      }
+    }]
+  }
+} else if exists(.body.workflow_run) {
+  # https://docs.github.com/en/webhooks/webhook-events-and-payloads#workflow_run
+  ts = parse_timestamp(.body.workflow_run.updated_at, "%+") ?? now()
+  ts = format_timestamp!(ts, format: "%+")
+  base_body = {
+    "context": {
+      "version": "0.4.1",
+      "id": id,
+      "source": .body.workflow_run.url,
+      "timestamp": ts,
+    },
+    "subject": {
+      "id": to_string!(.body.workflow_run.id) + "/" + to_string!(.body.workflow_run.run_attempt) , # or .body.workflow_run.workflow_id, integration of run_number ?
+      "type": "pipelineRun",
+      "content": {
+        "pipelineName": (repo_full_name + "/" + .body.workflow_run.name) ?? "",
+        "url": .body.workflow_run.html_url
+      }
     }
-    if .body.action == "requested" {
-        body = base_body
-        body.context.type = "dev.cdevents.pipelinerun.queued.0.2.0"
-        bodies = [body]
-    } else if .body.action == "in_progress" {
-        body = base_body
-        body.context.type = "dev.cdevents.pipelinerun.started.0.2.0"
-        bodies = [body]
-    } else if .body.action == "completed" {
-        body = base_body
-        body.context.type = "dev.cdevents.pipelinerun.finished.0.2.0"
-        body.subject.content.outcome = .body.workflow_run.conclusion # action_required, cancelled, failure, neutral, skipped, stale, success, timed_out, startup_failure, null
-        bodies = [body]
-    }
+  }
+  if .body.action == "requested" {
+    body = base_body
+    body.context.type = "dev.cdevents.pipelinerun.queued.0.2.0"
+    bodies = [body]
+  } else if .body.action == "in_progress" {
+    body = base_body
+    body.context.type = "dev.cdevents.pipelinerun.started.0.2.0"
+    bodies = [body]
+  } else if .body.action == "completed" {
+    body = base_body
+    body.context.type = "dev.cdevents.pipelinerun.finished.0.2.0"
+    body.subject.content.outcome = .body.workflow_run.conclusion # action_required, cancelled, failure, neutral, skipped, stale, success, timed_out, startup_failure, null
+    bodies = [body]
+  }
 } else if exists(.body.workflow_job) {
-    # https://docs.github.com/en/webhooks/webhook-events-and-payloads#workflow_job
-    base_body = {
-        "context": {
-            "version": "0.4.1",
-            "id": id,
-            "source": .body.workflow_job.url,
-        },
-        "subject": {
-            "id": to_string!(.body.workflow_job.id) + "/" + to_string!(.body.workflow_job.run_attempt),
-            "type": "taskRun",
-            "content": {
-                # define an "absolute" name to avoid conflicts with other entities from other contexts
-                "taskName": (repo_full_name + "/" + .body.workflow_job.workflow_name + "/" + .body.workflow_job.name) ?? .body.workflow_job.name,
-                "url": .body.workflow_job.html_url,
-                "pipelineRun": {
-                    "id": to_string!(.body.workflow_job.run_id) + "/" + to_string!(.body.workflow_job.run_attempt),
-                }
-            }
+  # https://docs.github.com/en/webhooks/webhook-events-and-payloads#workflow_job
+  base_body = {
+    "context": {
+      "version": "0.4.1",
+      "id": id,
+      "source": .body.workflow_job.url,
+    },
+    "subject": {
+      "id": to_string!(.body.workflow_job.id) + "/" + to_string!(.body.workflow_job.run_attempt),
+      "type": "taskRun",
+      "content": {
+        # define an "absolute" name to avoid conflicts with other entities from other contexts
+        "taskName": (repo_full_name + "/" + .body.workflow_job.workflow_name + "/" + .body.workflow_job.name) ?? .body.workflow_job.name,
+        "url": .body.workflow_job.html_url,
+        "pipelineRun": {
+          "id": to_string!(.body.workflow_job.run_id) + "/" + to_string!(.body.workflow_job.run_attempt),
         }
+      }
     }
-    if .body.action == "in_progress" {
-        ts = parse_timestamp(.body.workflow_job.started_at, "%+") ?? now()
-        ts = format_timestamp!(ts, format: "%+")
-        body = base_body
-        body.context.timestamp = ts
-        body.context.type = "dev.cdevents.taskrun.started.0.2.0"
-        bodies = [body]
-    } else if .body.action == "completed" {
-        ts = parse_timestamp(.body.workflow_job.completed_at, "%+") ?? now()
-        ts = format_timestamp!(ts, format: "%+")
-        body = base_body
-        body.context.timestamp = ts
-        body.context.type = "dev.cdevents.taskrun.finished.0.2.0"
-        body.subject.content.outcome = .body.workflow_job.conclusion # success, failure, null, skipped, cancelled, action_required, neutral, timed_out
-        bodies = [body]
-    }
+  }
+  if .body.action == "in_progress" {
+    ts = parse_timestamp(.body.workflow_job.started_at, "%+") ?? now()
+    ts = format_timestamp!(ts, format: "%+")
+    body = base_body
+    body.context.timestamp = ts
+    body.context.type = "dev.cdevents.taskrun.started.0.2.0"
+    bodies = [body]
+  } else if .body.action == "completed" {
+    ts = parse_timestamp(.body.workflow_job.completed_at, "%+") ?? now()
+    ts = format_timestamp!(ts, format: "%+")
+    body = base_body
+    body.context.timestamp = ts
+    body.context.type = "dev.cdevents.taskrun.finished.0.2.0"
+    body.subject.content.outcome = .body.workflow_job.conclusion # success, failure, null, skipped, cancelled, action_required, neutral, timed_out
+    bodies = [body]
+  }
 }
 
 map_values(bodies) -> |body| {
-    {
-        "metadata": .metadata,
-        "header": .header,
-        "body": body
-    }
+  {
+    "metadata": .metadata,
+    "header": .header,
+    "body": body
+  }
 }
