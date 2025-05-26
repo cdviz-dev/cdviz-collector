@@ -134,7 +134,7 @@ if exists(.body.package) {
   # https://docs.github.com/en/webhooks/webhook-events-and-payloads#workflow_run
   ts = parse_timestamp(.body.workflow_run.updated_at, "%+") ?? now()
   ts = format_timestamp!(ts, format: "%+")
-  base_body = {
+  body = {
     "context": {
       "version": "0.4.1",
       "id": id,
@@ -151,22 +151,19 @@ if exists(.body.package) {
     }
   }
   if .body.action == "requested" {
-    body = base_body
     body.context.type = "dev.cdevents.pipelinerun.queued.0.2.0"
     bodies = [body]
   } else if .body.action == "in_progress" {
-    body = base_body
     body.context.type = "dev.cdevents.pipelinerun.started.0.2.0"
     bodies = [body]
   } else if .body.action == "completed" {
-    body = base_body
     body.context.type = "dev.cdevents.pipelinerun.finished.0.2.0"
     body.subject.content.outcome = .body.workflow_run.conclusion # action_required, cancelled, failure, neutral, skipped, stale, success, timed_out, startup_failure, null
     bodies = [body]
   }
 } else if exists(.body.workflow_job) {
   # https://docs.github.com/en/webhooks/webhook-events-and-payloads#workflow_job
-  base_body = {
+  body = {
     "context": {
       "version": "0.4.1",
       "id": id,
@@ -188,14 +185,12 @@ if exists(.body.package) {
   if .body.action == "in_progress" {
     ts = parse_timestamp(.body.workflow_job.started_at, "%+") ?? now()
     ts = format_timestamp!(ts, format: "%+")
-    body = base_body
     body.context.timestamp = ts
     body.context.type = "dev.cdevents.taskrun.started.0.2.0"
     bodies = [body]
   } else if .body.action == "completed" {
     ts = parse_timestamp(.body.workflow_job.completed_at, "%+") ?? now()
     ts = format_timestamp!(ts, format: "%+")
-    body = base_body
     body.context.timestamp = ts
     body.context.type = "dev.cdevents.taskrun.finished.0.2.0"
     body.subject.content.outcome = .body.workflow_job.conclusion # success, failure, null, skipped, cancelled, action_required, neutral, timed_out
