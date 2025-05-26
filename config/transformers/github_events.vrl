@@ -17,6 +17,7 @@
 # | [x] | issue:opened | ticket:created |
 # | [x] | issue:closed | ticket:closed |
 # | [x] | issue:* | ticket:updated |
+# | [x] | branch | branch:created |
 #
 
 bodies = []
@@ -256,6 +257,39 @@ if exists(.body.package) {
       }
     }
     bodies = [body]
+  }
+} else if exists(.body.ref) {
+  if bool!(.body.created || false) {
+    body = {
+      "context": {
+        "version": "0.4.1",
+        "id": id,
+        "source": .body.repository.url,
+        # "chainId": ??
+        # "links": ??
+      },
+      "subject": {
+        "id": (.body.repository.url + "/branches/" + replace(.body.ref, "refs/heads/", "")) ?? .body.ref,
+        "type": "branch",
+        "content": {
+          "repository": {
+            "id": .body.repository.url,
+          }
+        }
+      }
+    }
+    ts = parse_timestamp(.body.head_commit.timestamp, "%+") ?? now()
+    ts = format_timestamp!(ts, format: "%+")
+    body.context.type = "dev.cdevents.branch.created.0.2.0"
+    body.context.timestamp = ts
+    bodies = [body]
+  # } else if .body.deleted {
+  #   # ts is not available in the payload => no reproduction => failed to compute unique id/CID for the event
+  #   ts = now()
+  #   ts = format_timestamp!(ts, format: "%+")
+  #   body.context.type = "dev.cdevents.branch.deleted.0.2.0"
+  #   body.context.timestamp = ts
+  #   bodies = [body]
   }
 }
 
