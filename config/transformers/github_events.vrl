@@ -18,6 +18,10 @@
 # | [x] | issue:closed | ticket:closed |
 # | [x] | issue:* | ticket:updated |
 # | [x] | branch | branch:created |
+# | [x] | pull_request:opened | change:created |
+# | [x] | pull_request:closed | change:merged change:abandoned |
+# | [x] | pull_request:* | change:updated |
+# | [x] | pull_request_review:submitted | change:reviewed |
 #
 
 bodies = []
@@ -290,6 +294,73 @@ if exists(.body.package) {
   #   body.context.type = "dev.cdevents.branch.deleted.0.2.0"
   #   body.context.timestamp = ts
   #   bodies = [body]
+  }
+} else if exists(.body.pull_request) {
+  body = {
+    "context": {
+      "version": "0.4.1",
+      "id": id,
+      "source": .body.repository.url,
+      # "chainId": ??
+      # "links": ??
+    },
+    "subject": {
+      "id": .body.pull_request.url,
+      "type": "change",
+      "content": {
+        "repository": {
+          "id": .body.repository.url,
+        }
+      }
+    }
+  }
+  if exists(.body.review) {
+    if .body.action == "submitted" && .body.review.state != "approved" {
+      ts = parse_timestamp(.body.review.submitted_at, "%+") ?? now()
+      ts = format_timestamp!(ts, format: "%+")
+      body.context.timestamp = ts
+      body.context.type = "dev.cdevents.change.reviewed.0.2.0"
+      body.customData = {
+        "pull_request_review": {
+          "action": .body.action,
+          "review": {
+            "state": .body.review.state, # approved, changes_requested, dismissed
+            "author": .body.review.user.login,
+            "url": .body.review.html_url
+          }
+        }
+      }
+      bodies = [body]
+    }
+    # other actions / states related to reviews are not supported by cdevents
+  } else if .body.action == "opened" {
+    ts = parse_timestamp(.body.pull_request.created_at, "%+") ?? now()
+    ts = format_timestamp!(ts, format: "%+")
+    body.context.timestamp = ts
+    body.context.type = "dev.cdevents.change.created.0.3.0"
+    body.subject.content.description = .body.pull_request.title # ?? concatenate with body ?
+    bodies = [body]
+  } else if .body.action == "closed" {
+    ts = parse_timestamp(.body.pull_request.closed_at, "%+") ?? now()
+    ts = format_timestamp!(ts, format: "%+")
+    body.context.timestamp = ts
+    if bool!(.body.pull_request.merged) {
+      body.context.type = "dev.cdevents.change.merged.0.2.0"
+    } else {
+      body.context.type = "dev.cdevents.change.abandoned.0.2.0"
+    }
+    bodies = [body]
+  } else {
+    ts = parse_timestamp(.body.pull_request.updated_at, "%+") ?? now()
+    ts = format_timestamp!(ts, format: "%+")
+    body.context.timestamp = ts
+    body.context.type = "dev.cdevents.change.updated.0.2.0"
+    body.customData = {
+      "pull_request": {
+        "action": .body.action
+      }
+    }
+    bodies = [body]
   }
 }
 

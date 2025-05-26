@@ -1,0 +1,25 @@
+{
+  "metadata": {
+    "name": "closed.01.json",
+    "path": "pull_request/closed.01.json"
+  },
+  "header": {},
+  "body": {
+    "context": {
+      "id": "0",
+      "source": "https://api.github.com/repos/aaaaa-aaa/aaaaa-aaaaaaaaa",
+      "timestamp": "2025-05-21T17:35:21+00:00",
+      "type": "dev.cdevents.change.merged.0.2.0",
+      "version": "0.4.1"
+    },
+    "subject": {
+      "content": {
+        "repository": {
+          "id": "https://api.github.com/repos/aaaaa-aaa/aaaaa-aaaaaaaaa"
+        }
+      },
+      "id": "https://api.github.com/repos/aaaaa-aaa/aaaaa-aaaaaaaaa/pulls/97",
+      "type": "change"
+    }
+  }
+}
