@@ -1,0 +1,25 @@
+{
+  "metadata": {
+    "name": "event.02.json",
+    "path": "branch/event.02.json"
+  },
+  "header": {},
+  "body": {
+    "context": {
+      "id": "0",
+      "source": "https://api.github.com/repos/aaaaa-aaa/aaaaa-aaaaaaaaa",
+      "timestamp": "2025-05-21T13:17:24+00:00",
+      "type": "dev.cdevents.branch.created.0.2.0",
+      "version": "0.4.1"
+    },
+    "subject": {
+      "content": {
+        "repository": {
+          "id": "https://api.github.com/repos/aaaaa-aaa/aaaaa-aaaaaaaaa"
+        }
+      },
+      "id": "https://api.github.com/repos/aaaaa-aaa/aaaaa-aaaaaaaaa/branches/db-branch-3",
+      "type": "branch"
+    }
+  }
+}
