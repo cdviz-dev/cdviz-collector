@@ -19,6 +19,7 @@ use std::{
 
 #[derive(Debug, Clone, Args)]
 #[command(args_conflicts_with_subcommands = true,flatten_help = true, about, long_about = None)]
+#[allow(clippy::struct_excessive_bools)]
 pub(crate) struct TransformArgs {
     /// The configuration file to use.
     #[clap(long = "config", env("CDVIZ_COLLECTOR_CONFIG"))]
@@ -28,8 +29,8 @@ pub(crate) struct TransformArgs {
     #[clap(short = 'C', long = "directory")]
     directory: Option<PathBuf>,
 
-    /// Names of transformers to chain (comma separated)
-    #[clap(short = 't', long = "transformer-refs", default_value = "passthrough")]
+    /// Names of transformers to chain (comma separated or multiple args)
+    #[clap(short = 't', long = "transformer-refs", default_value = "passthrough", value_delimiter= ',', num_args = 1..)]
     transformer_refs: Vec<String>,
 
     /// The input directory with json files.
@@ -47,6 +48,18 @@ pub(crate) struct TransformArgs {
     /// Do not check if output's body is a cdevent
     #[clap(long)]
     no_check_cdevent: bool,
+
+    /// Export headers to .headers.json files
+    #[clap(long)]
+    export_headers: bool,
+
+    /// Export metadata to .metadata.json files
+    #[clap(long)]
+    export_metadata: bool,
+
+    /// Keep the .json.new files after transformation (temporary generated files)
+    #[clap(long)]
+    keep_new_files: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Default)]
@@ -76,6 +89,8 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
         directory: args.output.clone(),
         check_cdevent: !args.no_check_cdevent,
         check_cdevent_failures_counter: Arc::clone(&check_cdevent_failures_counter),
+        export_headers: args.export_headers,
+        export_metadata: args.export_metadata,
     });
     let mut tconfigs =
         transformers::resolve_transformer_refs(&args.transformer_refs, &config.transformers)?;
@@ -90,22 +105,25 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
         recursive: true,
         path_patterns: vec![
             "**/*.json".to_string(),
-            "!**/*.out.json".to_string(),
-            "!**/*.new.json".to_string(),
+            "!**/*.headers.json".to_string(),
+            "!**/*.metadata.json".to_string(),
+            "!**/*.json.new".to_string(),
         ],
         parser: source_opendal::parsers::Config::Json,
     };
     let processed =
         source_opendal::OpendalExtractor::try_from(&config_extractor, pipe)?.run_once().await?;
     cliclack::log::info(format!("Processed {processed} input files.")).into_diagnostic()?;
-    // TODO process .new.json vs .out.json using the self.mode strategy
+    // TODO process .json.new vs .json using the self.mode strategy
     let output_files = list_output_files(&args.output).await?;
     let res = match args.mode {
         TransformMode::Review => review(&output_files),
         TransformMode::Check => check(&output_files),
         TransformMode::Overwrite => overwrite(&output_files),
     };
-    remove_new_files(&output_files)?;
+    if !args.keep_new_files {
+        remove_new_files(&output_files)?;
+    }
 
     let check_cdevent_failures_count = check_cdevent_failures_counter.load(Ordering::Acquire);
     if check_cdevent_failures_count > 0 {
@@ -123,35 +141,54 @@ struct OutputToJsonFile {
     directory: PathBuf,
     check_cdevent: bool,
     check_cdevent_failures_counter: Arc<AtomicU16>,
+    export_headers: bool,
+    export_metadata: bool,
 }
 
 impl Pipe for OutputToJsonFile {
     type Input = EventSource;
     fn send(&mut self, input: Self::Input) -> Result<()> {
-        let filename = input.metadata["path"]
-            .as_str()
-            .ok_or(miette!("could not extract 'name' field from metadata"))?;
-        let filename = filename.replace(".json", ".new.json");
-        let path = self.directory.join(&filename);
         // remove fields that can change between runs on different machines
         let mut input = input;
         if let Some(metadata) = input.metadata.as_object_mut() {
             metadata.remove("last_modified");
             metadata.remove("root");
         }
+
+        let filename = input.metadata["path"]
+            .as_str()
+            .ok_or(miette!("could not extract 'name' field from metadata"))?
+            .to_string();
+        let path = self.directory.join(&filename);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).into_diagnostic()?;
         }
-        std::fs::write(path, serde_json::to_string_pretty(&input).into_diagnostic()?)
+
+        std::fs::write(
+            path.with_extension("json.new"),
+            serde_json::to_string_pretty(&input.body).into_diagnostic()?,
+        )
+        .into_diagnostic()?;
+        if self.export_headers {
+            std::fs::write(
+                path.with_extension("headers.json.new"),
+                serde_json::to_string_pretty(&input.header).into_diagnostic()?,
+            )
             .into_diagnostic()?;
+        }
+        if self.export_metadata {
+            std::fs::write(
+                path.with_extension("metadata.json.new"),
+                serde_json::to_string_pretty(&input.metadata).into_diagnostic()?,
+            )
+            .into_diagnostic()?;
+        }
         if self.check_cdevent {
             let maybe_cdevents = CDEvent::try_from(input);
             if let Err(err) = maybe_cdevents {
                 self.check_cdevent_failures_counter.fetch_add(1, Ordering::SeqCst);
-                cliclack::log::warning(format!(
-                    "{filename}: could not parse body as a cdevent: {err}"
-                ))
-                .into_diagnostic()?;
+                cliclack::log::warning(format!("{filename}: could not parse as a cdevent: {err}"))
+                    .into_diagnostic()?;
             }
         }
         Ok(())
@@ -159,6 +196,7 @@ impl Pipe for OutputToJsonFile {
 }
 
 // recursive iterator over all files in a directory
+#[allow(clippy::case_sensitive_file_extension_comparisons)]
 async fn list_output_files(path: &Path) -> Result<Vec<PathBuf>> {
     use opendal::{Operator, services::Fs};
     let builder = Fs::default()
@@ -177,7 +215,7 @@ async fn list_output_files(path: &Path) -> Result<Vec<PathBuf>> {
         .iter()
         .filter(|entry| {
             entry.metadata().mode().is_file()
-                && (entry.path().ends_with(".out.json") || entry.path().ends_with(".new.json"))
+                && (entry.path().ends_with(".json") || entry.path().ends_with(".json.new"))
         })
         .map(|entry| path.join(entry.path()))
         .collect::<Vec<PathBuf>>();
@@ -188,8 +226,8 @@ fn overwrite(output_files: &Vec<PathBuf>) -> Result<bool> {
     let mut count = 0;
     for path in output_files {
         let filename = path.extract_filename()?;
-        if filename.ends_with(".new.json") {
-            let out_filename = filename.replace(".new.json", ".out.json");
+        if filename.ends_with(".json.new") {
+            let out_filename = filename.replace(".json.new", ".json");
             let out_path = path.with_file_name(out_filename);
             std::fs::rename(path, out_path).into_diagnostic()?;
             count += 1;
@@ -200,7 +238,7 @@ fn overwrite(output_files: &Vec<PathBuf>) -> Result<bool> {
 }
 
 fn check(output_files: &Vec<PathBuf>) -> Result<bool> {
-    let differences = crate::tools::difference::search_new_vs_out(output_files)?;
+    let differences = crate::tools::difference::find_differences(output_files)?;
     if differences.is_empty() {
         cliclack::log::success("0 differences found.").into_diagnostic()?;
         Ok(true)
@@ -215,7 +253,7 @@ fn check(output_files: &Vec<PathBuf>) -> Result<bool> {
 }
 
 fn review(output_files: &Vec<PathBuf>) -> Result<bool> {
-    let differences = crate::tools::difference::search_new_vs_out(output_files)?;
+    let differences = crate::tools::difference::find_differences(output_files)?;
     if differences.is_empty() {
         cliclack::log::success("0 differences found.").into_diagnostic()?;
         Ok(true)
@@ -233,8 +271,10 @@ fn review(output_files: &Vec<PathBuf>) -> Result<bool> {
 fn remove_new_files(output_files: &Vec<PathBuf>) -> Result<()> {
     for path in output_files {
         let filename = path.extract_filename()?;
-        if filename.ends_with(".new.json") && std::fs::exists(path).into_diagnostic()? {
+        if filename.ends_with(".json.new") && std::fs::exists(path).into_diagnostic()? {
             std::fs::remove_file(path).into_diagnostic()?;
+            // cliclack::log::remark(format!("remove {:?}", path))
+            //     .into_diagnostic()?;
         }
     }
     Ok(())
