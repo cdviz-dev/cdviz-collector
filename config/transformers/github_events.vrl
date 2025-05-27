@@ -23,11 +23,32 @@
 # | [x] | pull_request:* | change:updated |
 # | [x] | pull_request_review:submitted | change:reviewed |
 #
+# ## Rules:
+#
+# - `context.id` is computed by the collector (using content id, CID computed)
+# - `context.source` is the collector, not an url from github
+# - `subject.id` is the api url of the entity, except for artifacts usiong the package url (PURL)
+# - `subject.source` is empty, all information are in the `subject.id` (global id)
+# - `customData.github` follow the hierarchy of the github event, but only provides few fields
+#
 
 bodies = []
-id = "0" # "0" to let collector generate an id (alternative reuse github event id: .headers["X-GitHub-Delivery"])
+context_id = "0" # "0" to let collector generate an id (alternative reuse github event id: .headers["X-GitHub-Delivery"])
+# context_source = "https://api.github.com/repos/{{ .body.repository.full_name }}" ?? ""
+context_source = "cdviz-collector/github" # TODO: use collector URL or cdviz source's id
 repo_full_name = .body.repository.full_name
 sender = .body.sender.login
+custom_data = {
+  "github": {
+    "repository": {
+      "url": .body.repository.url,
+    },
+    "sender": {
+      "login": .body.sender.login,
+    },
+  }
+}
+
 # test existance of a field to determine the event type (alternative: .headers["X-GitHub-Event"])
 if exists(.body.package) {
   if .body.action == "published" {
@@ -94,8 +115,8 @@ if exists(.body.package) {
       {
         "context": {
           "version": "0.4.1",
-          "id": id,
-          "source": "/api.github.com/repos/{{ repo_full_name }}/packages" ?? "",
+          "id": context_id,
+          "source": context_source,
           "type": "dev.cdevents.artifact.published.0.2.0",
           "timestamp": ts,
           # "chainId": ??
@@ -108,7 +129,8 @@ if exists(.body.package) {
           "content": {
             "user": sender,
           }
-        }
+        },
+        "customData": custom_data,
       }
     }
   }
@@ -119,11 +141,19 @@ if exists(.body.package) {
     version = .body.release.tag_name
     # version = encode_percent(version) ?? ""
     pkg = "pkg:github/{{ repo_full_name }}@{{ version }}" ?? ""
+    custom_data.github.release = {
+      "url": .body.release.url,
+      # "tag_name": version,
+      # "name": .body.release.name,
+      # "description": .body.release.body,
+      # "draft": bool!(.body.release.draft || false),
+      # "prerelease": bool!(.body.release.prerelease || false),
+    }
     bodies = [{
       "context": {
         "version": "0.4.1",
-        "id": id,
-        "source": .body.release.url,
+        "id": context_id,
+        "source": context_source,
         "type": "dev.cdevents.artifact.published.0.2.0",
         "timestamp": ts,
         # "chainId": ??
@@ -135,7 +165,8 @@ if exists(.body.package) {
         "content": {
           "user": sender,
         }
-      }
+      },
+      "customData": custom_data,
     }]
   }
 } else if exists(.body.workflow_run) {
@@ -145,18 +176,19 @@ if exists(.body.package) {
   body = {
     "context": {
       "version": "0.4.1",
-      "id": id,
-      "source": .body.workflow_run.url,
+      "id": context_id,
+      "source": context_source,
       "timestamp": ts,
     },
     "subject": {
-      "id": to_string!(.body.workflow_run.id) + "/" + to_string!(.body.workflow_run.run_attempt) , # or .body.workflow_run.workflow_id, integration of run_number ?
+      "id": to_string!(.body.workflow_run.url) + "/attempts/" + to_string!(.body.workflow_run.run_attempt), # or .body.workflow_run.workflow_id, integration of run_number ?
       "type": "pipelineRun",
       "content": {
         "pipelineName": (repo_full_name + "/" + .body.workflow_run.name) ?? "",
-        "url": .body.workflow_run.html_url
+        "url": to_string!(.body.workflow_run.html_url) + "/attempts/" + to_string!(.body.workflow_run.run_attempt),
       }
-    }
+    },
+    "customData": custom_data,
   }
   if .body.action == "requested" {
     body.context.type = "dev.cdevents.pipelinerun.queued.0.2.0"
@@ -174,21 +206,22 @@ if exists(.body.package) {
   body = {
     "context": {
       "version": "0.4.1",
-      "id": id,
-      "source": .body.workflow_job.url,
+      "id": context_id,
+      "source": context_source, #.body.workflow_job.url,
     },
     "subject": {
-      "id": to_string!(.body.workflow_job.id) + "/" + to_string!(.body.workflow_job.run_attempt),
+      "id": .body.workflow_job.url,
       "type": "taskRun",
       "content": {
         # define an "absolute" name to avoid conflicts with other entities from other contexts
         "taskName": (repo_full_name + "/" + .body.workflow_job.workflow_name + "/" + .body.workflow_job.name) ?? .body.workflow_job.name,
         "url": .body.workflow_job.html_url,
         "pipelineRun": {
-          "id": to_string!(.body.workflow_job.run_id) + "/" + to_string!(.body.workflow_job.run_attempt),
+          "id": to_string!(.body.workflow_job.run_url) + "/attempts/" + to_string!(.body.workflow_job.run_attempt),
         }
       }
-    }
+    },
+    "customData": custom_data,
   }
   if .body.action == "in_progress" {
     ts = parse_timestamp(.body.workflow_job.started_at, "%+") ?? now()
@@ -210,8 +243,8 @@ if exists(.body.package) {
   body = {
     "context": {
       "version": "0.4.1",
-      "id": id,
-      "source": .body.issue.url,
+      "id": context_id,
+      "source": context_source,
       # "chainId": ??
       # "links": ??
     },
@@ -233,7 +266,8 @@ if exists(.body.package) {
         "milestone": .body.issue.milestone.title,
         "uri": .body.issue.html_url,
       }
-    }
+    },
+    "customData": custom_data,
   }
   if .body.action == "opened" {
     ts = parse_timestamp(.body.issue.created_at, "%+") ?? now()
@@ -255,11 +289,7 @@ if exists(.body.package) {
     body.context.type = "dev.cdevents.ticket.updated.0.1.0"
     body.context.timestamp = ts
     body.subject.content.updatedBy = .body.sender.login
-    body.customData = {
-      "issue": {
-        "action": .body.action # edited, transferred, reopened, locked, unlocked, milestoned, demilestoned
-      }
-    }
+    body.customData.github.action = .body.action # edited, transferred, reopened, locked, unlocked, milestoned, demilestoned
     bodies = [body]
   }
 } else if exists(.body.ref) {
@@ -267,8 +297,8 @@ if exists(.body.package) {
     body = {
       "context": {
         "version": "0.4.1",
-        "id": id,
-        "source": .body.repository.url,
+        "id": context_id,
+        "source": context_source,
         # "chainId": ??
         # "links": ??
       },
@@ -280,7 +310,8 @@ if exists(.body.package) {
             "id": .body.repository.url,
           }
         }
-      }
+      },
+      "customData": custom_data,
     }
     ts = parse_timestamp(.body.head_commit.timestamp, "%+") ?? now()
     ts = format_timestamp!(ts, format: "%+")
@@ -299,8 +330,8 @@ if exists(.body.package) {
   body = {
     "context": {
       "version": "0.4.1",
-      "id": id,
-      "source": .body.repository.url,
+      "id": context_id,
+      "source": context_source,
       # "chainId": ??
       # "links": ??
     },
@@ -312,7 +343,8 @@ if exists(.body.package) {
           "id": .body.repository.url,
         }
       }
-    }
+    },
+    "customData": custom_data,
   }
   if exists(.body.review) {
     if .body.action == "submitted" && .body.review.state != "approved" {
@@ -320,15 +352,11 @@ if exists(.body.package) {
       ts = format_timestamp!(ts, format: "%+")
       body.context.timestamp = ts
       body.context.type = "dev.cdevents.change.reviewed.0.2.0"
-      body.customData = {
-        "pull_request_review": {
-          "action": .body.action,
-          "review": {
-            "state": .body.review.state, # approved, changes_requested, dismissed
-            "author": .body.review.user.login,
-            "url": .body.review.html_url
-          }
-        }
+      body.customData.github.action = .body.action # submitted, dismissed, edited
+      body.customData.github.review = {
+        "state": .body.review.state, # approved, changes_requested, dismissed
+        "author": .body.review.user.login,
+        "url": .body.review.html_url
       }
       bodies = [body]
     }
@@ -355,11 +383,7 @@ if exists(.body.package) {
     ts = format_timestamp!(ts, format: "%+")
     body.context.timestamp = ts
     body.context.type = "dev.cdevents.change.updated.0.2.0"
-    body.customData = {
-      "pull_request": {
-        "action": .body.action
-      }
-    }
+    body.customData.github.action = .body.action
     bodies = [body]
   }
 }
