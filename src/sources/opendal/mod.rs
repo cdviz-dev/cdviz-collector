@@ -31,6 +31,8 @@ pub(crate) struct Config {
     pub(crate) recursive: bool,
     pub(crate) path_patterns: Vec<String>,
     pub(crate) parser: parsers::Config,
+    #[serde(default)]
+    pub(crate) try_read_headers_json: bool,
 }
 
 pub(crate) struct OpendalExtractor {
@@ -39,6 +41,7 @@ pub(crate) struct OpendalExtractor {
     recursive: bool,
     filter: Filter,
     parser: ParserEnum,
+    try_read_headers_json: bool,
 }
 
 impl OpendalExtractor {
@@ -47,12 +50,14 @@ impl OpendalExtractor {
             Operator::via_iter(value.kind, value.parameters.clone()).into_diagnostic()?;
         let filter = Filter::from_patterns(FilePatternMatcher::from(&value.path_patterns)?);
         let parser = value.parser.make_parser(next)?;
+        let try_read_headers_json = value.try_read_headers_json;
         Ok(Self {
             op,
             polling_interval: value.polling_interval,
             recursive: value.recursive,
             filter,
             parser,
+            try_read_headers_json,
         })
     }
 
@@ -61,6 +66,7 @@ impl OpendalExtractor {
         let op = &self.op;
         let filter = &self.filter;
         let recursive = self.recursive;
+        let try_read_headers_json = self.try_read_headers_json;
         let parser = &mut self.parser;
         // TODO convert into arg of instrument
         tracing::debug!(filter=? filter, scheme =? op.info().scheme(), root =? op.info().root(), "scanning");
@@ -71,7 +77,7 @@ impl OpendalExtractor {
         .await.into_diagnostic()?;
         let mut count = 0;
         while let Some(entry) = lister.try_next().await.into_diagnostic()? {
-            let resource = Resource::from_entry(op, entry).await;
+            let resource = Resource::from_entry(op, entry, try_read_headers_json).await;
             if filter.accept(&resource) {
                 count += 1;
                 if let Err(err) = parser.parse(op, &resource).await {

@@ -110,6 +110,7 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
             "!**/*.json.new".to_string(),
         ],
         parser: source_opendal::parsers::Config::Json,
+        try_read_headers_json: true,
     };
     let processed =
         source_opendal::OpendalExtractor::try_from(&config_extractor, pipe)?.run_once().await?;
