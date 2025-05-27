@@ -1,0 +1,14 @@
+{
+"Request URL": "https://webhook.example.com/6477ab47-373e-4da3-8546-96847f1c4911",
+"Request method": "POST",
+"Accept": "*/*",
+"Content-Type": "application/json",
+"User-Agent": "GitHub-Hookshot/b58a384",
+"X-GitHub-Delivery": "f09cf7c0-da5c-11ef-935b-a80f523efe1a",
+"X-GitHub-Event": "check_run",
+"X-GitHub-Hook-ID": "123456789",
+"X-GitHub-Hook-Installation-Target-ID": "987456321",
+"X-GitHub-Hook-Installation-Target-Type": "organization",
+"X-Hub-Signature": "sha1=712d15f76aa184f4767b7888883308ad8737bc87",
+"X-Hub-Signature-256": "sha256=f8535ae9c59b1f2ce20f2b9d4ce84beb5268f5a226885a96fead6241cab80b1d"
+}
