@@ -20,21 +20,21 @@ pub struct Comparison {
 
 impl Comparison {
     pub fn from_xxx_json(path: &Path) -> Result<Self> {
-        let base_name = path.extract_filename()?.replace(".new.json", "").replace(".out.json", "");
+        let base_name = path.extract_filename()?.replace(".json.new", "").replace(".json", "");
         let label = path.with_file_name(&base_name).to_string_lossy().to_string();
         Ok(Self {
-            expected: path.with_file_name(format!("{base_name}.out.json")),
-            actual: path.with_file_name(format!("{base_name}.new.json")),
+            expected: path.with_file_name(format!("{base_name}.json")),
+            actual: path.with_file_name(format!("{base_name}.json.new")),
             label,
         })
     }
 }
 
-pub fn search_new_vs_out(files: &Vec<PathBuf>) -> Result<HashMap<Comparison, Difference>> {
+pub fn find_differences(files: &Vec<PathBuf>) -> Result<HashMap<Comparison, Difference>> {
     let mut differences = HashMap::new();
     for path in files {
         let filename = path.extract_filename()?;
-        if filename.ends_with(".new.json") {
+        if filename.ends_with(".json.new") {
             let comparison = Comparison::from_xxx_json(path)?;
             if comparison.expected.exists() {
                 let expected_content =
@@ -54,7 +54,7 @@ pub fn search_new_vs_out(files: &Vec<PathBuf>) -> Result<HashMap<Comparison, Dif
                 differences
                     .insert(comparison, Difference::Presence { expected: false, actual: true });
             }
-        } else if filename.ends_with(".out.json") {
+        } else if filename.ends_with(".json") {
             let comparison = Comparison::from_xxx_json(path)?;
             if !comparison.actual.exists() {
                 differences
@@ -135,35 +135,35 @@ mod tests {
 
     #[test]
     fn test_build_comparison() {
-        let comparison = Comparison::from_xxx_json(Path::new("toto/bar/foo.new.json")).unwrap();
+        let comparison = Comparison::from_xxx_json(Path::new("toto/bar/foo.json.new")).unwrap();
         assert_eq!(comparison.label, "toto/bar/foo");
-        assert_eq!(comparison.actual, Path::new("toto/bar/foo.new.json"));
-        assert_eq!(comparison.expected, Path::new("toto/bar/foo.out.json"));
+        assert_eq!(comparison.actual, Path::new("toto/bar/foo.json.new"));
+        assert_eq!(comparison.expected, Path::new("toto/bar/foo.json"));
     }
 
     #[test]
     fn find_no_differences() {
         let tmpdir = tempfile::tempdir().unwrap();
-        let actual = tmpdir.path().join("foo.new.json");
+        let actual = tmpdir.path().join("foo.json.new");
         std::fs::write(&actual, "{}").unwrap();
-        let expected = tmpdir.path().join("foo.out.json");
+        let expected = tmpdir.path().join("foo.json");
         std::fs::write(&expected, "{}").unwrap();
         let files = vec![actual.clone(), expected.clone()];
 
-        let diffs = search_new_vs_out(&files).unwrap();
+        let diffs = find_differences(&files).unwrap();
         assert_eq!(diffs.len(), 0);
     }
 
     #[test]
-    fn find_differences() {
+    fn find_differences_on_content() {
         let tmpdir = tempfile::tempdir().unwrap();
-        let actual = tmpdir.path().join("foo.new.json");
+        let actual = tmpdir.path().join("foo.json.new");
         std::fs::write(&actual, "{}").unwrap();
-        let expected = tmpdir.path().join("foo.out.json");
+        let expected = tmpdir.path().join("foo.json");
         std::fs::write(&expected, "[]").unwrap();
         let files = vec![actual.clone(), expected.clone()];
 
-        let diffs = search_new_vs_out(&files).unwrap();
+        let diffs = find_differences(&files).unwrap();
         assert_eq!(diffs.len(), 1);
         let (comparison, diff) = diffs.into_iter().next().unwrap();
         assert!(comparison.label.ends_with("foo"));
@@ -178,13 +178,13 @@ mod tests {
     #[test]
     fn find_non_expected() {
         let tmpdir = tempfile::tempdir().unwrap();
-        let actual = tmpdir.path().join("foo.new.json");
+        let actual = tmpdir.path().join("foo.json.new");
         std::fs::write(&actual, "{}").unwrap();
-        // let expected = tmpdir.path().join("foo.out.json");
+        // let expected = tmpdir.path().join("foo.json");
         // std::fs::write(&expected, "{}").unwrap();
         let files = vec![actual.clone()];
 
-        let diffs = search_new_vs_out(&files).unwrap();
+        let diffs = find_differences(&files).unwrap();
         assert_eq!(diffs.len(), 1);
         let (comparison, diff) = diffs.into_iter().next().unwrap();
         assert!(comparison.label.ends_with("foo"));
@@ -195,13 +195,13 @@ mod tests {
     #[test]
     fn find_missing() {
         let tmpdir = tempfile::tempdir().unwrap();
-        // let actual = tmpdir.path().join("foo.new.json");
+        // let actual = tmpdir.path().join("foo.json.new");
         // std::fs::write(&actual, "{}").unwrap();
-        let expected = tmpdir.path().join("foo.out.json");
+        let expected = tmpdir.path().join("foo.json");
         std::fs::write(&expected, "{}").unwrap();
         let files = vec![expected.clone()];
 
-        let diffs = search_new_vs_out(&files).unwrap();
+        let diffs = find_differences(&files).unwrap();
         assert_eq!(diffs.len(), 1);
         let (comparison, diff) = diffs.into_iter().next().unwrap();
         assert!(comparison.label.ends_with("foo"));

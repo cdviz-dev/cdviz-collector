@@ -193,17 +193,38 @@ run = ["""
 [tasks."examples:transform:passthrough"]
 description = "run the transformation example passthrough (use `--mode review` to review and update)"
 wait_for = ["test:unit"]
-run = """cargo --locked run --profile test -- transform --mode {{option(name="mode", default="check")}} --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/cdevents_json --output ./outputs/transform-passthrough"""
+run = """cargo --locked run --profile test -- \
+  transform \
+  --mode {{option(name="mode", default="check")}} \
+  --directory ./examples/assets \
+  --config ./cdviz-collector.toml \
+  --input ./inputs/cdevents_json \
+  --output ./outputs/transform-passthrough
+"""
 
 [tasks."examples:transform:github_events"]
 description = "run the transformation example github_events (use `--mode review` to review and update)"
 wait_for = ["test:unit"]
-run = """cargo --locked run --profile test -- transform -t github_events --mode {{option(name="mode", default="check")}} --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/github_events --output ./outputs/transform-github_events"""
+run = """cargo --locked run --profile test -- \
+  transform \
+  --mode {{option(name="mode", default="check")}} \
+  --directory ./examples/assets \
+  --config ./cdviz-collector.toml \
+  -t github_events \
+  --input ./inputs/github_events \
+  --output ./outputs/transform-github_events"""
 
 [tasks."examples:transform:kubewatch_cloudevents"]
 description = "run the transformation example kubewatch_cloudevents (cloudevents) (use `--mode review` to review and update)"
 wait_for = ["test:unit"]
-run = """cargo --locked run --profile test -- transform -vv -t kubewatch_metadata -t kubewatch_cloudevents --mode {{option(name="mode", default="check")}} --directory ./examples/assets --config ./cdviz-collector.toml --input ./inputs/kubewatch_cloudevents --output ./outputs/transform-kubewatch_cloudevents"""
+run = """cargo --locked run --profile test -- \
+  transform \
+  --mode {{option(name="mode", default="check")}} \
+  --directory ./examples/assets \
+  --config ./cdviz-collector.toml \
+  -t kubewatch_metadata,kubewatch_cloudevents \
+  --input ./inputs/kubewatch_cloudevents \
+  --output ./outputs/transform-kubewatch_cloudevents"""
 
 [tasks."examples:httpyac"]
 description = "run the httpyac on `examples/assets` (default to `**/*.http`, eg. `mise run examples:httpyac '**/*.http'`)"
