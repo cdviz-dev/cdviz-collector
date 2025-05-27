@@ -68,8 +68,8 @@ async fn webhook(
         return err.into_response();
     }
     let Json(body): Json<serde_json::Value> = maybe_json.unwrap_or_default();
-    let header = header_to_map(&headers, &state.headers_to_keep);
-    let event = EventSource { header, body, ..Default::default() };
+    let headers = header_to_map(&headers, &state.headers_to_keep);
+    let event = EventSource { headers, body, ..Default::default() };
     if let Err(err) = state.next.lock().await.send(event) {
         return ReportWrapper::from(err).into_response();
     }
@@ -126,7 +126,7 @@ mod tests_handler {
         assert_eq!(response.status(), StatusCode::CREATED);
         let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
         assert_eq!(output.body, payload);
-        assert_eq!(output.header.get("content-type").unwrap(), "application/json");
+        assert_eq!(output.headers.get("content-type").unwrap(), "application/json");
     }
 
     #[tokio::test]

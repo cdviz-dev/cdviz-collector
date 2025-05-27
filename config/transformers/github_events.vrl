@@ -391,7 +391,7 @@ if exists(.body.package) {
 map_values(bodies) -> |body| {
   {
     "metadata": .metadata,
-    "header": .header,
+    "headers": .headers,
     "body": body
   }
 }

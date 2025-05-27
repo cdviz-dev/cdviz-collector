@@ -37,7 +37,7 @@ type = "vrl"
 template = """
 [{
     "metadata": .metadata,
-    "header": .header,
+    "headers": .headers,
     "body": {
         "context": {
             "version": "0.4.0-draft",
@@ -106,7 +106,7 @@ template = """
   "metadata": merge(.metadata, {
     "environment_id": "cluster/A-dev",
   }),
-  "header": .header,
+  "headers": .headers,
   "body": .body,
 }]
 """
@@ -126,7 +126,7 @@ type = "vrl"
 template = """
 [{
   "metadata": .metadata,
-  "header": .header,
+  "headers": .headers,
   "body": .body,
 }]
 """

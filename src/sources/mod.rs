@@ -60,7 +60,7 @@ pub(crate) fn make(
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct EventSource {
     pub metadata: Value,
-    pub header: HashMap<String, String>,
+    pub headers: HashMap<String, String>,
     pub body: Value,
 }
 

@@ -172,7 +172,7 @@ impl Pipe for OutputToJsonFile {
         if self.export_headers {
             std::fs::write(
                 path.with_extension("headers.json.new"),
-                serde_json::to_string_pretty(&input.header).into_diagnostic()?,
+                serde_json::to_string_pretty(&input.headers).into_diagnostic()?,
             )
             .into_diagnostic()?;
         }
