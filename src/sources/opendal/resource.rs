@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use opendal::{Entry, EntryMode, Metadata, Operator};
 
@@ -12,13 +14,19 @@ pub(crate) struct Resource {
     root: String,
     last_modified: Option<DateTime<Utc>>,
     content_length: u64,
+    x_headers: HashMap<String, String>,
 }
 
 impl Resource {
-    pub(crate) async fn from_entry(op: &Operator, entry: Entry) -> Self {
+    pub(crate) async fn from_entry(
+        op: &Operator,
+        entry: Entry,
+        try_to_load_headers_json: bool,
+    ) -> Self {
         let mut stats: Option<Metadata> = None;
         let mut last_modified = entry.metadata().last_modified();
         let mut content_length = entry.metadata().content_length();
+        let mut x_headers = HashMap::new();
 
         if last_modified.is_none() {
             if stats.is_none() {
@@ -32,8 +40,12 @@ impl Resource {
             }
             content_length = stats.as_ref().map(Metadata::content_length).unwrap_or_default();
         }
-
-        Self { entry, root: op.info().root().to_string(), last_modified, content_length }
+        if try_to_load_headers_json {
+            if let Some(headers) = load_header_json(entry.path(), op).await {
+                x_headers.extend(headers);
+            }
+        }
+        Self { entry, root: op.info().root().to_string(), last_modified, content_length, x_headers }
     }
 
     pub(crate) fn name(&self) -> &str {
@@ -67,6 +79,24 @@ impl Resource {
         }
         value
     }
+
+    pub(crate) fn as_headers(&self) -> HashMap<String, String> {
+        self.x_headers.clone()
+    }
+}
+
+async fn load_header_json(path: &str, op: &Operator) -> Option<HashMap<String, String>> {
+    use bytes::Buf;
+
+    let (base, _) = path.rsplit_once('.')?;
+    let headers_path = format!("{base}.headers.json");
+    if op.exists(&headers_path).await.ok()? {
+        let bytes = op.read(&headers_path).await.ok()?;
+        let headers: Option<HashMap<String, String>> = serde_json::from_reader(bytes.reader()).ok();
+        headers
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -83,13 +113,13 @@ mod tests {
         let op: Operator = Operator::new(builder).unwrap().finish();
         let mut entries = op.lister_with(prefix).await.unwrap();
         let_assert!(Ok(Some(entry)) = entries.try_next().await);
-        let resource = Resource::from_entry(&op, entry).await;
+        let resource = Resource::from_entry(&op, entry, true).await;
         (op, resource)
     }
 
     #[tokio::test]
     async fn extract_metadata_works() {
-        let (_, resource) = provide_op_resource("dir1/file").await;
+        let (_, resource) = provide_op_resource("dir1/file01").await;
         check!(resource.is_file());
         check!(resource.name() == "file01.txt");
         check!(resource.path() == "dir1/file01.txt");
@@ -99,7 +129,7 @@ mod tests {
 
     #[tokio::test]
     async fn as_json_metadata_works() {
-        let (_, resource) = provide_op_resource("dir1/file").await;
+        let (_, resource) = provide_op_resource("dir1/file01").await;
         // Extract the metadata and check that it's what we expect
         let result = resource.as_json_metadata();
         check!(result["name"] == "file01.txt");
@@ -109,6 +139,21 @@ mod tests {
         let_assert!(
             Ok(_) = result["last_modified"].as_str().unwrap_or_default().parse::<DateTime<Utc>>()
         );
+    }
+
+    #[tokio::test]
+    async fn as_headers_on_exists() {
+        let (_, resource) = provide_op_resource("dir1/file02.txt").await;
+        let result = resource.as_headers();
+        let_assert!(Some(value) = result.get("header1"));
+        check!(value == "value1");
+    }
+
+    #[tokio::test]
+    async fn as_headers_on_nonexists() {
+        let (_, resource) = provide_op_resource("dir1/file01").await;
+        let result = resource.as_headers();
+        check!(result.is_empty());
     }
 
     // TODO

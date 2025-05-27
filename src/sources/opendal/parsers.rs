@@ -83,8 +83,9 @@ impl Parser for JsonParser {
     async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
         let bytes = op.read(resource.path()).await.into_diagnostic()?;
         let metadata = resource.as_json_metadata();
+        let headers = resource.as_headers();
         let body: serde_json::Value = serde_json::from_reader(bytes.reader()).into_diagnostic()?;
-        let event = EventSource { metadata, body, ..Default::default() };
+        let event = EventSource { metadata, headers, body };
         self.next.send(event)
     }
 }
@@ -103,6 +104,7 @@ impl Parser for JsonlParser {
     async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
         let bytes = op.read(resource.path()).await.into_diagnostic()?;
         let metadata = resource.as_json_metadata();
+        let headers = resource.as_headers();
         let mut reader = bytes.reader();
         let mut buf = String::new();
         while reader.read_line(&mut buf).into_diagnostic()? > 0 {
@@ -110,7 +112,7 @@ impl Parser for JsonlParser {
                 continue;
             }
             let body: serde_json::Value = serde_json::from_str(&buf).into_diagnostic()?;
-            let event = EventSource { metadata: metadata.clone(), body, ..Default::default() };
+            let event = EventSource { metadata: metadata.clone(), headers: headers.clone(), body };
             self.next.send(event)?;
         }
         Ok(())
@@ -133,12 +135,14 @@ impl Parser for CsvRowParser {
 
         let bytes = op.read(resource.path()).await.into_diagnostic()?;
         let mut rdr = Reader::from_reader(bytes.reader());
-        let headers = rdr.headers().into_diagnostic()?.clone();
+        let csv_headers = rdr.headers().into_diagnostic()?.clone();
         let metadata = resource.as_json_metadata();
+        let headers = resource.as_headers();
         for record in rdr.records() {
             let record = record.into_diagnostic()?;
-            let body = json!(headers.iter().zip(record.iter()).collect::<HashMap<&str, &str>>());
-            let event = EventSource { metadata: metadata.clone(), body, ..Default::default() };
+            let body =
+                json!(csv_headers.iter().zip(record.iter()).collect::<HashMap<&str, &str>>());
+            let event = EventSource { metadata: metadata.clone(), headers: headers.clone(), body };
             self.next.send(event)?;
         }
         Ok(())
