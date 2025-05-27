@@ -7,14 +7,20 @@
   "body": {
     "context": {
       "id": "0",
-      "source": "https://api.github.com/repos/aaaaa-aaa/aaaaa-aaaaaaaaa",
+      "source": "cdviz-collector/github",
       "timestamp": "2025-05-21T17:36:04+00:00",
       "type": "dev.cdevents.change.updated.0.2.0",
       "version": "0.4.1"
     },
     "customData": {
-      "pull_request": {
-        "action": "edited"
+      "github": {
+        "action": "edited",
+        "repository": {
+          "url": "https://api.github.com/repos/aaaaa-aaa/aaaaa-aaaaaaaaa"
+        },
+        "sender": {
+          "login": "aaaaaa-aaaaaaa[aaa]"
+        }
       }
     },
     "subject": {
