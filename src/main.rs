@@ -1,3 +1,7 @@
+#![doc = include_str!("../README.md")]
+#![doc(html_favicon_url = "https://cdviz.dev/favicon.ico")]
+#![doc(html_logo_url = "https://cdviz.dev/favicon.svg")]
+
 mod config;
 mod connect;
 mod errors;
