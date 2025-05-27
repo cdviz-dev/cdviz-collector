@@ -93,7 +93,7 @@ mod tests {
         let mut processor = Processor::new("", Box::new(collector.create_pipe())).unwrap();
         let input = EventSource {
             metadata: serde_json::json!({"foo": "bar"}),
-            header: std::collections::HashMap::new(),
+            headers: std::collections::HashMap::new(),
             body: serde_json::json!({"a": 1, "b": 2}),
         };
         processor.send(input.clone()).unwrap();
@@ -108,7 +108,7 @@ mod tests {
         let mut processor = Processor::new("null", Box::new(collector.create_pipe())).unwrap();
         let input = EventSource {
             metadata: serde_json::json!({"foo": "bar"}),
-            header: std::collections::HashMap::new(),
+            headers: std::collections::HashMap::new(),
             body: serde_json::json!({"a": 1, "b": 2}),
         };
         processor.send(input.clone()).unwrap();
@@ -123,7 +123,7 @@ mod tests {
         let mut processor = Processor::new("[]", Box::new(collector.create_pipe())).unwrap();
         let input = EventSource {
             metadata: serde_json::json!({"foo": "bar"}),
-            header: std::collections::HashMap::new(),
+            headers: std::collections::HashMap::new(),
             body: serde_json::json!({"a": 1, "b": 2}),
         };
         processor.send(input.clone()).unwrap();
@@ -146,14 +146,14 @@ mod tests {
         .unwrap();
         let input = EventSource {
             metadata: serde_json::json!({"foo": "bar"}),
-            header: std::collections::HashMap::new(),
+            headers: std::collections::HashMap::new(),
             body: serde_json::json!({"a": 1, "b": 2}),
         };
         processor.send(input.clone()).unwrap();
 
         let expected = EventSource {
             metadata: serde_json::json!({"foo": "bar"}),
-            header: std::collections::HashMap::new(),
+            headers: std::collections::HashMap::new(),
             body: serde_json::json!({"c": 12}),
         };
         let mut outputs = collector.try_into_iter().unwrap();

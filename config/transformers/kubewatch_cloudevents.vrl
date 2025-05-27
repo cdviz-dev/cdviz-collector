@@ -105,7 +105,7 @@ if includes(["Deployment", "StatefulSet", "DaemonSet"], .body.data.kind) && (.bo
         tag = encode_percent!(container.tag)
         output = push(output, {
           "metadata": .metadata,
-          "header": .header,
+          "headers": .headers,
           "body": {
             "context": {
               "version": "0.4.1",
@@ -138,7 +138,7 @@ if includes(["Deployment", "StatefulSet", "DaemonSet"], .body.data.kind) && (.bo
         container_name = container.container_name
         output = push(output, {
           "metadata": .metadata,
-          "header": .header,
+          "headers": .headers,
           "body": {
             "context": {
               "version": "0.4.1",
