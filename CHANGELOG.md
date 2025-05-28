@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.7.6...0.8.0) - 2025-05-28
+
+### Added
+
+- allow opendal extractor & transform command to read headers from sibling file with extension `.headers.json`
+- feat!(transform): `transform`'s output is splitted into 3 files `.json`, `.headers.json`, `.metadata.json` (2 latests are optional)
+- feat!(github): change the computation of `subject.id`, `context.source`, `customData`,...
+- convert github's pull_request events into cdevents changes
+- convert some github's branch events into cdevents `branch.created`
+- convert github's issue event into cdevents' ticket
+
+### Fixed
+
+- *(kubewatch)* encode_percent of `tag` in `packageId`
+- workaround to compile transitive dependency 'oniguruma' with gcc >= 15
+- *(deps)* update rust crate vrl to 0.24
+
+### Other
+
+- *(github)* convert sample `xxxx.headers.txt` into `xxxx.headers.json` (ready to be used by transformer)
+- [**breaking**] rename `EventSource.header` into `EventSource.headers`
+- *(vrl)* rename `base_body` into `body` and avoid reference rename
+- reindent vrl
+- add sample for github events
+- automate obfuscation of sample
+- format json samples
+- mute warning about duplicate versions of dependencies
+- import README into apidoc
+- remove concurrency on releasz-plz to fix pre-mature cancellation
+- tune trigger of workflow
+- tune mise & rust configuration
+- *(deps)* update
+- replace task `install:rustcomponents` by experimental setting `tools.rust.components`
+- format json
+- *(github)* allow 1 github event to generate 0-n cdevents
+- update mega-linter workflow
+- *(deps)* update dependency rust to v1.87.0
+
 ## [0.7.6](https://github.com/cdviz-dev/cdviz-collector/compare/0.7.5...0.7.6) - 2025-04-16
 
 ### Fixed
