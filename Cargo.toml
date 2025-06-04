@@ -61,7 +61,7 @@ tool_transform = ["source_opendal", "tool_ui", "transformer_hbs", "transformer_v
 
 [dependencies]
 axum = "0.8"
-axum-tracing-opentelemetry = "0.28"
+axum-tracing-opentelemetry = "0.29"
 base64 = "0.22"
 bytes = { version = "1", optional = true }
 cdevents-sdk = { version = "0.2", features = ["cloudevents"] }
@@ -89,7 +89,7 @@ handlebars_misc_helpers = { version = "0.17", optional = true, default-features 
 ] }
 hmac = "0.12"
 humantime-serde = "1"
-init-tracing-opentelemetry = { version = "0.28", features = [
+init-tracing-opentelemetry = { version = "0.29", features = [
   "otlp",
   "tracing_subscriber_ext",
   "logfmt",
@@ -129,7 +129,7 @@ tower-http = { version = "0.6", features = [
   "validate-request",
 ] }
 tracing = "0.1"
-tracing-opentelemetry-instrumentation-sdk = { version = "0.28" }
+tracing-opentelemetry-instrumentation-sdk = { version = "0.29" }
 vrl = { version = "0.24", optional = true }
 
 [target.'cfg(all(target_env = "musl", target_pointer_width = "64"))'.dependencies.jemallocator]
