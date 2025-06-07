@@ -216,7 +216,7 @@ skip = [
     # "windows-targets",
     # "windows_x86_64_msvc",
     # "windows_x86_64_gnullvm",
-    "tower",
+    # "tower",
     # "sync_wrapper",
     "syn",
     "regex-syntax",

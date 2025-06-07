@@ -131,7 +131,7 @@ run = ["docker rm -f postgres || true", "sleep 3", """
         -e "POSTGRES_PASSWORD=$PG_OFFLINE_PWD" \
         -e "POSTGRES_USER=$PG_OFFLINE_USER" \
         -v "$MISE_CONFIG_ROOT/tests/assets/db:/docker-entrypoint-initdb.d" \
-        -p 5432:5432 -dpostgres:16
+        -p 5432:5432 -d postgres:16
     """]
 
 [tasks."db:stop"]
@@ -144,7 +144,7 @@ description = "update db definition to be able compile sqlx code"
 run = [
     "mise run db:start",
     "sleep 5",
-    "sqlx database create --database-ur \"$PG_OFFLINE_URL\"",
+    "sqlx database create --database-url \"$PG_OFFLINE_URL\"",
     "cargo --locked sqlx prepare --workspace --database-url \"$PG_OFFLINE_URL\"",
     "sqlx database drop -y --database-url \"PG_OFFLINE_URL\"",
     "mise run db:stop",
