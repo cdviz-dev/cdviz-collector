@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "CALL store_cdevent($1)",
+  "query": "CALL cdviz.store_cdevent($1)",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "f9ad1896b6eb169b76af116f7bfd4f66233e9aac3a6143f43bef13b46249f969"
+  "hash": "d5331719cef6e3191f9adb99d2395d8a3f7d06ed25c0cf24209ca62d55cba0d5"
 }
