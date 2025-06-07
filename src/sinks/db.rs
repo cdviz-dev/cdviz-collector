@@ -99,7 +99,7 @@ fn build_otel_span(db_operation: &str) -> tracing::Span {
 
 // store event as json in db (postgresql using sqlx)
 async fn store_event(pg_pool: &PgPool, event: Event) -> Result<()> {
-    sqlx::query!("CALL store_cdevent($1)", event.payload)
+    sqlx::query!("CALL cdviz.store_cdevent($1)", event.payload)
         .execute(pg_pool)
         .instrument(build_otel_span("store_cdevent"))
         .await
@@ -197,7 +197,7 @@ mod tests {
         let testcontext = testcontext.await; // to keep guard & DB up
         let sink = testcontext.sink;
         let mut runner = TestRunner::default();
-        let mut count: i64 = sqlx::QueryBuilder::new("SELECT count(*) from cdevents_lake")
+        let mut count: i64 = sqlx::QueryBuilder::new("SELECT count(*) from cdviz.cdevents_lake")
             .build()
             .fetch_one(&sink.pool)
             .await
@@ -208,7 +208,7 @@ mod tests {
             let val = any::<Message>().new_tree(&mut runner).unwrap();
             sink.send(&val.current()).await.unwrap();
             //TODO check insertion content
-            let count_n: i64 = sqlx::QueryBuilder::new("SELECT count(*) from cdevents_lake")
+            let count_n: i64 = sqlx::QueryBuilder::new("SELECT count(*) from cdviz.cdevents_lake")
                 .build()
                 .fetch_one(&sink.pool)
                 .await
