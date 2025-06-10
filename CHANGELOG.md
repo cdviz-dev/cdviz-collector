@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.8.0...0.8.1) - 2025-06-10
+
+### Fixed
+
+- *(deps)* update opentelemetry to 0.29
+
+### Other
+
+- *(deps)* update rust crate proptest to v1.7.0
+
 ## [0.8.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.7.6...0.8.0) - 2025-05-28
 
 ### Added
