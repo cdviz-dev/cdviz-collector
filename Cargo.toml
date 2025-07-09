@@ -148,7 +148,7 @@ tempfile = "3"
 test-strategy = "0.4"
 test-trace = "0.3"
 time = "=0.3.39" # HACK explicit fix version (not used) to avoid compilation errors on domain #see https://github.com/NLnetLabs/domain/issues/502
-toml = "0.8" # same version as figment
+toml = "0.9" # same version as figment
 tower = { version = "0.5", features = ["util"] }
 tracing-subscriber = "0.3"
 uuid = "1"
