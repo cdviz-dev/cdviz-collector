@@ -93,7 +93,7 @@ handlebars_misc_helpers = { version = "0.17", optional = true, default-features 
 ] }
 hmac = "0.12"
 humantime-serde = "1"
-init-tracing-opentelemetry = { version = "0.29", features = [
+init-tracing-opentelemetry = { version = "0.30", features = [
   "otlp",
   "tracing_subscriber_ext",
   "logfmt",
