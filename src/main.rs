@@ -17,7 +17,7 @@ use clap::{Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
 pub(crate) use connect::{Message, Receiver, Sender};
 use errors::{IntoDiagnostic, Result};
-use init_tracing_opentelemetry::tracing_subscriber_ext::TracingGuard;
+use init_tracing_opentelemetry::otlp::OtelGuard;
 
 // Use Jemalloc only for musl-64 bits platforms
 // see [Default musl allocator considered harmful (to performance)](https://nickb.dev/blog/default-musl-allocator-considered-harmful-to-performance/)
@@ -54,7 +54,7 @@ enum Command {
 }
 
 //TODO use logfmt
-fn init_log(verbose: Verbosity) -> Result<TracingGuard> {
+fn init_log(verbose: Verbosity) -> Result<OtelGuard> {
     let level = if verbose.is_present() {
         verbose.log_level().map(|level| level.to_string()).unwrap_or_default()
     } else {
