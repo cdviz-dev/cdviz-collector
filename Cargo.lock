@@ -605,6 +605,7 @@ dependencies = [
  "opendal",
  "pretty_assertions",
  "proptest",
+ "regex",
  "reqwest",
  "reqwest-eventsource",
  "reqwest-middleware",

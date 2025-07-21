@@ -1,5 +1,6 @@
 use super::EventSourcePipe;
 use crate::errors::ReportWrapper;
+use crate::security::rule::{HeaderRuleConfig, validate_headers};
 use crate::security::signature;
 use crate::sources::EventSource;
 use axum::Json;
@@ -20,7 +21,11 @@ pub(crate) struct Config {
     /// HTTP headers to forward into the pipeline
     #[serde(default)]
     pub(crate) headers_to_keep: Vec<String>,
+    /// Header rules for incoming webhook requests
+    #[serde(default)]
+    pub(crate) headers: Vec<HeaderRuleConfig>,
     /// Verify the incoming request and the signature
+    #[deprecated(since = "0.9.0", note = "Use `headers` instead")]
     #[serde(default)]
     pub(crate) signature: Option<signature::SignatureConfig>,
 }
@@ -29,10 +34,15 @@ pub(crate) struct Config {
 struct WebhookState {
     next: Arc<Mutex<EventSourcePipe>>,
     headers_to_keep: Vec<HeaderName>,
-    signature: Option<signature::SignatureConfig>,
+    headers: Vec<HeaderRuleConfig>,
 }
 
 pub(crate) fn make_route(config: &Config, next: EventSourcePipe) -> Router {
+    let mut headers = config.headers.clone();
+    #[allow(deprecated)]
+    if let Some(signature) = config.signature.as_ref() {
+        headers.push(HeaderRuleConfig::from(signature.clone()));
+    }
     let state = WebhookState {
         next: Arc::new(Mutex::new(next)),
         headers_to_keep: config
@@ -40,7 +50,7 @@ pub(crate) fn make_route(config: &Config, next: EventSourcePipe) -> Router {
             .iter()
             .filter_map(|name| HeaderName::from_str(name.as_str()).ok())
             .collect(),
-        signature: config.signature.clone(),
+        headers,
     };
     Router::new().route(&format!("/webhook/{}", config.id), post(webhook)).with_state(state)
 }
@@ -57,12 +67,15 @@ async fn webhook(
     body: axum::body::Bytes,
 ) -> impl IntoResponse {
     //tracing::trace!(?body, "received");
-    //TODO replace by a middleware
-    if let Some(signature) = state.signature.as_ref() {
-        if let Err(err) = signature::check_signature(signature, &headers, &body) {
-            return err.into_response();
+
+    // Validate headers if any rules are configured
+    if !state.headers.is_empty() {
+        if let Err(validation_error) = validate_headers(&headers, &state.headers, Some(&body)) {
+            tracing::warn!(error = ?validation_error, "Webhook rejected due to header rule validation failure");
+            return validation_error.into_response();
         }
     }
+
     let maybe_json = Json::from_bytes(&body);
     if let Err(err) = maybe_json {
         return err.into_response();
@@ -243,9 +256,11 @@ mod tests_headers_conversion {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod security_tests {
     use super::*;
     use crate::pipes::collect_to_vec;
+    use crate::security::rule::{HeaderRuleConfig, Rule};
     use crate::security::signature::{Encoding, SignatureConfig, SignatureOn};
     use assert2::let_assert;
     use axum::body::Body;
@@ -258,6 +273,7 @@ mod security_tests {
         let config = Config {
             id: "secure".to_string(),
             headers_to_keep: vec!["Content-Type".to_string()],
+            headers: vec![],
             signature: Some(SignatureConfig {
                 header: "X-Hub-Signature-256".to_string(),
                 token: "secret-token".into(),
@@ -300,6 +316,7 @@ mod security_tests {
         let config = Config {
             id: "secure".to_string(),
             headers_to_keep: vec![],
+            headers: vec![],
             signature: Some(SignatureConfig {
                 header: "X-Hub-Signature-256".to_string(),
                 token: "secret-token".into(),
@@ -331,6 +348,7 @@ mod security_tests {
         let config = Config {
             id: "secure".to_string(),
             headers_to_keep: vec![],
+            headers: vec![],
             signature: Some(SignatureConfig {
                 header: "X-Hub-Signature-256".to_string(),
                 token: "secret-token".into(),
@@ -359,7 +377,12 @@ mod security_tests {
 
     #[tokio::test]
     async fn test_webhook_rejects_malformed_json() {
-        let config = Config { id: "test".to_string(), headers_to_keep: vec![], signature: None };
+        let config = Config {
+            id: "test".to_string(),
+            headers_to_keep: vec![],
+            headers: vec![],
+            signature: None,
+        };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
 
@@ -377,8 +400,14 @@ mod security_tests {
     }
 
     #[tokio::test]
+    #[allow(deprecated)]
     async fn test_webhook_handles_large_payload() {
-        let config = Config { id: "test".to_string(), headers_to_keep: vec![], signature: None };
+        let config = Config {
+            id: "test".to_string(),
+            headers_to_keep: vec![],
+            headers: vec![],
+            signature: None,
+        };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
 
@@ -403,6 +432,7 @@ mod security_tests {
         let config = Config {
             id: "../../../etc/passwd".to_string(),
             headers_to_keep: vec![],
+            headers: vec![],
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
@@ -426,6 +456,7 @@ mod security_tests {
         let config = Config {
             id: "test".to_string(),
             headers_to_keep: vec!["Authorization".to_string(), "Content-Type".to_string()],
+            headers: vec![],
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
@@ -450,5 +481,190 @@ mod security_tests {
         // Should only have content-type, not authorization (sensitive)
         assert!(output.headers.contains_key("content-type"));
         assert!(!output.headers.contains_key("authorization"));
+    }
+
+    #[tokio::test]
+    async fn test_webhook_header_validation_success() {
+        let config = Config {
+            id: "auth-test".to_string(),
+            headers_to_keep: vec!["Content-Type".to_string()],
+            headers: vec![HeaderRuleConfig {
+                header: "Authorization".to_string(),
+                rule: Rule::Matches { pattern: r"^Bearer \w+$".to_string() },
+            }],
+            signature: None,
+        };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        let payload = json!({"test": "data"});
+        let request = Request::builder()
+            .uri("/webhook/auth-test")
+            .method("POST")
+            .header("content-type", "application/json")
+            .header("authorization", "Bearer token123")
+            .body(Body::from(payload.to_string()))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+        assert_eq!(output.body, payload);
+    }
+
+    #[tokio::test]
+    async fn test_webhook_header_validation_failure() {
+        let config = Config {
+            id: "auth-test".to_string(),
+            headers_to_keep: vec![],
+            headers: vec![HeaderRuleConfig {
+                header: "Authorization".to_string(),
+                rule: Rule::Equals {
+                    value: "Bearer secret-token".to_string(),
+                    case_sensitive: true,
+                },
+            }],
+            signature: None,
+        };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        let payload = json!({"test": "data"});
+        let request = Request::builder()
+            .uri("/webhook/auth-test")
+            .method("POST")
+            .header("content-type", "application/json")
+            .header("authorization", "Bearer wrong-token")
+            .body(Body::from(payload.to_string()))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let_assert!(None = collector.try_into_iter().unwrap().next());
+    }
+
+    #[tokio::test]
+    async fn test_webhook_header_validation_missing_header() {
+        let config = Config {
+            id: "auth-test".to_string(),
+            headers_to_keep: vec![],
+            headers: vec![HeaderRuleConfig { header: "X-API-Key".to_string(), rule: Rule::Exists }],
+            signature: None,
+        };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        let payload = json!({"test": "data"});
+        let request = Request::builder()
+            .uri("/webhook/auth-test")
+            .method("POST")
+            .header("content-type", "application/json")
+            // Missing X-API-Key header
+            .body(Body::from(payload.to_string()))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let_assert!(None = collector.try_into_iter().unwrap().next());
+    }
+
+    #[tokio::test]
+    async fn test_webhook_combined_header_and_signature_validation() {
+        let config = Config {
+            id: "secure-auth".to_string(),
+            headers_to_keep: vec!["Content-Type".to_string()],
+            headers: vec![HeaderRuleConfig {
+                header: "X-API-Key".to_string(),
+                rule: Rule::Equals { value: "api-secret".to_string(), case_sensitive: true },
+            }],
+            signature: Some(SignatureConfig {
+                header: "X-Hub-Signature-256".to_string(),
+                token: "secret-token".into(),
+                token_encoding: None,
+                signature_prefix: Some("sha256=".to_string()),
+                signature_on: SignatureOn::Body,
+                signature_encoding: Encoding::Hex,
+            }),
+        };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        let payload = json!({"secure": "data"});
+        let payload_str = payload.to_string();
+
+        // Generate valid signature
+        let signature = crate::security::signature::build_signature(
+            config.signature.as_ref().unwrap(),
+            &HeaderMap::new(),
+            payload_str.as_bytes(),
+        )
+        .unwrap();
+
+        let request = Request::builder()
+            .uri("/webhook/secure-auth")
+            .method("POST")
+            .header("content-type", "application/json")
+            .header("x-api-key", "api-secret") // Valid header rule
+            .header("X-Hub-Signature-256", signature) // Valid signature
+            .body(Body::from(payload_str))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+        assert_eq!(output.body, payload);
+    }
+
+    #[tokio::test]
+    async fn test_webhook_signature_validation_with_header_rules() {
+        let config = Config {
+            id: "signature-auth".to_string(),
+            headers_to_keep: vec![],
+            headers: vec![HeaderRuleConfig {
+                header: "X-Hub-Signature-256".to_string(),
+                rule: Rule::Signature {
+                    token: "secret-token".into(),
+                    token_encoding: None,
+                    signature_prefix: Some("sha256=".to_string()),
+                    signature_on: SignatureOn::Body,
+                    signature_encoding: crate::security::signature::Encoding::Hex,
+                },
+            }],
+            signature: None, // Using header rules instead of signature field
+        };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        let payload = json!({"signature": "test"});
+        let payload_str = payload.to_string();
+
+        // Generate valid signature using the same config as header rule
+        let signature_config = SignatureConfig {
+            header: "X-Hub-Signature-256".to_string(),
+            token: "secret-token".into(),
+            token_encoding: None,
+            signature_prefix: Some("sha256=".to_string()),
+            signature_on: SignatureOn::Body,
+            signature_encoding: Encoding::Hex,
+        };
+        let signature = crate::security::signature::build_signature(
+            &signature_config,
+            &HeaderMap::new(),
+            payload_str.as_bytes(),
+        )
+        .unwrap();
+
+        let request = Request::builder()
+            .uri("/webhook/signature-auth")
+            .method("POST")
+            .header("content-type", "application/json")
+            .header("X-Hub-Signature-256", signature)
+            .body(Body::from(payload_str))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+        assert_eq!(output.body, payload);
     }
 }

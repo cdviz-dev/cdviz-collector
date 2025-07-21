@@ -89,7 +89,11 @@ type = "webhook"
 id = "000-github"
 headers_to_keep = []
 # token override by environment variable reads from the secret
-signature = { signature_encoding = "hex", signature_on = "body", signature_prefix = "sha256=", header = "x-hub-signature-256", token = "changeme" }
+headers = [
+#   { header = "Authorization", rule = { type = "exists" } },
+#   { header = "X-API-Key", rule = { type = "matches", pattern = "^[a-zA-Z0-9]{32}$" } }
+  { header = "x-hub-signature-256", rule = { type = "signature", signature_encoding = "hex", signature_on = "body", signature_prefix = "sha256=", token = "changeme" }}
+]
 
 [transformers.github_events]
 type = "vrl"

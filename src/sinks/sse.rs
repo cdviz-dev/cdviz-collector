@@ -1,28 +1,33 @@
 use super::Sink;
 use crate::Message;
 use crate::errors::Result;
+use crate::security::rule::{HeaderRuleConfig, validate_headers};
 use axum::extract::State;
+use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
 use axum::routing::{Router, get};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tokio::sync::broadcast;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub(crate) struct Config {
     /// Is the sink enabled?
     pub(crate) enabled: bool,
     /// ID of the SSE endpoint, used to define the path of the SSE URL (`/sse/{id}`)
     pub(crate) id: String,
+    /// Optional header rules for incoming SSE connections
+    #[serde(default)]
+    pub(crate) headers: Vec<HeaderRuleConfig>,
 }
 
 impl TryFrom<Config> for SseSink {
     type Error = crate::errors::Report;
 
     fn try_from(value: Config) -> Result<Self> {
-        Ok(SseSink::new(value.id))
+        Ok(SseSink::new(value.id, value.headers))
     }
 }
 
@@ -30,16 +35,17 @@ impl TryFrom<Config> for SseSink {
 pub(crate) struct SseSink {
     id: String,
     tx: broadcast::Sender<Message>,
+    headers: Vec<HeaderRuleConfig>,
 }
 
 impl SseSink {
-    pub(crate) fn new(id: String) -> Self {
+    pub(crate) fn new(id: String, headers: Vec<HeaderRuleConfig>) -> Self {
         let (tx, _) = broadcast::channel(1000); // Buffer up to 1000 messages
-        Self { id, tx }
+        Self { id, tx, headers }
     }
 
     pub(crate) fn make_route(&self) -> Router {
-        let state = SseState { tx: self.tx.clone() };
+        let state = SseState { tx: self.tx.clone(), headers: self.headers.clone() };
         Router::new().route(&format!("/sse/{}", self.id), get(sse_handler)).with_state(state)
     }
 }
@@ -47,6 +53,7 @@ impl SseSink {
 #[derive(Clone)]
 struct SseState {
     tx: broadcast::Sender<Message>,
+    headers: Vec<HeaderRuleConfig>,
 }
 
 impl Sink for SseSink {
@@ -71,9 +78,20 @@ impl Sink for SseSink {
     }
 }
 
-#[tracing::instrument(skip(state))]
-async fn sse_handler(State(state): State<SseState>) -> impl IntoResponse {
+#[tracing::instrument(skip(state, headers))]
+async fn sse_handler(
+    State(state): State<SseState>,
+    headers: HeaderMap,
+) -> axum::response::Response {
     tracing::debug!("New SSE client connected");
+
+    // Validate headers if any rules are configured
+    if !state.headers.is_empty() {
+        if let Err(validation_error) = validate_headers(&headers, &state.headers, None) {
+            tracing::warn!(error = ?validation_error, "SSE connection rejected due to header rule validation failure");
+            return validation_error.into_response();
+        }
+    }
 
     let rx = state.tx.subscribe();
     let stream = BroadcastStream::new(rx).map(|result| {
@@ -106,11 +124,13 @@ async fn sse_handler(State(state): State<SseState>) -> impl IntoResponse {
         }
     });
 
-    Sse::new(stream).keep_alive(
-        axum::response::sse::KeepAlive::new()
-            .interval(std::time::Duration::from_secs(30))
-            .text("keep-alive"),
-    )
+    Sse::new(stream)
+        .keep_alive(
+            axum::response::sse::KeepAlive::new()
+                .interval(std::time::Duration::from_secs(30))
+                .text("keep-alive"),
+        )
+        .into_response()
 }
 
 #[cfg(test)]
@@ -125,7 +145,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sse_endpoint_exists() {
-        let config = Config { enabled: true, id: "test".to_string() };
+        let config = Config { enabled: true, id: "test".to_string(), headers: vec![] };
         let sink = SseSink::try_from(config).unwrap();
         let router = sink.make_route();
 
@@ -143,7 +163,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sse_wrong_path() {
-        let config = Config { enabled: true, id: "test".to_string() };
+        let config = Config { enabled: true, id: "test".to_string(), headers: vec![] };
         let sink = SseSink::try_from(config).unwrap();
         let router = sink.make_route();
 
@@ -160,7 +180,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sse_wrong_method() {
-        let config = Config { enabled: true, id: "test".to_string() };
+        let config = Config { enabled: true, id: "test".to_string(), headers: vec![] };
         let sink = SseSink::try_from(config).unwrap();
         let router = sink.make_route();
 
@@ -177,7 +197,7 @@ mod tests {
 
     #[proptest(async = "tokio")]
     async fn test_sse_sink_send(msg: Message) {
-        let config = Config { enabled: true, id: "test".to_string() };
+        let config = Config { enabled: true, id: "test".to_string(), headers: vec![] };
         let sink = SseSink::try_from(config).unwrap();
 
         // Should not fail even if no clients are connected
@@ -187,7 +207,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sse_sink_creation() {
-        let config = Config { enabled: true, id: "my-sse-endpoint".to_string() };
+        let config = Config { enabled: true, id: "my-sse-endpoint".to_string(), headers: vec![] };
 
         let sink = SseSink::try_from(config.clone()).unwrap();
         assert_eq!(sink.id, config.id);
@@ -204,6 +224,88 @@ mod tests {
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
+
+    #[tokio::test]
+    async fn test_sse_header_validation_success() {
+        use crate::security::rule::{HeaderRuleConfig, Rule};
+
+        let config = Config {
+            enabled: true,
+            id: "test-auth".to_string(),
+            headers: vec![HeaderRuleConfig {
+                header: "Authorization".to_string(),
+                rule: Rule::Matches { pattern: r"^Bearer \w+$".to_string() },
+            }],
+        };
+        let sink = SseSink::try_from(config).unwrap();
+        let router = sink.make_route();
+
+        let request = Request::builder()
+            .uri("/sse/test-auth")
+            .method("GET")
+            .header("Accept", "text/event-stream")
+            .header("Authorization", "Bearer token123")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get("content-type").unwrap(), "text/event-stream");
+    }
+
+    #[tokio::test]
+    async fn test_sse_header_validation_failure() {
+        use crate::security::rule::{HeaderRuleConfig, Rule};
+
+        let config = Config {
+            enabled: true,
+            id: "test-auth".to_string(),
+            headers: vec![HeaderRuleConfig {
+                header: "Authorization".to_string(),
+                rule: Rule::Equals {
+                    value: "Bearer secret-token".to_string(),
+                    case_sensitive: true,
+                },
+            }],
+        };
+        let sink = SseSink::try_from(config).unwrap();
+        let router = sink.make_route();
+
+        let request = Request::builder()
+            .uri("/sse/test-auth")
+            .method("GET")
+            .header("Accept", "text/event-stream")
+            .header("Authorization", "Bearer wrong-token")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_sse_header_validation_missing_header() {
+        use crate::security::rule::{HeaderRuleConfig, Rule};
+
+        let config = Config {
+            enabled: true,
+            id: "test-auth".to_string(),
+            headers: vec![HeaderRuleConfig { header: "X-API-Key".to_string(), rule: Rule::Exists }],
+        };
+        let sink = SseSink::try_from(config).unwrap();
+        let router = sink.make_route();
+
+        let request = Request::builder()
+            .uri("/sse/test-auth")
+            .method("GET")
+            .header("Accept", "text/event-stream")
+            // Missing X-API-Key header
+            .body(Body::empty())
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
 }
 
 #[cfg(test)]
@@ -217,7 +319,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_sse_message_broadcast() {
-        let config = Config { enabled: true, id: "broadcast-test".to_string() };
+        let config = Config { enabled: true, id: "broadcast-test".to_string(), headers: vec![] };
         let sink = SseSink::try_from(config).unwrap();
 
         // Create two test messages
