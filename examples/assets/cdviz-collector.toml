@@ -5,6 +5,12 @@
 # pool_connections_min = 1
 # pool_connections_max = 10
 
+# [sinks.sse_001]
+# # This will create an SSE endpoint at http://localhost:8080/sse/001
+# enabled = false
+# type = "sse"
+# id = "001"
+
 [sinks.cdevents_local_json]
 enabled = false
 parameters = { root = "./sinks.off" }

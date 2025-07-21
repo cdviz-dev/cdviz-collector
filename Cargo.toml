@@ -23,6 +23,7 @@ default = [
     "sink_db",
     "sink_folder",
     "sink_http",
+    "sink_sse",
     "source_opendal",
     "tool_transform",
 ]
@@ -39,6 +40,7 @@ sink_http = [
     "reqwest/json",
     "reqwest/rustls-tls",
 ]
+sink_sse = ["dep:tokio-stream"]
 #! ### Sources
 source_opendal = [
     "dep:bytes",
@@ -118,6 +120,7 @@ sqlx = { version = "0.8", features = [
   "json",
 ], default-features = false, optional = true }
 tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 tokio-util = "0.7"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = [
@@ -142,13 +145,14 @@ figment = { version = "0.10", features = ["toml", "env", "test"] }
 indoc = "2"
 pretty_assertions = "1"
 proptest = "1"
+reqwest-eventsource = "0.6"
 rstest = "0.25"
 rustainers = "0.15"
 tempfile = "3"
 test-strategy = "0.4"
 test-trace = "0.3"
-time = "=0.3.39" # HACK explicit fix version (not used) to avoid compilation errors on domain #see https://github.com/NLnetLabs/domain/issues/502
-toml = "0.8" # same version as figment
+time = "=0.3.39"                                                   # HACK explicit fix version (not used) to avoid compilation errors on domain #see https://github.com/NLnetLabs/domain/issues/502
+toml = "0.8"                                                       # same version as figment
 tower = { version = "0.5", features = ["util"] }
 tracing-subscriber = "0.3"
 uuid = "1"

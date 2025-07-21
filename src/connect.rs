@@ -10,6 +10,8 @@ use std::{path::PathBuf, sync::LazyLock};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
+static SHUTDOWN_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
+
 #[derive(Debug, Clone, Args)]
 #[command(args_conflicts_with_subcommands = true,flatten_help = true, about, long_about = None)]
 pub(crate) struct ConnectArgs {
@@ -41,8 +43,6 @@ impl From<CDEvent> for Message {
     }
 }
 
-static SHUTDOWN_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
-
 //TODO add transformers ( eg file/event info, into cdevents) for sources
 //TODO integrations with cloudevents (sources & sink)
 //TODO integrations with kafka / redpanda, nats,
@@ -56,39 +56,24 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
 
     let (tx, _) = broadcast::channel::<Message>(100);
 
-    let sinks = config
-        .sinks
-        .into_iter()
-        .filter(|(_name, config)| config.is_enabled())
-        .inspect(|(name, _config)| tracing::info!(kind = "sink", name, "starting"))
-        .map(|(name, config)| sinks::start(name, config, tx.subscribe()))
-        .collect::<Vec<_>>();
+    let (sinks, sink_routes) = sinks::create_sinks_and_routes(config.sinks, &tx)?;
 
-    if sinks.is_empty() {
+    if sinks.is_empty() && sink_routes.is_empty() {
         tracing::error!("no sink configured or started");
         return Err(Error::NoSink).into_diagnostic();
     }
 
-    let sources = config
-        .sources
-        .into_iter()
-        .filter(|(_name, config)| config.is_enabled())
-        .inspect(|(name, _config)| tracing::info!(kind = "source", name, "starting"))
-        .map(|(name, config)| sources::make(&name, &config, tx.clone(), SHUTDOWN_TOKEN.clone()))
-        .collect::<Result<Vec<_>>>()?;
+    let (sources, source_routes) =
+        sources::create_sources_and_routes(config.sources, &tx, &SHUTDOWN_TOKEN)?;
 
-    if sources.is_empty() {
+    if sources.is_empty() && source_routes.is_empty() {
         tracing::error!("no source configured or started");
         return Err(Error::NoSource).into_diagnostic();
     }
-    let mut join_handles = vec![];
+
     let mut routes = vec![];
-    for source in sources {
-        match source {
-            sources::extractors::Extractor::Task(task) => join_handles.push(task),
-            sources::extractors::Extractor::Webhook(route) => routes.push(route),
-        }
-    }
+    routes.extend(source_routes);
+    routes.extend(sink_routes);
 
     let servers = vec![crate::http::launch(&config.http, routes, &SHUTDOWN_TOKEN)];
 
@@ -103,7 +88,7 @@ pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
     //TODO use tokio JoinSet or TaskTracker?
     sinks
         .into_iter()
-        .chain(join_handles)
+        .chain(sources)
         .chain(servers)
         .collect::<TryJoinAll<_>>()
         .await

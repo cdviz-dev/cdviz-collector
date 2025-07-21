@@ -5,9 +5,12 @@ pub(crate) mod debug;
 pub(crate) mod folder;
 #[cfg(feature = "sink_http")]
 pub(crate) mod http;
+#[cfg(feature = "sink_sse")]
+pub(crate) mod sse;
 
 use crate::errors::{Report, Result};
 use crate::{Message, Receiver};
+use axum::Router;
 #[cfg(feature = "sink_db")]
 use db::DbSink;
 use debug::DebugSink;
@@ -17,7 +20,11 @@ use folder::FolderSink;
 #[cfg(feature = "sink_http")]
 use http::HttpSink;
 use serde::Deserialize;
+#[cfg(feature = "sink_sse")]
+use sse::SseSink;
 use tokio::task::JoinHandle;
+
+type SinkHandlesAndRoutes = (Vec<JoinHandle<Result<()>>>, Vec<Router>);
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type")]
@@ -33,6 +40,9 @@ pub(crate) enum Config {
     #[cfg(feature = "sink_folder")]
     #[serde(alias = "folder")]
     Folder(folder::Config),
+    #[cfg(feature = "sink_sse")]
+    #[serde(alias = "sse")]
+    Sse(sse::Config),
 }
 
 impl Default for Config {
@@ -51,6 +61,8 @@ impl Config {
             Self::Folder(folder::Config { enabled, .. }) => *enabled,
             #[cfg(feature = "sink_http")]
             Self::Http(http::Config { enabled, .. }) => *enabled,
+            #[cfg(feature = "sink_sse")]
+            Self::Sse(sse::Config { enabled, .. }) => *enabled,
         }
     }
 }
@@ -67,6 +79,8 @@ impl TryFrom<Config> for SinkEnum {
             Config::Folder(config) => FolderSink::try_from(config)?.into(),
             #[cfg(feature = "sink_http")]
             Config::Http(config) => HttpSink::try_from(config)?.into(),
+            #[cfg(feature = "sink_sse")]
+            Config::Sse(config) => SseSink::try_from(config)?.into(),
         };
         Ok(out)
     }
@@ -82,11 +96,19 @@ enum SinkEnum {
     FolderSink,
     #[cfg(feature = "sink_http")]
     HttpSink,
+    #[cfg(feature = "sink_sse")]
+    SseSink,
 }
 
 #[enum_dispatch(SinkEnum)]
 trait Sink {
     async fn send(&self, msg: &Message) -> Result<()>;
+
+    /// Get the routes that this sink needs to register with the HTTP server
+    /// Most sinks don't need routes, so this returns None by default
+    fn get_routes(&self) -> Option<axum::Router> {
+        None
+    }
 }
 
 pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> JoinHandle<Result<()>> {
@@ -102,4 +124,35 @@ pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> Join
         tracing::info!(name, kind = "sink", "exiting");
         Ok(())
     })
+}
+
+/// Create sinks and return both the task handles and any routes they need to register
+pub(crate) fn create_sinks_and_routes(
+    sink_configs: impl IntoIterator<Item = (String, Config)>,
+    tx: &tokio::sync::broadcast::Sender<Message>,
+) -> Result<SinkHandlesAndRoutes> {
+    let mut handles = Vec::new();
+    let mut routes = Vec::new();
+
+    for (name, config) in sink_configs {
+        if !config.is_enabled() {
+            continue;
+        }
+
+        tracing::info!(kind = "sink", name, "starting");
+
+        // Create the sink first to extract any routes
+        let sink = SinkEnum::try_from(config.clone())?;
+
+        // Extract routes if the sink provides them
+        if let Some(route) = sink.get_routes() {
+            routes.push(route);
+        }
+
+        // Start the sink task
+        let handle = start(name, config, tx.subscribe());
+        handles.push(handle);
+    }
+
+    Ok((handles, routes))
 }

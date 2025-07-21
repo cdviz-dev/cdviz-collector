@@ -8,11 +8,15 @@ pub(crate) mod webhook;
 use crate::errors::{IntoDiagnostic, Result};
 use crate::pipes::Pipe;
 use crate::{Message, Sender};
+use axum::Router;
 use cdevents_sdk::CDEvent;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+
+type SourceHandlesAndRoutes = (Vec<JoinHandle<Result<()>>>, Vec<Router>);
 
 // TODO support name/reference for extractor / transformer
 #[derive(Clone, Debug, Deserialize, Default)]
@@ -102,6 +106,29 @@ fn set_id_zero_to_cid(body: &mut serde_json::Value) -> Result<()> {
         body["context"]["id"] = json!(cid.to_string());
     }
     Ok(())
+}
+
+pub(crate) fn create_sources_and_routes(
+    source_configs: impl IntoIterator<Item = (String, Config)>,
+    tx: &tokio::sync::broadcast::Sender<Message>,
+    cancel_token: &'static CancellationToken,
+) -> Result<SourceHandlesAndRoutes> {
+    let sources = source_configs
+        .into_iter()
+        .filter(|(_name, config)| config.is_enabled())
+        .inspect(|(name, _config)| tracing::info!(kind = "source", name, "starting"))
+        .map(|(name, config)| make(&name, &config, tx.clone(), cancel_token.clone()))
+        .collect::<Result<Vec<_>>>()?;
+
+    let mut join_handles = vec![];
+    let mut routes = vec![];
+    for source in sources {
+        match source {
+            extractors::Extractor::Task(task) => join_handles.push(task),
+            extractors::Extractor::Webhook(route) => routes.push(route),
+        }
+    }
+    Ok((join_handles, routes))
 }
 
 #[cfg(test)]
