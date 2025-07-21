@@ -85,7 +85,7 @@ mod tests {
         let config = Config::Webhook(webhook::Config {
             id: "test-webhook".to_string(),
             headers_to_keep: vec!["Content-Type".to_string()],
-            signature: None,
+            ..Default::default()
         });
         let collector = Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
@@ -145,33 +145,7 @@ mod tests {
 mod security_tests {
     use super::*;
     use crate::pipes::collect_to_vec::Collector;
-    use crate::security::signature::{Encoding, SignatureConfig, SignatureOn};
     use crate::sources::EventSource;
-
-    #[test]
-    fn test_webhook_config_with_signature_validation() {
-        let config = Config::Webhook(webhook::Config {
-            id: "secure-webhook".to_string(),
-            headers_to_keep: vec!["Content-Type".to_string()],
-            signature: Some(SignatureConfig {
-                header: "X-Hub-Signature-256".to_string(),
-                token: "secret-token".to_string().into(),
-                token_encoding: None,
-                signature_prefix: Some("sha256=".to_string()),
-                signature_on: SignatureOn::Body,
-                signature_encoding: Encoding::Hex,
-            }),
-        });
-
-        if let Config::Webhook(webhook_config) = config {
-            assert!(webhook_config.signature.is_some());
-            let sig_config = webhook_config.signature.unwrap();
-            assert_eq!(sig_config.header, "X-Hub-Signature-256");
-            assert_eq!(sig_config.signature_prefix, Some("sha256=".to_string()));
-        } else {
-            panic!("Expected webhook config with signature");
-        }
-    }
 
     #[tokio::test]
     async fn test_extractor_name_injection_safety() {

@@ -102,6 +102,7 @@ opendal = { version = "0.54", default-features = false, features = [
   "services-fs",
   "services-s3",
 ], optional = true }
+regex = "1"
 reqwest = { version = "0.12", default-features = false, optional = true }
 reqwest-middleware = { version = "0.4", features = ["json"], optional = true }
 reqwest-tracing = { version = "0.5", optional = true }
@@ -175,7 +176,7 @@ expect_used = "warn"
 if_then_some_else_none = "warn"
 indexing_slicing = "allow"
 large_include_file = "warn"
-min_ident_chars = "warn"
+# min_ident_chars = "warn"
 print_stderr = "warn"
 print_stdout = "warn"
 rc_buffer = "warn"

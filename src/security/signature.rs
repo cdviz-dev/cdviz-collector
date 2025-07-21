@@ -14,7 +14,7 @@ use hmac::{
     digest::{InvalidLength, MacError},
 };
 use secrecy::{ExposeSecret, SecretString};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::Sha256;
 //use std::task::{Context, Poll};
@@ -45,7 +45,7 @@ pub struct SignatureConfig {
     pub(crate) signature_encoding: Encoding,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 //#[serde(untagged)]
 pub enum SignatureOn {
@@ -56,7 +56,7 @@ pub enum SignatureOn {
     HeadersThenBody { separator: String, headers: Vec<String> },
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum Encoding {
     /// base64 encoding (with padding and case sensitive)

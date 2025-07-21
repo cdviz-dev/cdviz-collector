@@ -1,26 +1,30 @@
 use super::Sink;
 use crate::Message;
 use crate::errors::{IntoDiagnostic, Report, Result};
+use crate::security::rule::HeaderRuleConfig;
 use cdevents_sdk::cloudevents::BuilderExt;
 use cloudevents::{EventBuilder, EventBuilderV10};
 use http_cloudevents::RequestBuilderExt;
 use reqwest::Url;
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
 use reqwest_tracing::TracingMiddleware;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub(crate) struct Config {
     /// Is the sink is enabled?
     pub(crate) enabled: bool,
     destination: Url,
+    /// Header generation for outgoing HTTP requests
+    #[serde(default)]
+    pub(crate) headers: Vec<HeaderRuleConfig>,
 }
 
 impl TryFrom<Config> for HttpSink {
     type Error = Report;
 
     fn try_from(value: Config) -> Result<Self> {
-        Ok(HttpSink::new(value.destination))
+        Ok(HttpSink::new(value.destination, value.headers))
     }
 }
 
@@ -28,10 +32,11 @@ impl TryFrom<Config> for HttpSink {
 pub(crate) struct HttpSink {
     client: ClientWithMiddleware,
     dest: Url,
+    headers: Vec<HeaderRuleConfig>,
 }
 
 impl HttpSink {
-    pub(crate) fn new(url: Url) -> Self {
+    pub(crate) fn new(url: Url, headers: Vec<HeaderRuleConfig>) -> Self {
         // Retry up to 3 times with increasing intervals between attempts.
         //let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let client = ClientBuilder::new(reqwest::Client::new())
@@ -40,7 +45,62 @@ impl HttpSink {
             // Retry failed requests.
             //.with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
-        Self { dest: url, client }
+        Self { dest: url, client, headers }
+    }
+
+    /// Generate and add configured headers to the request
+    fn add_headers(&self, mut req: RequestBuilder, body: &[u8]) -> Result<RequestBuilder> {
+        use crate::security::rule::Rule;
+
+        for header_config in &self.headers {
+            match &header_config.rule {
+                // For static values, just set the header
+                Rule::Equals { value, .. } => {
+                    req = req.header(&header_config.header, value);
+                }
+
+                // For signatures, generate the signature and set the header
+                Rule::Signature {
+                    token,
+                    token_encoding,
+                    signature_prefix,
+                    signature_on,
+                    signature_encoding,
+                } => {
+                    use crate::security::signature::{self, SignatureConfig};
+
+                    let signature_config = SignatureConfig {
+                        header: header_config.header.clone(),
+                        token: token.clone(),
+                        token_encoding: token_encoding.clone(),
+                        signature_prefix: signature_prefix.clone(),
+                        signature_on: signature_on.clone(),
+                        signature_encoding: signature_encoding.clone(),
+                    };
+
+                    // Build signature using the body
+                    let signature = signature::build_signature(
+                        &signature_config,
+                        &axum::http::HeaderMap::new(), // No existing headers for signature computation
+                        body,
+                    )
+                    .into_diagnostic()?;
+
+                    req = req.header(&header_config.header, signature);
+                }
+
+                // Other validation methods are not supported for header generation
+                _ => {
+                    tracing::warn!(
+                        header = header_config.header,
+                        validation_type = ?header_config.rule,
+                        "Unsupported validation method for HTTP header generation"
+                    );
+                }
+            }
+        }
+
+        Ok(req)
     }
 }
 
@@ -52,6 +112,22 @@ impl Sink for HttpSink {
         let event_result = EventBuilderV10::new().with_cdevent(cd_event.clone());
 
         let mut req = self.client.post(self.dest.clone());
+
+        // Determine the body content for signature generation
+        let body_bytes = match &event_result {
+            Ok(event_builder) => {
+                let event = event_builder.clone().build().into_diagnostic()?;
+                serde_json::to_vec(&event).into_diagnostic()?
+            }
+            Err(_) => {
+                // In error case, use the original event
+                serde_json::to_vec(&cd_event).into_diagnostic()?
+            }
+        };
+
+        // Add configured headers (including signatures based on body)
+        req = self.add_headers(req, &body_bytes)?;
+
         req = match event_result {
             Ok(event_builder) => {
                 let event_result = event_builder.build();
@@ -83,7 +159,7 @@ mod tests {
     use crate::Message;
     use assert2::let_assert;
     use reqwest::Url;
-    use wiremock::matchers::{header, method, path};
+    use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -93,8 +169,8 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
         .and(path("/events"))
-        .and(header("Content-Type", "application/json"))
-        .and(header("ce-specversion", "1.0"))
+        .and(wiremock::matchers::header("Content-Type", "application/json"))
+        .and(wiremock::matchers::header("ce-specversion", "1.0"))
         .respond_with(ResponseTemplate::new(200))
         .expect(1)
         // Mounting the mock on the mock server - it's now effective!
@@ -104,6 +180,7 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", &mock_server.uri())).unwrap(),
+            headers: vec![],
         };
 
         let sink = HttpSink::try_from(config).unwrap();
@@ -121,7 +198,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/events"))
-            .and(header("content-type", "application/cloudevents+json"))
+            .and(wiremock::matchers::header("content-type", "application/cloudevents+json"))
             .respond_with(ResponseTemplate::new(200))
             .mount(&mock_server)
             .await;
@@ -129,6 +206,7 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+            headers: vec![],
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -148,6 +226,7 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+            headers: vec![],
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -161,6 +240,7 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse("http://invalid-host-that-does-not-exist:9999/events").unwrap(),
+            headers: vec![],
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -174,7 +254,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/events"))
-            .and(header("content-type", "application/json"))
+            .and(wiremock::matchers::header("content-type", "application/json"))
             .respond_with(ResponseTemplate::new(200))
             .mount(&mock_server)
             .await;
@@ -182,6 +262,7 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+            headers: vec![],
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -194,6 +275,7 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse("https://example.com/events").unwrap(),
+            headers: vec![],
         };
         let_assert!(Ok(_) = HttpSink::try_from(config));
 
@@ -203,6 +285,7 @@ mod tests {
             let config = Config {
                 enabled: true,
                 destination: Url::parse(&format!("{scheme}://example.com/events")).unwrap(),
+                headers: vec![],
             };
             let_assert!(Ok(_) = HttpSink::try_from(config));
         }
@@ -224,6 +307,7 @@ mod security_tests {
         let config = Config {
             enabled: true,
             destination: Url::parse("http://insecure.example.com/events").unwrap(),
+            headers: vec![],
         };
 
         // Currently allows HTTP - in production you might want to validate this
@@ -243,7 +327,8 @@ mod security_tests {
         ];
 
         for url in internal_urls {
-            let config = Config { enabled: true, destination: Url::parse(url).unwrap() };
+            let config =
+                Config { enabled: true, destination: Url::parse(url).unwrap(), headers: vec![] };
 
             // Currently allows internal URLs - in production you might want to validate this
             let_assert!(Ok(_) = HttpSink::try_from(config));
@@ -274,10 +359,50 @@ mod security_tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+            headers: vec![],
         };
         let sink = HttpSink::try_from(config).unwrap();
 
         // Should handle redirects properly
+        let_assert!(Ok(()) = sink.send(&msg).await);
+    }
+
+    #[test_strategy::proptest(async = "tokio", cases = 10)]
+    async fn test_http_sink_with_static_headers(msg: Message) {
+        use crate::security::rule::{HeaderRuleConfig, Rule};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .and(wiremock::matchers::header("X-API-Key", "test-secret-key"))
+            .and(wiremock::matchers::header("X-Client-ID", "cdviz-collector"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            enabled: true,
+            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+            headers: vec![
+                HeaderRuleConfig {
+                    header: "X-API-Key".to_string(),
+                    rule: Rule::Equals {
+                        value: "test-secret-key".to_string(),
+                        case_sensitive: true,
+                    },
+                },
+                HeaderRuleConfig {
+                    header: "X-Client-ID".to_string(),
+                    rule: Rule::Equals {
+                        value: "cdviz-collector".to_string(),
+                        case_sensitive: true,
+                    },
+                },
+            ],
+        };
+        let sink = HttpSink::try_from(config).unwrap();
+
         let_assert!(Ok(()) = sink.send(&msg).await);
     }
 
@@ -298,6 +423,7 @@ mod security_tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+            headers: vec![],
         };
         let sink = HttpSink::try_from(config).unwrap();
 
