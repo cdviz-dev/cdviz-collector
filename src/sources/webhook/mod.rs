@@ -241,3 +241,214 @@ mod tests_headers_conversion {
         assert_eq!(result, expected);
     }
 }
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+    use crate::pipes::collect_to_vec;
+    use crate::security::signature::{Encoding, SignatureConfig, SignatureOn};
+    use assert2::let_assert;
+    use axum::body::Body;
+    use axum::http::{HeaderValue, Request, StatusCode};
+    use serde_json::json;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_webhook_with_valid_signature() {
+        let config = Config {
+            id: "secure".to_string(),
+            headers_to_keep: vec!["Content-Type".to_string()],
+            signature: Some(SignatureConfig {
+                header: "X-Hub-Signature-256".to_string(),
+                token: "secret-token".into(),
+                token_encoding: None,
+                signature_prefix: Some("sha256=".to_string()),
+                signature_on: SignatureOn::Body,
+                signature_encoding: Encoding::Hex,
+            }),
+        };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        let payload = json!({"action": "test", "data": "secure"});
+        let payload_str = payload.to_string();
+
+        // Generate valid signature
+        let signature = crate::security::signature::build_signature(
+            config.signature.as_ref().unwrap(),
+            &HeaderMap::new(),
+            payload_str.as_bytes(),
+        )
+        .unwrap();
+
+        let request = Request::builder()
+            .uri("/webhook/secure")
+            .method("POST")
+            .header("content-type", "application/json")
+            .header("X-Hub-Signature-256", signature)
+            .body(Body::from(payload_str))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+        assert_eq!(output.body, payload);
+    }
+
+    #[tokio::test]
+    async fn test_webhook_with_invalid_signature() {
+        let config = Config {
+            id: "secure".to_string(),
+            headers_to_keep: vec![],
+            signature: Some(SignatureConfig {
+                header: "X-Hub-Signature-256".to_string(),
+                token: "secret-token".into(),
+                token_encoding: None,
+                signature_prefix: Some("sha256=".to_string()),
+                signature_on: SignatureOn::Body,
+                signature_encoding: Encoding::Hex,
+            }),
+        };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        let payload = json!({"action": "test", "data": "secure"});
+        let request = Request::builder()
+            .uri("/webhook/secure")
+            .method("POST")
+            .header("content-type", "application/json")
+            .header("X-Hub-Signature-256", "sha256=invalid-signature")
+            .body(Body::from(payload.to_string()))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let_assert!(None = collector.try_into_iter().unwrap().next());
+    }
+
+    #[tokio::test]
+    async fn test_webhook_missing_required_signature() {
+        let config = Config {
+            id: "secure".to_string(),
+            headers_to_keep: vec![],
+            signature: Some(SignatureConfig {
+                header: "X-Hub-Signature-256".to_string(),
+                token: "secret-token".into(),
+                token_encoding: None,
+                signature_prefix: None,
+                signature_on: SignatureOn::Body,
+                signature_encoding: Encoding::Hex,
+            }),
+        };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        let payload = json!({"action": "test"});
+        let request = Request::builder()
+            .uri("/webhook/secure")
+            .method("POST")
+            .header("content-type", "application/json")
+            // Missing signature header
+            .body(Body::from(payload.to_string()))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let_assert!(None = collector.try_into_iter().unwrap().next());
+    }
+
+    #[tokio::test]
+    async fn test_webhook_rejects_malformed_json() {
+        let config = Config { id: "test".to_string(), headers_to_keep: vec![], signature: None };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        let malformed_json = r#"{"key": "value", invalid}"#;
+        let request = Request::builder()
+            .uri("/webhook/test")
+            .method("POST")
+            .header("content-type", "application/json")
+            .body(Body::from(malformed_json))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let_assert!(None = collector.try_into_iter().unwrap().next());
+    }
+
+    #[tokio::test]
+    async fn test_webhook_handles_large_payload() {
+        let config = Config { id: "test".to_string(), headers_to_keep: vec![], signature: None };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        // Create a large but valid JSON payload
+        let large_data = "x".repeat(1024 * 1024); // 1MB of data
+        let payload = json!({"large_field": large_data});
+        let request = Request::builder()
+            .uri("/webhook/test")
+            .method("POST")
+            .header("content-type", "application/json")
+            .body(Body::from(payload.to_string()))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+        assert_eq!(output.body["large_field"], large_data);
+    }
+
+    #[tokio::test]
+    async fn test_webhook_path_traversal_prevention() {
+        let config = Config {
+            id: "../../../etc/passwd".to_string(),
+            headers_to_keep: vec![],
+            signature: None,
+        };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        let payload = json!({"test": "data"});
+        let request = Request::builder()
+            .uri("/webhook/../../../etc/passwd")
+            .method("POST")
+            .header("content-type", "application/json")
+            .body(Body::from(payload.to_string()))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        // Should be treated as a normal path component, not a traversal
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_webhook_sensitive_headers_not_forwarded() {
+        let config = Config {
+            id: "test".to_string(),
+            headers_to_keep: vec!["Authorization".to_string(), "Content-Type".to_string()],
+            signature: None,
+        };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        let payload = json!({"test": "data"});
+        let mut authorization = HeaderValue::from_static("Bearer secret-token");
+        authorization.set_sensitive(true);
+
+        let request = Request::builder()
+            .uri("/webhook/test")
+            .method("POST")
+            .header("content-type", "application/json")
+            .header("authorization", authorization)
+            .body(Body::from(payload.to_string()))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+
+        // Should only have content-type, not authorization (sensitive)
+        assert!(output.headers.contains_key("content-type"));
+        assert!(!output.headers.contains_key("authorization"));
+    }
+}

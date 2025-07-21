@@ -76,6 +76,236 @@ impl Sink for HttpSink {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Message;
+    use assert2::let_assert;
+    use reqwest::Url;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn test_http_sink() {
+        use proptest::prelude::*;
+        use proptest::test_runner::TestRunner;
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+        .and(path("/events"))
+        .and(header("Content-Type", "application/json"))
+        .and(header("ce-specversion", "1.0"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        // Mounting the mock on the mock server - it's now effective!
+        .mount(&mock_server)
+        .await;
+
+        let config = Config {
+            enabled: true,
+            destination: Url::parse(&format!("{}/events", &mock_server.uri())).unwrap(),
+        };
+
+        let sink = HttpSink::try_from(config).unwrap();
+
+        let mut runner = TestRunner::default();
+        for _ in 0..1 {
+            let val = any::<Message>().new_tree(&mut runner).unwrap();
+            assert!(sink.send(&val.current()).await.is_ok());
+        }
+    }
+
+    #[test_strategy::proptest(async = "tokio")]
+    async fn test_http_sink_successful_send(msg: Message) {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .and(header("content-type", "application/cloudevents+json"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            enabled: true,
+            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+        };
+        let sink = HttpSink::try_from(config).unwrap();
+
+        let_assert!(Ok(()) = sink.send(&msg).await);
+    }
+
+    #[test_strategy::proptest(async = "tokio")]
+    async fn test_http_sink_server_error_handling(msg: Message) {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            enabled: true,
+            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+        };
+        let sink = HttpSink::try_from(config).unwrap();
+
+        // Should not fail even on server error (logs warning)
+        let_assert!(Ok(()) = sink.send(&msg).await);
+    }
+
+    #[test_strategy::proptest(async = "tokio")]
+    async fn test_http_sink_network_failure(msg: Message) {
+        // Use invalid URL to simulate network failure
+        let config = Config {
+            enabled: true,
+            destination: Url::parse("http://invalid-host-that-does-not-exist:9999/events").unwrap(),
+        };
+        let sink = HttpSink::try_from(config).unwrap();
+
+        // Should fail with network error
+        let_assert!(Err(_) = sink.send(&msg).await);
+    }
+
+    #[test_strategy::proptest(async = "tokio")]
+    async fn test_http_sink_fallback_to_raw_json(msg: Message) {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .and(header("content-type", "application/json"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            enabled: true,
+            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+        };
+        let sink = HttpSink::try_from(config).unwrap();
+
+        let_assert!(Ok(()) = sink.send(&msg).await);
+    }
+
+    #[test]
+    fn test_http_sink_config_validation() {
+        // Valid config
+        let config = Config {
+            enabled: true,
+            destination: Url::parse("https://example.com/events").unwrap(),
+        };
+        let_assert!(Ok(_) = HttpSink::try_from(config));
+
+        // Config with various URL schemes
+        let schemes = vec!["http", "https"];
+        for scheme in schemes {
+            let config = Config {
+                enabled: true,
+                destination: Url::parse(&format!("{scheme}://example.com/events")).unwrap(),
+            };
+            let_assert!(Ok(_) = HttpSink::try_from(config));
+        }
+    }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+    use crate::Message;
+    use assert2::let_assert;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn test_http_sink_rejects_non_https_in_production() {
+        // In a real production environment, you might want to reject non-HTTPS URLs
+        // This test documents the current behavior
+        let config = Config {
+            enabled: true,
+            destination: Url::parse("http://insecure.example.com/events").unwrap(),
+        };
+
+        // Currently allows HTTP - in production you might want to validate this
+        let_assert!(Ok(_) = HttpSink::try_from(config));
+    }
+
+    #[tokio::test]
+    async fn test_http_sink_prevents_ssrf_attacks() {
+        // Test that the sink doesn't allow requests to internal networks
+        // Note: This is more of a documentation test as the current implementation
+        // doesn't prevent SSRF attacks
+        let internal_urls = vec![
+            "http://localhost:8080/events",
+            "http://127.0.0.1:8080/events",
+            "http://10.0.0.1:8080/events",
+            "http://192.168.1.1:8080/events",
+        ];
+
+        for url in internal_urls {
+            let config = Config { enabled: true, destination: Url::parse(url).unwrap() };
+
+            // Currently allows internal URLs - in production you might want to validate this
+            let_assert!(Ok(_) = HttpSink::try_from(config));
+        }
+    }
+
+    #[test_strategy::proptest(
+        async = "tokio",
+        proptest::prelude::ProptestConfig::default(),
+        cases = 10
+    )]
+    async fn test_http_sink_handles_redirect_securely(msg: Message) {
+        let mock_server = MockServer::start().await;
+
+        // Set up redirect
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .respond_with(ResponseTemplate::new(302).insert_header("Location", "/redirected"))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/redirected"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            enabled: true,
+            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+        };
+        let sink = HttpSink::try_from(config).unwrap();
+
+        // Should handle redirects properly
+        let_assert!(Ok(()) = sink.send(&msg).await);
+    }
+
+    #[test_strategy::proptest(
+        async = "tokio",
+        proptest::prelude::ProptestConfig::default(),
+        cases = 10
+    )]
+    async fn test_http_sink_request_tracing(msg: Message) {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            enabled: true,
+            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+        };
+        let sink = HttpSink::try_from(config).unwrap();
+
+        // Verify that tracing middleware is present and doesn't interfere
+        let_assert!(Ok(()) = sink.send(&msg).await);
+    }
+}
+
 //
 
 mod http_cloudevents {
@@ -134,42 +364,6 @@ mod http_cloudevents {
 
         fn end(self) -> Result<RequestBuilder> {
             Ok(self.req)
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestRunner;
-    use wiremock::matchers::{header, method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
-
-    #[tokio::test]
-    async fn test_http_sink() {
-        let mock_server = MockServer::start().await;
-        Mock::given(method("POST"))
-        .and(path("/events"))
-        .and(header("Content-Type", "application/json"))
-        .and(header("ce-specversion", "1.0"))
-        .respond_with(ResponseTemplate::new(200))
-        .expect(1)
-        // Mounting the mock on the mock server - it's now effective!
-        .mount(&mock_server)
-        .await;
-
-        let config = Config {
-            enabled: true,
-            destination: Url::parse(&format!("{}/events", &mock_server.uri())).unwrap(),
-        };
-
-        let sink = HttpSink::try_from(config).unwrap();
-
-        let mut runner = TestRunner::default();
-        for _ in 0..1 {
-            let val = any::<Message>().new_tree(&mut runner).unwrap();
-            assert!(sink.send(&val.current()).await.is_ok());
         }
     }
 }

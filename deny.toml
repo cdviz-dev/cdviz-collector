@@ -191,11 +191,12 @@ deny = [
 # Certain crates/versions that will be skipped when doing duplicate detection.
 skip = [
     #"ansi_term@0.11.0",
-    "base64",
-    "bitflags",
+    # "base64",
+    # "bitflags",
     "core-foundation",
     "futures",
     "getrandom",
+    "hashbrown",
     "heck",
     "itertools",
     "rand",
@@ -209,7 +210,7 @@ skip = [
     "toml_edit",
     "unicode-width",
     "wasi",
-    "webpki-roots",
+    # "webpki-roots",
     "windows-strings",
     "winnow",
     #{ crate = "ansi_term@0.11.0", reason = "you can specify a reason why it can't be updated/removed" },
