@@ -57,6 +57,7 @@ struct SseState {
 }
 
 impl Sink for SseSink {
+    #[tracing::instrument(skip(self, msg), fields(cdevent_id = %msg.cdevent.id()))]
     async fn send(&self, msg: &Message) -> Result<()> {
         // Send message to all connected SSE clients
         if let Err(err) = self.tx.send(msg.clone()) {
