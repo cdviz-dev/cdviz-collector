@@ -1,3 +1,5 @@
+#[cfg(feature = "source_sse")]
+use super::sse;
 use super::{EventSourcePipe, opendal, webhook};
 use crate::errors::Result;
 use axum::Router;
@@ -16,6 +18,9 @@ pub(crate) enum Config {
     #[cfg(feature = "source_opendal")]
     #[serde(alias = "opendal")]
     Opendal(opendal::Config),
+    #[cfg(feature = "source_sse")]
+    #[serde(alias = "sse")]
+    Sse(sse::Config),
 }
 
 pub enum Extractor {
@@ -24,6 +29,7 @@ pub enum Extractor {
 }
 
 impl Config {
+    /// ignore the 'enabled' field, create the extractor like if it was enabled.
     //TODO include some metadata into the extractor like the source name
     pub(crate) fn make_extractor(
         &self,
@@ -47,6 +53,16 @@ impl Config {
                     extractor.run(cancel_token).await?;
                     tracing::info!(name, kind = "source", "exiting");
                     drop(extractor); // to drop in cascade channel's sender
+                    Ok(())
+                }))
+            }
+            #[cfg(feature = "source_sse")]
+            Config::Sse(config) => {
+                let extractor = sse::SseExtractor::from(config, next);
+                Extractor::Task(tokio::spawn(async move {
+                    extractor.run(cancel_token).await?;
+                    tracing::info!(name, kind = "source", "exiting");
+                    // extractor is moved into run(), so no need to drop explicitly
                     Ok(())
                 }))
             }
