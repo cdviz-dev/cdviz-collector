@@ -77,7 +77,8 @@ mod tests {
         let sink = FolderSink::try_from(config).unwrap();
 
         let id = cdevent.id();
-        let msg = crate::Message { cdevent: cdevent.clone() };
+        let msg =
+            crate::Message { cdevent: cdevent.clone(), headers: std::collections::HashMap::new() };
         let file = tmp_dir.path().join(format!("{id}.json"));
         assert!(!file.exists());
         let_assert!(Ok(()) = sink.send(&msg).await);

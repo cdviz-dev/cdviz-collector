@@ -104,6 +104,17 @@ impl HttpSink {
     }
 }
 
+/// Add source headers from the message to the request
+fn add_source_headers(
+    mut req: RequestBuilder,
+    source_headers: &std::collections::HashMap<String, String>,
+) -> RequestBuilder {
+    for (name, value) in source_headers {
+        req = req.header(name, value);
+    }
+    req
+}
+
 impl Sink for HttpSink {
     //TODO use cloudevents
     async fn send(&self, msg: &Message) -> Result<()> {
@@ -125,7 +136,11 @@ impl Sink for HttpSink {
             }
         };
 
+        // Add source headers first
+        req = add_source_headers(req, &msg.headers);
+
         // Add configured headers (including signatures based on body)
+        // These can override source headers if there are conflicts
         req = self.add_headers(req, &body_bytes)?;
 
         req = match event_result {
@@ -429,6 +444,134 @@ mod security_tests {
 
         // Verify that tracing middleware is present and doesn't interfere
         let_assert!(Ok(()) = sink.send(&msg).await);
+    }
+
+    #[tokio::test]
+    async fn test_http_sink_forwards_source_headers() {
+        use crate::sources::EventSource;
+        use cdevents_sdk::CDEvent;
+        use serde_json::json;
+        use std::collections::HashMap;
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .and(wiremock::matchers::header("X-Source-Header", "source-value"))
+            .and(wiremock::matchers::header("Authorization", "Bearer source-token"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            enabled: true,
+            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+            headers: vec![],
+        };
+        let sink = HttpSink::try_from(config).unwrap();
+
+        // Create a message with source headers
+        let mut source_headers = HashMap::new();
+        source_headers.insert("X-Source-Header".to_string(), "source-value".to_string());
+        source_headers.insert("Authorization".to_string(), "Bearer source-token".to_string());
+
+        let event_source = EventSource {
+            metadata: json!({}),
+            headers: source_headers.clone(),
+            body: json!({
+                "context": {
+                    "version": "0.4.0",
+                    "id": "test-header-forward",
+                    "source": "test-source",
+                    "type": "dev.cdevents.service.deployed.0.1.1",
+                    "timestamp": "2024-03-14T10:30:00Z"
+                },
+                "subject": {
+                    "id": "test-subject",
+                    "source": "test-source",
+                    "type": "service",
+                    "content": {
+                        "environment": {
+                            "id": "test-env"
+                        },
+                        "artifactId": "pkg:test/artifact@1.0.0"
+                    }
+                }
+            }),
+        };
+
+        let cdevent = CDEvent::try_from(event_source).unwrap();
+        let message = Message { cdevent, headers: source_headers };
+
+        let_assert!(Ok(()) = sink.send(&message).await);
+    }
+
+    #[tokio::test]
+    async fn test_http_sink_configured_headers_override_source_headers() {
+        use crate::security::rule::{HeaderRuleConfig, Rule};
+        use crate::sources::EventSource;
+        use cdevents_sdk::CDEvent;
+        use serde_json::json;
+        use std::collections::HashMap;
+
+        let mock_server = MockServer::start().await;
+
+        // Should receive the configured header value, not the source header value
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .and(wiremock::matchers::header("Authorization", "Bearer configured-token"))
+            .and(wiremock::matchers::header("X-Source-Only", "source-only-value"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            enabled: true,
+            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+            headers: vec![HeaderRuleConfig {
+                header: "Authorization".to_string(),
+                rule: Rule::Equals {
+                    value: "Bearer configured-token".to_string(),
+                    case_sensitive: true,
+                },
+            }],
+        };
+        let sink = HttpSink::try_from(config).unwrap();
+
+        // Create a message with source headers that will conflict with configured headers
+        let mut source_headers = HashMap::new();
+        source_headers.insert("Authorization".to_string(), "Bearer source-token".to_string()); // This should be overridden
+        source_headers.insert("X-Source-Only".to_string(), "source-only-value".to_string()); // This should remain
+
+        let event_source = EventSource {
+            metadata: json!({}),
+            headers: source_headers.clone(),
+            body: json!({
+                "context": {
+                    "version": "0.4.0",
+                    "id": "test-header-override",
+                    "source": "test-source",
+                    "type": "dev.cdevents.service.deployed.0.1.1",
+                    "timestamp": "2024-03-14T10:30:00Z"
+                },
+                "subject": {
+                    "id": "test-subject",
+                    "source": "test-source",
+                    "type": "service",
+                    "content": {
+                        "environment": {
+                            "id": "test-env"
+                        },
+                        "artifactId": "pkg:test/artifact@1.0.0"
+                    }
+                }
+            }),
+        };
+
+        let cdevent = CDEvent::try_from(event_source).unwrap();
+        let message = Message { cdevent, headers: source_headers };
+
+        let_assert!(Ok(()) = sink.send(&message).await);
     }
 }
 

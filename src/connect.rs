@@ -31,6 +31,8 @@ pub(crate) type Receiver<T> = tokio::sync::broadcast::Receiver<T>;
 pub(crate) struct Message {
     // received_at: OffsetDateTime,
     pub(crate) cdevent: CDEvent,
+    #[allow(dead_code)] // Headers will be used by sinks that need them
+    pub(crate) headers: std::collections::HashMap<String, String>,
     //raw: serde_json::Value,
 }
 
@@ -39,6 +41,7 @@ impl From<CDEvent> for Message {
         Self {
             // received_at: OffsetDateTime::now_utc(),
             cdevent: value,
+            headers: std::collections::HashMap::new(),
         }
     }
 }
