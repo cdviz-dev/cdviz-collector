@@ -2,6 +2,8 @@ pub(crate) mod extractors;
 #[cfg(feature = "source_opendal")]
 pub(crate) mod opendal;
 mod send_cdevents;
+#[cfg(feature = "source_sse")]
+pub(crate) mod sse;
 pub(crate) mod transformers;
 pub(crate) mod webhook;
 

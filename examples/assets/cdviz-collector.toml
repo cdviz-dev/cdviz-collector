@@ -10,6 +10,10 @@
 # enabled = false
 # type = "sse"
 # id = "001"
+# headers = [
+#   { header = "Authorization", rule = { type = "exists" } },
+#   { header = "X-API-Key", rule = { type = "matches", pattern = "^[a-zA-Z0-9]{32}$" } }
+# ]
 
 [sinks.cdevents_local_json]
 enabled = false
@@ -140,3 +144,17 @@ template = """
   "body": .body,
 }]
 """
+
+
+[sources.cdevents_sse]
+enabled = false
+
+[sources.cdevents_sse.extractor]
+type = "sse"
+url = "http://localhost:8080/sse/001"
+# headers = [
+#   { header = "Authorization", rule = { type = "static", value = "Bearer your-token-here" } },
+#   { header = "X-API-Key", rule = { type = "secret", value = "your-api-key-from-env" } },
+#   { header = "X-Signature-256", rule = { type = "signature", token = "webhook-secret", signature_prefix = "sha256=" } }
+# ]
+# max_retries = 10
