@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.8.1...0.9.0) - 2025-07-22
+
+### Added
+
+- allow Sinks to transfert headers from source to destination
+- add Server-Sent Event (SSE) as source/extractor
+- [**breaking**] add `headers` configuration to validate incoming http request and generate some outgoing request
+- add Server-Sent Event (SSE) as sink
+
+### Fixed
+
+- *(deps)* update rust crate init-tracing-opentelemetry to 0.30
+- *(deps)* update rust crate opendal to 0.54
+- *(deps)* update rust crate tokio to v1.46.0
+- *(deps)* update rust crate serde_with to v3.14.0
+- *(deps)* update rust crate vrl to 0.25
+
+### Other
+
+- update biome config
+- disable some linter
+- add AI assitant configuration
+- format examples
+- add some test
+- use `cdviz` schema with sink db (to be aligned with cdviz-db)
+- *(deps)* update dependency rust to v1.88.0
+
 ## [0.8.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.8.0...0.8.1) - 2025-06-10
 
 ### Fixed
