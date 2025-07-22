@@ -11,6 +11,8 @@ DISABLE_LINTERS:
   - CSS_STYLELINT # not tailwindcss compatible
   - DOCKERFILE_DOCKERFILELINT
   - HTML_HTMLHINT # not tailwindcss compatible
+  - JSON_JSONLINT # doesn't support json5 / jsonc
+  - JSON_V8R # use wrong version schema for biome, ...
   - MARKDOWN_MARKDOWN_LINK_CHECK
   - REPOSITORY_CHECKOV # unstable randomly failed (false negative) on generated k8s manifest
   - REPOSITORY_DEVSKIM # issue with "git config --global --add safe.directory ..."
