@@ -82,14 +82,23 @@ flowchart LR
 This software is distributed under a dual-licensing model:
 
 1. Affero General Public License Version 3.0 ([AGPL-3.0-only](LICENSE)):
-  - The software is available under the AGPL 3.0 license. This means you can use, modify, and distribute the software under the terms of the AGPL 3.0. Any modifications or derivative works must also be licensed under AGPL 3.0.
-  - For more details, see the [AGPL-3.0-only](LICENSE).
+
+- The software is available under the AGPL 3.0 license. This means you can use, modify, and distribute the software under the terms of the AGPL 3.0. Any modifications or derivative works must also be licensed under AGPL 3.0.
+- For more details, see the [AGPL-3.0-only](LICENSE).
+
 2. Proprietary License:
-  - Alternatively, the software is available under a proprietary license. This option is suitable for users who require different terms or additional permissions not granted by the AGPL 3.0.
-  - For more information about obtaining a proprietary license, please contact us at <contact@cdviz.dev>.
+
+- Alternatively, the software is available under a proprietary license. This option is suitable for users who require different terms or additional permissions not granted by the AGPL 3.0.
+- For more information about obtaining a proprietary license, please contact us at <contact@cdviz.dev>.
 
 By using this software, you agree to comply with the terms of one of the above licenses.
 
 For exceptions, see [LICENSING.md](LICENSING.md).
 
-[cdevents]: <https://cdevents.dev/>
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md) for more details.
+
+Note: This project has been developed with assistance from Claude Code. All AI-generated code has been carefully reviewed, tested, and validated to ensure quality, security, and adherence to Rust best practices.
+
+[cdevents]: https://cdevents.dev/
