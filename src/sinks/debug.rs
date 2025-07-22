@@ -21,6 +21,7 @@ impl TryFrom<Config> for DebugSink {
 pub(crate) struct DebugSink {}
 
 impl Sink for DebugSink {
+    #[tracing::instrument(skip(self, msg), fields(cdevent_id = %msg.cdevent.id()))]
     async fn send(&self, msg: &Message) -> Result<()> {
         tracing::info!(cdevent=?msg.cdevent, "mock sending");
         Ok(())
