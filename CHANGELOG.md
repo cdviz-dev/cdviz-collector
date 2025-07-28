@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.9.0...0.9.1) - 2025-07-28
+
+### Fixed
+
+- *(deps)* update rust crate tokio to v1.47.0
+
+### Other
+
+- *(deps)* update rust crate rstest to 0.26
+
 ## [0.9.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.8.1...0.9.0) - 2025-07-22
 
 ### Added
