@@ -65,6 +65,7 @@ pub(crate) struct DbSink {
 }
 
 impl Sink for DbSink {
+    #[tracing::instrument(skip(self, message), fields(cdevent_id = %message.cdevent.id()))]
     async fn send(&self, message: &Message) -> Result<()> {
         store_event(
             &self.pool,

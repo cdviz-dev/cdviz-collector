@@ -9,6 +9,9 @@ use reqwest::Url;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
 use reqwest_tracing::TracingMiddleware;
 use serde::Deserialize;
+use opentelemetry::propagation::Injector;
+use opentelemetry::{Context, global};
+use opentelemetry::trace::TraceContextExt;
 
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct Config {
@@ -115,8 +118,70 @@ fn add_source_headers(
     req
 }
 
+/// Add W3C Trace Context headers using OpenTelemetry propagation
+fn add_trace_context_headers(
+    mut req: RequestBuilder,
+    trace_context: Option<&crate::connect::TraceContext>,
+) -> RequestBuilder {
+    if let Some(trace_ctx) = trace_context {
+        // Create OpenTelemetry context with trace information
+        use opentelemetry::trace::{SpanContext, TraceFlags, TraceState};
+
+        let span_context = SpanContext::new(
+            trace_ctx.trace_id,
+            trace_ctx.span_id,
+            TraceFlags::new(trace_ctx.trace_flags),
+            false,
+            TraceState::NONE,
+        );
+        
+        // Create context with the remote span context for propagation
+        let context = Context::current().with_remote_span_context(span_context);
+
+        // Create a header injector for the request
+        let mut header_injector = HeaderInjector::new();
+        
+        // Use the global text map propagator to inject headers
+        global::get_text_map_propagator(|propagator| {
+            propagator.inject_context(&context, &mut header_injector);
+        });
+
+        // Add all injected headers to the request
+        for (key, value) in header_injector.headers {
+            req = req.header(key, value);
+        }
+
+        tracing::debug!(
+            trace_id = %trace_ctx.trace_id,
+            span_id = %trace_ctx.span_id,
+            "Added trace context headers to outgoing HTTP request using OpenTelemetry propagation"
+        );
+    }
+    req
+}
+
+/// Header injector for OpenTelemetry propagation
+struct HeaderInjector {
+    headers: std::collections::HashMap<String, String>,
+}
+
+impl HeaderInjector {
+    fn new() -> Self {
+        Self {
+            headers: std::collections::HashMap::new(),
+        }
+    }
+}
+
+impl Injector for HeaderInjector {
+    fn set(&mut self, key: &str, value: String) {
+        self.headers.insert(key.to_string(), value);
+    }
+}
+
 impl Sink for HttpSink {
     //TODO use cloudevents
+    #[tracing::instrument(skip(self, msg), fields(cdevent_id = %msg.cdevent.id()))]
     async fn send(&self, msg: &Message) -> Result<()> {
         let cd_event = msg.cdevent.clone();
         // convert  CdEvent to cloudevents
@@ -138,6 +203,9 @@ impl Sink for HttpSink {
 
         // Add source headers first
         req = add_source_headers(req, &msg.headers);
+
+        // Add trace context headers for distributed tracing
+        req = add_trace_context_headers(req, &msg.trace_context);
 
         // Add configured headers (including signatures based on body)
         // These can override source headers if there are conflicts
@@ -501,7 +569,7 @@ mod security_tests {
         };
 
         let cdevent = CDEvent::try_from(event_source).unwrap();
-        let message = Message { cdevent, headers: source_headers };
+        let message = Message { cdevent, headers: source_headers, trace_context: None };
 
         let_assert!(Ok(()) = sink.send(&message).await);
     }
@@ -569,7 +637,7 @@ mod security_tests {
         };
 
         let cdevent = CDEvent::try_from(event_source).unwrap();
-        let message = Message { cdevent, headers: source_headers };
+        let message = Message { cdevent, headers: source_headers, trace_context: None };
 
         let_assert!(Ok(()) = sink.send(&message).await);
     }

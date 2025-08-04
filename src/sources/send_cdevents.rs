@@ -22,8 +22,8 @@ impl Pipe for Processor {
         // TODO if source is empty, set a default value based on configuration TBD
         let cdevent = CDEvent::try_from(input.clone())?;
 
-        // Include headers from EventSource into the message
-        let message = Message { cdevent, headers: input.headers };
+        // Include headers from EventSource into the message and capture trace context
+        let message = Message::with_trace_context(cdevent, input.headers);
 
         self.next.send(message).into_diagnostic()?;
         Ok(())
