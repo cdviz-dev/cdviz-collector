@@ -30,6 +30,7 @@ pub(crate) struct FolderSink {
 }
 
 impl Sink for FolderSink {
+    #[tracing::instrument(skip(self, msg), fields(cdevent_id = %msg.cdevent.id()))]
     async fn send(&self, msg: &Message) -> Result<()> {
         let id = msg.cdevent.id();
         let mut writer = self.op.writer(&format!("{id}.json")).await.into_diagnostic()?;
@@ -77,8 +78,11 @@ mod tests {
         let sink = FolderSink::try_from(config).unwrap();
 
         let id = cdevent.id();
-        let msg =
-            crate::Message { cdevent: cdevent.clone(), headers: std::collections::HashMap::new() };
+        let msg = crate::Message {
+            cdevent: cdevent.clone(),
+            headers: std::collections::HashMap::new(),
+            trace_context: None,
+        };
         let file = tmp_dir.path().join(format!("{id}.json"));
         assert!(!file.exists());
         let_assert!(Ok(()) = sink.send(&msg).await);
