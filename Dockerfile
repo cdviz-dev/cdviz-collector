@@ -40,13 +40,13 @@ ENV USER=nonroot
 ENV UID=10001
 
 RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/nonexistent" \
-    --shell "/sbin/nologin" \
-    --no-create-home \
-    --uid "${UID}" \
-    "${USER}"
+  --disabled-password \
+  --gecos "" \
+  --home "/nonexistent" \
+  --shell "/sbin/nologin" \
+  --no-create-home \
+  --uid "${UID}" \
+  "${USER}"
 
 WORKDIR /work
 
@@ -88,13 +88,13 @@ ENV USER=nonroot
 ENV UID=10001
 
 RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/nonexistent" \
-    --shell "/sbin/nologin" \
-    --no-create-home \
-    --uid "${UID}" \
-    "${USER}"
+  --disabled-password \
+  --gecos "" \
+  --home "/nonexistent" \
+  --shell "/sbin/nologin" \
+  --no-create-home \
+  --uid "${UID}" \
+  "${USER}"
 
 WORKDIR /work
 
@@ -151,7 +151,8 @@ COPY --from=download /etc/passwd /etc/passwd
 COPY --from=download /etc/group /etc/group
 USER nonroot
 COPY --from=download /app/${TARGETPLATFORM} /usr/local/bin/cdviz-collector
-COPY ./config /etc/cdviz-collector
+# use wildcard to copy/follow all files from the directory and not copy as symlinks
+COPY ./config/transformers/* /etc/cdviz-collector/transformers/.
 
 ENV \
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="http://127.0.0.1:4317" \

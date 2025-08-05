@@ -55,8 +55,8 @@ run = [
 [tasks.obfuscate]
 description = "obfuscate some data into the samples"
 run = [
-    "json-simple-obfuscator examples/assets/inputs/kubewatch_cloudevents/*/*.json",
-    "json-simple-obfuscator examples/assets/inputs/github_events/*/*.json",
+    "json-simple-obfuscator transformers/kubewatch_cloudevents/inputs/*/*.json",
+    "json-simple-obfuscator transformers/github_events/inputs/*/*.json",
 ]
 
 [tasks."deny"]
@@ -92,10 +92,10 @@ run = ["cargo --locked machete --with-metadata",
 ]
 
 [tasks."test"]
-# using `depends_post = ["examples:transform:*"]` trigger an error
-# > Infinitive loop detected, all tasks are finished but the graph isn't empty examples:...
-# So as workaround a wait_for is added to every task examples:transform:...
-depends = ["test:unit", "examples:transform:*"]
+# using `depends_post = ["test:transform:*"]` trigger an error
+# > Infinitive loop detected, all tasks are finished but the graph isn't empty test:...
+# So as workaround a wait_for is added to every task test:transform:...
+depends = ["test:unit", "test:transform:*"]
 wait_for = ["lint", "lint:*"]
 
 [tasks."test:unit"]
@@ -190,41 +190,44 @@ run = ["""
     docker buildx bake --push cdviz-collector
 """]
 
-[tasks."examples:transform:passthrough"]
+[tasks."test:transform:passthrough"]
 description = "run the transformation example passthrough (use `--mode review` to review and update)"
 wait_for = ["test:unit"]
 run = """cargo --locked run --profile test -- \
   transform \
   --mode {{option(name="mode", default="check")}} \
-  --directory ./examples/assets \
+  --directory ./transformers/passthrough \
   --config ./cdviz-collector.toml \
-  --input ./inputs/cdevents_json \
-  --output ./outputs/transform-passthrough
+  -t passthrough \
+  --input ./inputs \
+  --output ./outputs
 """
 
-[tasks."examples:transform:github_events"]
+[tasks."test:transform:github_events"]
 description = "run the transformation example github_events (use `--mode review` to review and update)"
 wait_for = ["test:unit"]
 run = """cargo --locked run --profile test -- \
   transform \
   --mode {{option(name="mode", default="check")}} \
-  --directory ./examples/assets \
+  --directory ./transformers/github_events \
   --config ./cdviz-collector.toml \
   -t github_events \
-  --input ./inputs/github_events \
-  --output ./outputs/transform-github_events"""
+  --input ./inputs \
+  --output ./outputs
+"""
 
-[tasks."examples:transform:kubewatch_cloudevents"]
+[tasks."test:transform:kubewatch_cloudevents"]
 description = "run the transformation example kubewatch_cloudevents (cloudevents) (use `--mode review` to review and update)"
 wait_for = ["test:unit"]
 run = """cargo --locked run --profile test -- \
   transform \
   --mode {{option(name="mode", default="check")}} \
-  --directory ./examples/assets \
+  --directory ./transformers/kubewatch_cloudevents \
   --config ./cdviz-collector.toml \
   -t kubewatch_metadata,kubewatch_cloudevents \
-  --input ./inputs/kubewatch_cloudevents \
-  --output ./outputs/transform-kubewatch_cloudevents"""
+  --input ./inputs \
+  --output ./outputs
+"""
 
 [tasks."examples:httpyac"]
 description = "run the httpyac on `examples/assets` (default to `**/*.http`, eg. `mise run examples:httpyac '**/*.http'`)"
