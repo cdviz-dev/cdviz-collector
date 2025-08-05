@@ -74,6 +74,7 @@ description = "Lint all the code (megalinter + lint_rust)"
 # - lint:megalinter
 
 [tasks."lint:rust"]
+wait_for = ["build:cli"]
 run = [
     "cargo --locked fmt --all -- --check",
     "cargo --locked sort --grouped --check",
@@ -99,7 +100,7 @@ depends = ["test:unit", "test:transform:*"]
 wait_for = ["lint", "lint:*"]
 
 [tasks."test:unit"]
-wait_for = ["lint", "lint:*"]
+wait_for = ["lint", "lint:*", "build:cli"]
 run = [
     "cargo --locked nextest run",
     # "cargo test --doc",
@@ -190,10 +191,16 @@ run = ["""
     docker buildx bake --push cdviz-collector
 """]
 
+[tasks."build:cli"]
+description = "build a cli, mainly for local development and test"
+hide = true
+run = "cargo --locked build --profile test"
+
 [tasks."test:transform:passthrough"]
 description = "run the transformation example passthrough (use `--mode review` to review and update)"
 wait_for = ["test:unit"]
-run = """cargo --locked run --profile test -- \
+depends = ["build:cli"]
+run = """./target/debug/cdviz-collector \
   transform \
   --mode {{option(name="mode", default="check")}} \
   --directory ./transformers/passthrough \
@@ -206,7 +213,8 @@ run = """cargo --locked run --profile test -- \
 [tasks."test:transform:github_events"]
 description = "run the transformation example github_events (use `--mode review` to review and update)"
 wait_for = ["test:unit"]
-run = """cargo --locked run --profile test -- \
+depends = ["build:cli"]
+run = """./target/debug/cdviz-collector \
   transform \
   --mode {{option(name="mode", default="check")}} \
   --directory ./transformers/github_events \
@@ -219,7 +227,8 @@ run = """cargo --locked run --profile test -- \
 [tasks."test:transform:kubewatch_cloudevents"]
 description = "run the transformation example kubewatch_cloudevents (cloudevents) (use `--mode review` to review and update)"
 wait_for = ["test:unit"]
-run = """cargo --locked run --profile test -- \
+depends = ["build:cli"]
+run = """./target/debug/cdviz-collector \
   transform \
   --mode {{option(name="mode", default="check")}} \
   --directory ./transformers/kubewatch_cloudevents \
