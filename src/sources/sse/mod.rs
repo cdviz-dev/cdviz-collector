@@ -3,6 +3,8 @@ pub mod config;
 pub use config::Config;
 
 use crate::errors::Result;
+#[cfg(test)]
+use crate::security::rule::HeaderRuleMap;
 use crate::sources::{EventSource, EventSourcePipe};
 use futures::StreamExt;
 use reqwest_eventsource::{Event, RequestBuilderExt};
@@ -90,7 +92,7 @@ impl SseSourceState {
         let mut request_builder = reqwest::Client::new().get(&self.config.url);
 
         // Generate and add configured headers
-        match crate::security::header::generate_headers(&self.config.headers, None) {
+        match crate::security::header::generate_headers(&self.config.headers_as_configs(), None) {
             Ok(headers) => {
                 request_builder = request_builder.headers(headers);
             }
@@ -186,14 +188,18 @@ mod tests {
 
     #[test]
     fn test_config_serialization() {
-        use crate::security::header::{HeaderSource, OutgoingHeaderConfig};
+        use crate::security::header::{HeaderSource, OutgoingHeaderMap};
 
         let config = Config {
             url: "https://example.com/events".to_string(),
-            headers: vec![OutgoingHeaderConfig {
-                header: "Authorization".to_string(),
-                rule: HeaderSource::Static { value: "Bearer token".to_string() },
-            }],
+            headers: {
+                let mut map = OutgoingHeaderMap::new();
+                map.insert(
+                    "Authorization".to_string(),
+                    HeaderSource::Static { value: "Bearer token".to_string() },
+                );
+                map
+            },
             max_retries: Some(5),
             enabled: true,
         };
@@ -253,6 +259,7 @@ mod tests {
 mod integration_tests {
     use super::*;
     use crate::pipes::collect_to_vec::Collector;
+    use crate::security::header::OutgoingHeaderMap;
     use crate::sinks::sse as sse_sink;
     use axum::Router;
     use std::time::Duration;
@@ -266,7 +273,7 @@ mod integration_tests {
         let port = addr.port();
 
         // Create SSE sink
-        let sse_sink = sse_sink::SseSink::new("test-sse".to_string(), vec![]);
+        let sse_sink = sse_sink::SseSink::new("test-sse".to_string(), HeaderRuleMap::new());
         let routes = sse_sink.make_route();
 
         // Create HTTP server with SSE routes
@@ -292,8 +299,12 @@ mod integration_tests {
         let (server_url, _server_handle) = setup_test_sse_sink().await;
 
         // Create SSE source config pointing to the sink
-        let source_config =
-            Config { url: server_url, headers: vec![], max_retries: Some(3), enabled: true };
+        let source_config = Config {
+            url: server_url,
+            headers: OutgoingHeaderMap::new(),
+            max_retries: Some(3),
+            enabled: true,
+        };
 
         // Setup SSE source
         let collector = Collector::<EventSource>::new();
@@ -316,7 +327,7 @@ mod integration_tests {
         // Test with a URL that will return an error quickly
         let source_config = Config {
             url: "http://localhost:99999/nonexistent".to_string(),
-            headers: vec![],
+            headers: OutgoingHeaderMap::new(),
             max_retries: Some(1),
             enabled: true,
         };
@@ -455,15 +466,11 @@ mod unit_tests {
 
     #[test]
     fn test_header_config() {
-        use crate::security::header::{HeaderSource, OutgoingHeaderConfig};
+        use crate::security::header::HeaderSource;
 
-        let header = OutgoingHeaderConfig {
-            header: "Authorization".to_string(),
-            rule: HeaderSource::Static { value: "Bearer test-token".to_string() },
-        };
+        let header_source = HeaderSource::Static { value: "Bearer test-token".to_string() };
 
-        assert_eq!(header.header, "Authorization");
-        match header.rule {
+        match header_source {
             HeaderSource::Static { value } => assert_eq!(value, "Bearer test-token"),
             _ => panic!("Expected static header source"),
         }
@@ -480,37 +487,12 @@ mod unit_tests {
             enabled = true
             max_retries = 5
 
-            # Headers to include in outgoing SSE requests
-            [[headers]]
-            header = "Authorization"
-
-            [headers.rule]
-            type = "static"
-            value = "Bearer api-token-12345"
-
-            [[headers]]
-            header = "X-API-Key"
-
-            [headers.rule]
-            type = "secret"
-            value = "my-secret-api-key"
-
-            [[headers]]
-            header = "X-Request-Signature"
-
-            [headers.rule]
-            type = "signature"
-            token = "webhook-signing-secret"
-            signature_prefix = "sha256="
-            signature_on = "body"
-            signature_encoding = "hex"
-
-            [[headers]]
-            header = "User-Agent"
-
-            [headers.rule]
-            type = "static"
-            value = "cdviz-collector/1.0"
+            # Headers to include in outgoing SSE requests - new map format
+            [headers]
+            "Authorization" = { type = "static", value = "Bearer api-token-12345" }
+            "X-API-Key" = { type = "secret", value = "my-secret-api-key" }
+            "X-Request-Signature" = { type = "signature", token = "webhook-signing-secret", signature_prefix = "sha256=", signature_on = "body", signature_encoding = "hex" }
+            "User-Agent" = { type = "static", value = "cdviz-collector/1.0" }
         "#};
 
         let config: Config = toml::from_str(toml_str).unwrap();
@@ -521,8 +503,7 @@ mod unit_tests {
         assert_eq!(config.headers.len(), 4);
 
         // Validate Authorization header (static)
-        assert_eq!(config.headers[0].header, "Authorization");
-        match &config.headers[0].rule {
+        match config.headers.get("Authorization").unwrap() {
             crate::security::header::HeaderSource::Static { value } => {
                 assert_eq!(value, "Bearer api-token-12345");
             }
@@ -530,8 +511,7 @@ mod unit_tests {
         }
 
         // Validate X-API-Key header (secret)
-        assert_eq!(config.headers[1].header, "X-API-Key");
-        match &config.headers[1].rule {
+        match config.headers.get("X-API-Key").unwrap() {
             crate::security::header::HeaderSource::Secret { value } => {
                 assert_eq!(value.expose_secret(), "my-secret-api-key");
             }
@@ -539,8 +519,7 @@ mod unit_tests {
         }
 
         // Validate X-Request-Signature header (signature)
-        assert_eq!(config.headers[2].header, "X-Request-Signature");
-        match &config.headers[2].rule {
+        match config.headers.get("X-Request-Signature").unwrap() {
             crate::security::header::HeaderSource::Signature {
                 token,
                 signature_prefix,
@@ -550,15 +529,14 @@ mod unit_tests {
             } => {
                 assert_eq!(token.expose_secret(), "webhook-signing-secret");
                 assert_eq!(signature_prefix, &Some("sha256=".to_string()));
-                assert_eq!(signature_on, &crate::security::signature::SignatureOn::Body);
-                assert_eq!(signature_encoding, &crate::security::signature::Encoding::Hex);
+                assert_eq!(*signature_on, crate::security::signature::SignatureOn::Body);
+                assert_eq!(*signature_encoding, crate::security::signature::Encoding::Hex);
             }
             _ => panic!("Expected signature header for X-Request-Signature"),
         }
 
         // Validate User-Agent header (static)
-        assert_eq!(config.headers[3].header, "User-Agent");
-        match &config.headers[3].rule {
+        match config.headers.get("User-Agent").unwrap() {
             crate::security::header::HeaderSource::Static { value } => {
                 assert_eq!(value, "cdviz-collector/1.0");
             }

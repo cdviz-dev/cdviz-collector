@@ -1,6 +1,8 @@
 use super::EventSourcePipe;
 use crate::errors::ReportWrapper;
-use crate::security::rule::{HeaderRuleConfig, validate_headers};
+use crate::security::rule::{
+    HeaderRuleConfig, HeaderRuleMap, header_rule_map_to_configs, validate_headers,
+};
 use crate::security::signature;
 use crate::sources::EventSource;
 use axum::Json;
@@ -21,9 +23,9 @@ pub(crate) struct Config {
     /// HTTP headers to forward into the pipeline
     #[serde(default)]
     pub(crate) headers_to_keep: Vec<String>,
-    /// Header rules for incoming webhook requests
+    /// Header rules for incoming webhook requests - new map format
     #[serde(default)]
-    pub(crate) headers: Vec<HeaderRuleConfig>,
+    pub(crate) headers: HeaderRuleMap,
     /// Verify the incoming request and the signature
     #[deprecated(since = "0.9.0", note = "Use `headers` instead")]
     #[serde(default)]
@@ -38,7 +40,7 @@ struct WebhookState {
 }
 
 pub(crate) fn make_route(config: &Config, next: EventSourcePipe) -> Router {
-    let mut headers = config.headers.clone();
+    let mut headers = header_rule_map_to_configs(&config.headers);
     #[allow(deprecated)]
     if let Some(signature) = config.signature.as_ref() {
         headers.push(HeaderRuleConfig::from(signature.clone()));
@@ -260,7 +262,7 @@ mod tests_headers_conversion {
 mod security_tests {
     use super::*;
     use crate::pipes::collect_to_vec;
-    use crate::security::rule::{HeaderRuleConfig, Rule};
+    use crate::security::rule::Rule;
     use crate::security::signature::{Encoding, SignatureConfig, SignatureOn};
     use assert2::let_assert;
     use axum::body::Body;
@@ -273,7 +275,7 @@ mod security_tests {
         let config = Config {
             id: "secure".to_string(),
             headers_to_keep: vec!["Content-Type".to_string()],
-            headers: vec![],
+            headers: HeaderRuleMap::new(),
             signature: Some(SignatureConfig {
                 header: "X-Hub-Signature-256".to_string(),
                 token: "secret-token".into(),
@@ -316,7 +318,7 @@ mod security_tests {
         let config = Config {
             id: "secure".to_string(),
             headers_to_keep: vec![],
-            headers: vec![],
+            headers: HeaderRuleMap::new(),
             signature: Some(SignatureConfig {
                 header: "X-Hub-Signature-256".to_string(),
                 token: "secret-token".into(),
@@ -348,7 +350,7 @@ mod security_tests {
         let config = Config {
             id: "secure".to_string(),
             headers_to_keep: vec![],
-            headers: vec![],
+            headers: HeaderRuleMap::new(),
             signature: Some(SignatureConfig {
                 header: "X-Hub-Signature-256".to_string(),
                 token: "secret-token".into(),
@@ -380,7 +382,7 @@ mod security_tests {
         let config = Config {
             id: "test".to_string(),
             headers_to_keep: vec![],
-            headers: vec![],
+            headers: HeaderRuleMap::new(),
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
@@ -405,7 +407,7 @@ mod security_tests {
         let config = Config {
             id: "test".to_string(),
             headers_to_keep: vec![],
-            headers: vec![],
+            headers: HeaderRuleMap::new(),
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
@@ -432,7 +434,7 @@ mod security_tests {
         let config = Config {
             id: "../../../etc/passwd".to_string(),
             headers_to_keep: vec![],
-            headers: vec![],
+            headers: HeaderRuleMap::new(),
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
@@ -456,7 +458,7 @@ mod security_tests {
         let config = Config {
             id: "test".to_string(),
             headers_to_keep: vec!["Authorization".to_string(), "Content-Type".to_string()],
-            headers: vec![],
+            headers: HeaderRuleMap::new(),
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
@@ -488,10 +490,14 @@ mod security_tests {
         let config = Config {
             id: "auth-test".to_string(),
             headers_to_keep: vec!["Content-Type".to_string()],
-            headers: vec![HeaderRuleConfig {
-                header: "Authorization".to_string(),
-                rule: Rule::Matches { pattern: r"^Bearer \w+$".to_string() },
-            }],
+            headers: {
+                let mut map = HeaderRuleMap::new();
+                map.insert(
+                    "Authorization".to_string(),
+                    Rule::Matches { pattern: r"^Bearer \w+$".to_string() },
+                );
+                map
+            },
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
@@ -517,13 +523,14 @@ mod security_tests {
         let config = Config {
             id: "auth-test".to_string(),
             headers_to_keep: vec![],
-            headers: vec![HeaderRuleConfig {
-                header: "Authorization".to_string(),
-                rule: Rule::Equals {
-                    value: "Bearer secret-token".to_string(),
-                    case_sensitive: true,
-                },
-            }],
+            headers: {
+                let mut map = HeaderRuleMap::new();
+                map.insert(
+                    "Authorization".to_string(),
+                    Rule::Equals { value: "Bearer secret-token".to_string(), case_sensitive: true },
+                );
+                map
+            },
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
@@ -548,7 +555,11 @@ mod security_tests {
         let config = Config {
             id: "auth-test".to_string(),
             headers_to_keep: vec![],
-            headers: vec![HeaderRuleConfig { header: "X-API-Key".to_string(), rule: Rule::Exists }],
+            headers: {
+                let mut map = HeaderRuleMap::new();
+                map.insert("X-API-Key".to_string(), Rule::Exists);
+                map
+            },
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
@@ -573,10 +584,14 @@ mod security_tests {
         let config = Config {
             id: "secure-auth".to_string(),
             headers_to_keep: vec!["Content-Type".to_string()],
-            headers: vec![HeaderRuleConfig {
-                header: "X-API-Key".to_string(),
-                rule: Rule::Equals { value: "api-secret".to_string(), case_sensitive: true },
-            }],
+            headers: {
+                let mut map = HeaderRuleMap::new();
+                map.insert(
+                    "X-API-Key".to_string(),
+                    Rule::Equals { value: "api-secret".to_string(), case_sensitive: true },
+                );
+                map
+            },
             signature: Some(SignatureConfig {
                 header: "X-Hub-Signature-256".to_string(),
                 token: "secret-token".into(),
@@ -620,16 +635,20 @@ mod security_tests {
         let config = Config {
             id: "signature-auth".to_string(),
             headers_to_keep: vec![],
-            headers: vec![HeaderRuleConfig {
-                header: "X-Hub-Signature-256".to_string(),
-                rule: Rule::Signature {
-                    token: "secret-token".into(),
-                    token_encoding: None,
-                    signature_prefix: Some("sha256=".to_string()),
-                    signature_on: SignatureOn::Body,
-                    signature_encoding: crate::security::signature::Encoding::Hex,
-                },
-            }],
+            headers: {
+                let mut map = HeaderRuleMap::new();
+                map.insert(
+                    "X-Hub-Signature-256".to_string(),
+                    Rule::Signature {
+                        token: "secret-token".into(),
+                        token_encoding: None,
+                        signature_prefix: Some("sha256=".to_string()),
+                        signature_on: SignatureOn::Body,
+                        signature_encoding: crate::security::signature::Encoding::Hex,
+                    },
+                );
+                map
+            },
             signature: None, // Using header rules instead of signature field
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();

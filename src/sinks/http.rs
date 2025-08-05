@@ -1,26 +1,28 @@
 use super::Sink;
 use crate::Message;
 use crate::errors::{IntoDiagnostic, Report, Result};
-use crate::security::rule::HeaderRuleConfig;
+use crate::security::header::{
+    OutgoingHeaderMap, generate_headers, outgoing_header_map_to_configs,
+};
 use cdevents_sdk::cloudevents::BuilderExt;
 use cloudevents::{EventBuilder, EventBuilderV10};
 use http_cloudevents::RequestBuilderExt;
+use opentelemetry::propagation::Injector;
+use opentelemetry::trace::TraceContextExt;
+use opentelemetry::{Context, global};
 use reqwest::Url;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
 use reqwest_tracing::TracingMiddleware;
 use serde::Deserialize;
-use opentelemetry::propagation::Injector;
-use opentelemetry::{Context, global};
-use opentelemetry::trace::TraceContextExt;
 
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct Config {
     /// Is the sink is enabled?
     pub(crate) enabled: bool,
     destination: Url,
-    /// Header generation for outgoing HTTP requests
+    /// Header generation for outgoing HTTP requests - new map format
     #[serde(default)]
-    pub(crate) headers: Vec<HeaderRuleConfig>,
+    pub(crate) headers: OutgoingHeaderMap,
 }
 
 impl TryFrom<Config> for HttpSink {
@@ -35,11 +37,11 @@ impl TryFrom<Config> for HttpSink {
 pub(crate) struct HttpSink {
     client: ClientWithMiddleware,
     dest: Url,
-    headers: Vec<HeaderRuleConfig>,
+    headers: OutgoingHeaderMap,
 }
 
 impl HttpSink {
-    pub(crate) fn new(url: Url, headers: Vec<HeaderRuleConfig>) -> Self {
+    pub(crate) fn new(url: Url, headers: OutgoingHeaderMap) -> Self {
         // Retry up to 3 times with increasing intervals between attempts.
         //let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let client = ClientBuilder::new(reqwest::Client::new())
@@ -52,58 +54,18 @@ impl HttpSink {
     }
 
     /// Generate and add configured headers to the request
-    fn add_headers(&self, mut req: RequestBuilder, body: &[u8]) -> Result<RequestBuilder> {
-        use crate::security::rule::Rule;
-
-        for header_config in &self.headers {
-            match &header_config.rule {
-                // For static values, just set the header
-                Rule::Equals { value, .. } => {
-                    req = req.header(&header_config.header, value);
-                }
-
-                // For signatures, generate the signature and set the header
-                Rule::Signature {
-                    token,
-                    token_encoding,
-                    signature_prefix,
-                    signature_on,
-                    signature_encoding,
-                } => {
-                    use crate::security::signature::{self, SignatureConfig};
-
-                    let signature_config = SignatureConfig {
-                        header: header_config.header.clone(),
-                        token: token.clone(),
-                        token_encoding: token_encoding.clone(),
-                        signature_prefix: signature_prefix.clone(),
-                        signature_on: signature_on.clone(),
-                        signature_encoding: signature_encoding.clone(),
-                    };
-
-                    // Build signature using the body
-                    let signature = signature::build_signature(
-                        &signature_config,
-                        &axum::http::HeaderMap::new(), // No existing headers for signature computation
-                        body,
-                    )
-                    .into_diagnostic()?;
-
-                    req = req.header(&header_config.header, signature);
-                }
-
-                // Other validation methods are not supported for header generation
-                _ => {
-                    tracing::warn!(
-                        header = header_config.header,
-                        validation_type = ?header_config.rule,
-                        "Unsupported validation method for HTTP header generation"
-                    );
-                }
+    fn add_headers(&self, req: RequestBuilder, body: &[u8]) -> Result<RequestBuilder> {
+        let header_configs = outgoing_header_map_to_configs(&self.headers);
+        match generate_headers(&header_configs, Some(body)) {
+            Ok(headers) => {
+                // Since both axum and reqwest use the same http crate types, we can use headers directly
+                Ok(req.headers(headers))
+            }
+            Err(e) => {
+                tracing::error!("Failed to generate headers: {}", e);
+                Err(e).into_diagnostic()
             }
         }
-
-        Ok(req)
     }
 }
 
@@ -134,13 +96,13 @@ fn add_trace_context_headers(
             false,
             TraceState::NONE,
         );
-        
+
         // Create context with the remote span context for propagation
         let context = Context::current().with_remote_span_context(span_context);
 
         // Create a header injector for the request
         let mut header_injector = HeaderInjector::new();
-        
+
         // Use the global text map propagator to inject headers
         global::get_text_map_propagator(|propagator| {
             propagator.inject_context(&context, &mut header_injector);
@@ -167,9 +129,7 @@ struct HeaderInjector {
 
 impl HeaderInjector {
     fn new() -> Self {
-        Self {
-            headers: std::collections::HashMap::new(),
-        }
+        Self { headers: std::collections::HashMap::new() }
     }
 }
 
@@ -205,7 +165,7 @@ impl Sink for HttpSink {
         req = add_source_headers(req, &msg.headers);
 
         // Add trace context headers for distributed tracing
-        req = add_trace_context_headers(req, &msg.trace_context);
+        req = add_trace_context_headers(req, msg.trace_context.as_ref());
 
         // Add configured headers (including signatures based on body)
         // These can override source headers if there are conflicts
@@ -263,7 +223,7 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", &mock_server.uri())).unwrap(),
-            headers: vec![],
+            headers: OutgoingHeaderMap::new(),
         };
 
         let sink = HttpSink::try_from(config).unwrap();
@@ -289,7 +249,7 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: vec![],
+            headers: OutgoingHeaderMap::new(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -309,7 +269,7 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: vec![],
+            headers: OutgoingHeaderMap::new(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -323,7 +283,7 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse("http://invalid-host-that-does-not-exist:9999/events").unwrap(),
-            headers: vec![],
+            headers: OutgoingHeaderMap::new(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -345,7 +305,7 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: vec![],
+            headers: OutgoingHeaderMap::new(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -358,7 +318,7 @@ mod tests {
         let config = Config {
             enabled: true,
             destination: Url::parse("https://example.com/events").unwrap(),
-            headers: vec![],
+            headers: OutgoingHeaderMap::new(),
         };
         let_assert!(Ok(_) = HttpSink::try_from(config));
 
@@ -368,7 +328,7 @@ mod tests {
             let config = Config {
                 enabled: true,
                 destination: Url::parse(&format!("{scheme}://example.com/events")).unwrap(),
-                headers: vec![],
+                headers: OutgoingHeaderMap::new(),
             };
             let_assert!(Ok(_) = HttpSink::try_from(config));
         }
@@ -379,6 +339,7 @@ mod tests {
 mod security_tests {
     use super::*;
     use crate::Message;
+    use crate::security::header::HeaderSource;
     use assert2::let_assert;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -390,7 +351,7 @@ mod security_tests {
         let config = Config {
             enabled: true,
             destination: Url::parse("http://insecure.example.com/events").unwrap(),
-            headers: vec![],
+            headers: OutgoingHeaderMap::new(),
         };
 
         // Currently allows HTTP - in production you might want to validate this
@@ -410,8 +371,11 @@ mod security_tests {
         ];
 
         for url in internal_urls {
-            let config =
-                Config { enabled: true, destination: Url::parse(url).unwrap(), headers: vec![] };
+            let config = Config {
+                enabled: true,
+                destination: Url::parse(url).unwrap(),
+                headers: OutgoingHeaderMap::new(),
+            };
 
             // Currently allows internal URLs - in production you might want to validate this
             let_assert!(Ok(_) = HttpSink::try_from(config));
@@ -442,7 +406,7 @@ mod security_tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: vec![],
+            headers: OutgoingHeaderMap::new(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -452,8 +416,6 @@ mod security_tests {
 
     #[test_strategy::proptest(async = "tokio", cases = 10)]
     async fn test_http_sink_with_static_headers(msg: Message) {
-        use crate::security::rule::{HeaderRuleConfig, Rule};
-
         let mock_server = MockServer::start().await;
 
         Mock::given(method("POST"))
@@ -467,22 +429,18 @@ mod security_tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: vec![
-                HeaderRuleConfig {
-                    header: "X-API-Key".to_string(),
-                    rule: Rule::Equals {
-                        value: "test-secret-key".to_string(),
-                        case_sensitive: true,
-                    },
-                },
-                HeaderRuleConfig {
-                    header: "X-Client-ID".to_string(),
-                    rule: Rule::Equals {
-                        value: "cdviz-collector".to_string(),
-                        case_sensitive: true,
-                    },
-                },
-            ],
+            headers: {
+                let mut map = OutgoingHeaderMap::new();
+                map.insert(
+                    "X-API-Key".to_string(),
+                    HeaderSource::Static { value: "test-secret-key".to_string() },
+                );
+                map.insert(
+                    "X-Client-ID".to_string(),
+                    HeaderSource::Static { value: "cdviz-collector".to_string() },
+                );
+                map
+            },
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -506,7 +464,7 @@ mod security_tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: vec![],
+            headers: OutgoingHeaderMap::new(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -534,7 +492,7 @@ mod security_tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: vec![],
+            headers: OutgoingHeaderMap::new(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -576,7 +534,6 @@ mod security_tests {
 
     #[tokio::test]
     async fn test_http_sink_configured_headers_override_source_headers() {
-        use crate::security::rule::{HeaderRuleConfig, Rule};
         use crate::sources::EventSource;
         use cdevents_sdk::CDEvent;
         use serde_json::json;
@@ -596,13 +553,14 @@ mod security_tests {
         let config = Config {
             enabled: true,
             destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: vec![HeaderRuleConfig {
-                header: "Authorization".to_string(),
-                rule: Rule::Equals {
-                    value: "Bearer configured-token".to_string(),
-                    case_sensitive: true,
-                },
-            }],
+            headers: {
+                let mut map = OutgoingHeaderMap::new();
+                map.insert(
+                    "Authorization".to_string(),
+                    HeaderSource::Static { value: "Bearer configured-token".to_string() },
+                );
+                map
+            },
         };
         let sink = HttpSink::try_from(config).unwrap();
 

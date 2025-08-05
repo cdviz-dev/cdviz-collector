@@ -1,4 +1,6 @@
-use crate::security::header::OutgoingHeaderConfig;
+use crate::security::header::{
+    OutgoingHeaderConfig, OutgoingHeaderMap, outgoing_header_map_to_configs,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -6,9 +8,9 @@ pub struct Config {
     /// The SSE endpoint URL to connect to
     pub url: String,
 
-    /// Headers to include in the SSE request
+    /// Headers to include in the SSE request - new map format
     #[serde(default)]
-    pub headers: Vec<OutgoingHeaderConfig>,
+    pub headers: OutgoingHeaderMap,
 
     /// Maximum number of reconnection attempts (default: 10)
     pub max_retries: Option<u32>,
@@ -16,6 +18,13 @@ pub struct Config {
     /// Whether the SSE source is enabled
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+}
+
+impl Config {
+    /// Get headers as Vec<OutgoingHeaderConfig> for internal use
+    pub fn headers_as_configs(&self) -> Vec<OutgoingHeaderConfig> {
+        outgoing_header_map_to_configs(&self.headers)
+    }
 }
 
 fn default_enabled() -> bool {
@@ -26,7 +35,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             url: "http://localhost:8080/sse/001".to_string(),
-            headers: vec![],
+            headers: OutgoingHeaderMap::new(),
             max_retries: Some(10),
             enabled: true,
         }
@@ -48,14 +57,18 @@ mod tests {
 
     #[test]
     fn test_config_serialization() {
-        use crate::security::header::{HeaderSource, OutgoingHeaderConfig};
+        use crate::security::header::HeaderSource;
 
         let config = Config {
             url: "https://example.com/events".to_string(),
-            headers: vec![OutgoingHeaderConfig {
-                header: "Authorization".to_string(),
-                rule: HeaderSource::Static { value: "Bearer token".to_string() },
-            }],
+            headers: {
+                let mut map = OutgoingHeaderMap::new();
+                map.insert(
+                    "Authorization".to_string(),
+                    HeaderSource::Static { value: "Bearer token".to_string() },
+                );
+                map
+            },
             max_retries: Some(5),
             enabled: true,
         };

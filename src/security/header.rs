@@ -1,6 +1,7 @@
 use axum::http::{HeaderMap, HeaderName, HeaderValue};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use super::signature::{self, Encoding, SignatureOn};
@@ -144,6 +145,20 @@ fn generate_header_value_with_context(
         name: config.header.clone(),
         error: e.to_string(),
     })
+}
+
+/// Map-based configuration for outgoing headers
+/// Maps header names directly to their source configurations
+pub type OutgoingHeaderMap = HashMap<String, HeaderSource>;
+
+/// Convert map-based configuration to the internal Vec<OutgoingHeaderConfig> format
+pub fn outgoing_header_map_to_configs(map: &OutgoingHeaderMap) -> Vec<OutgoingHeaderConfig> {
+    map.iter()
+        .map(|(header, source)| OutgoingHeaderConfig {
+            header: header.clone(),
+            rule: source.clone(),
+        })
+        .collect()
 }
 
 /// Simplified configuration format that maps to `OutgoingHeaderConfig`
@@ -473,6 +488,71 @@ mod tests {
                 assert_eq!(signature_prefix, Some("custom=".to_string()));
                 assert_eq!(signature_on, SignatureOn::Body);
                 assert_eq!(signature_encoding, Encoding::Hex);
+            }
+            _ => panic!("Expected signature header source"),
+        }
+    }
+
+    #[test]
+    fn test_outgoing_header_map_to_configs() {
+        let mut map = OutgoingHeaderMap::new();
+        map.insert(
+            "Authorization".to_string(),
+            HeaderSource::Static { value: "Bearer token".to_string() },
+        );
+        map.insert("X-API-Key".to_string(), HeaderSource::Secret { value: "secret123".into() });
+
+        let configs = outgoing_header_map_to_configs(&map);
+        assert_eq!(configs.len(), 2);
+
+        // Find the authorization header
+        let auth_header = configs.iter().find(|h| h.header == "Authorization").unwrap();
+        match &auth_header.rule {
+            HeaderSource::Static { value } => assert_eq!(value, "Bearer token"),
+            _ => panic!("Expected static source"),
+        }
+
+        // Find the API key header
+        let api_key_header = configs.iter().find(|h| h.header == "X-API-Key").unwrap();
+        match &api_key_header.rule {
+            HeaderSource::Secret { .. } => {}
+            _ => panic!("Expected secret source"),
+        }
+    }
+
+    #[test]
+    fn test_toml_parsing_outgoing_header_map() {
+        #[derive(serde::Deserialize)]
+        struct Config {
+            headers: OutgoingHeaderMap,
+        }
+
+        let toml_str = indoc! {r#"
+            [headers]
+            "Authorization" = { type = "static", value = "Bearer token123" }
+            "X-API-Key" = { type = "secret", value = "secret-from-env" }
+            "X-Hub-Signature-256" = { type = "signature", token = "webhook-secret", signature_prefix = "sha256=" }
+            "#};
+
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.headers.len(), 3);
+
+        // Check Authorization header
+        match config.headers.get("Authorization").unwrap() {
+            HeaderSource::Static { value } => assert_eq!(value, "Bearer token123"),
+            _ => panic!("Expected static header source"),
+        }
+
+        // Check X-API-Key header
+        match config.headers.get("X-API-Key").unwrap() {
+            HeaderSource::Secret { .. } => {}
+            _ => panic!("Expected secret header source"),
+        }
+
+        // Check signature header
+        match config.headers.get("X-Hub-Signature-256").unwrap() {
+            HeaderSource::Signature { signature_prefix, .. } => {
+                assert_eq!(signature_prefix, &Some("sha256=".to_string()));
             }
             _ => panic!("Expected signature header source"),
         }
