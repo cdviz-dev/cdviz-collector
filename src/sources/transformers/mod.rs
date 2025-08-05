@@ -1,5 +1,3 @@
-#[cfg(feature = "transformer_hbs")]
-mod hbs;
 #[cfg(feature = "transformer_vrl")]
 mod vrl;
 
@@ -21,9 +19,6 @@ pub(crate) enum Config {
     Log(log::Config),
     #[serde(alias = "discard_all")]
     DiscardAll,
-    #[cfg(feature = "transformer_hbs")]
-    #[serde(alias = "hbs")]
-    Hbs { template: String },
     #[cfg(feature = "transformer_vrl")]
     #[serde(alias = "vrl")]
     Vrl { template: String },
@@ -35,8 +30,6 @@ impl Config {
             Config::Passthrough => Box::new(passthrough::Processor::new(next)),
             Config::Log(config) => Box::new(log::Processor::try_from(config, next)?),
             Config::DiscardAll => Box::new(discard_all::Processor::new()),
-            #[cfg(feature = "transformer_hbs")]
-            Config::Hbs { template } => Box::new(hbs::Processor::new(template, next)?),
             #[cfg(feature = "transformer_vrl")]
             Config::Vrl { template } => Box::new(vrl::Processor::new(template, next)?),
         };
