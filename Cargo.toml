@@ -17,6 +17,11 @@ ignored = [
     "humantime-serde",
 ] # auto-registered and used at runtime
 
+[[bin]]
+name = "cdviz-collector"
+path = "src/main.rs"
+doc = false
+
 [features]
 ## default is "full" feature set
 default = [
