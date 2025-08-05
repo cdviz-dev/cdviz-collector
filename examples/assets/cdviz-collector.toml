@@ -70,88 +70,15 @@ template = """
 }]
 """
 
-[sources.github_local_json]
-enabled = true
-transformer_refs = ["github_events"]
+# [sources.cdevents_sse]
+# enabled = false
 
-[sources.github_local_json.extractor]
-type = "opendal"
-kind = "fs"
-parameters = { root = "./inputs/github_events" }
-polling_interval = "10s"
-recursive = true
-path_patterns = ["**/*.json"]
-parser = "json"
+# [sources.cdevents_sse.extractor]
+# type = "sse"
+# url = "http://localhost:8080/sse/001"
+# max_retries = 10
 
-[sources.github_webhook]
-enabled = true
-transformer_refs = ["github_events"]
-
-[sources.github_webhook.extractor]
-type = "webhook"
-id = "000-github"
-headers_to_keep = []
-# token override by environment variable reads from the secret
-[sources.github_webhook.extractor.headers]
-# "Authorization" = { type = "exists" }
-# "X-API-Key" = { type = "matches", pattern = "^[a-zA-Z0-9]{32}$" }
-"x-hub-signature-256" = { type = "signature", signature_encoding = "hex", signature_on = "body", signature_prefix = "sha256=", token = "changeme" }
-
-[transformers.github_events]
-type = "vrl"
-template_file = "../../config/transformers/github_events.vrl"
-
-[sources.kubewatch_webhook]
-enabled = true
-transformer_refs = [ "log", "kubewatch_metadata", "log", "kubewatch_cloudevents", "log" ]
-
-[sources.kubewatch_webhook.extractor]
-type = "webhook"
-id = "000-kubewatch"
-
-[transformers.kubewatch_metadata]
-type = "vrl"
-template = """
-.metadata = object(.metadata) ?? {}
-
-[{
-  "metadata": merge(.metadata, {
-    "environment_id": "cluster/A-dev",
-  }),
-  "headers": .headers,
-  "body": .body,
-}]
-"""
-
-[transformers.kubewatch_cloudevents]
-type = "vrl"
-template_file = "../../config/transformers/kubewatch_cloudevents.vrl"
-
-[transformers.vrl_identity]
-type = "vrl"
-template = """
-[.]
-"""
-
-[transformers.vrl_copy_l1]
-type = "vrl"
-template = """
-[{
-  "metadata": .metadata,
-  "headers": .headers,
-  "body": .body,
-}]
-"""
-
-
-[sources.cdevents_sse]
-enabled = false
-
-[sources.cdevents_sse.extractor]
-type = "sse"
-url = "http://localhost:8080/sse/001"
-[sources.cdevents_sse.extractor.headers]
+# [sources.cdevents_sse.extractor.headers]
 # "Authorization" = { type = "static", value = "Bearer your-token-here" }
 # "X-API-Key" = { type = "secret", value = "your-api-key-from-env" }
 # "X-Signature-256" = { type = "signature", token = "webhook-secret", signature_prefix = "sha256=" }
-# max_retries = 10

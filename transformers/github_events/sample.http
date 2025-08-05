@@ -1,3 +1,5 @@
+# the webhook should be configured
+
 @host = http://localhost:8080
 @github_webhook_path = /webhook/000-github
 
@@ -21,7 +23,7 @@ GET /healthz
 POST {{host}}{{github_webhook_path}}
 Content-Type: application/json
 
-< ./inputs/github_events/workflow_run/completed.json
+< ./inputs/workflow_run/completed.json
 
 ?? status == 401
 ?? js response.parsedBody.title == Invalid Signature
@@ -32,6 +34,6 @@ POST {{host}}{{github_webhook_path}}
 Content-Type: application/json
 x-hub-signature-256: to_process
 
-< ./inputs/github_events/workflow_run/completed.json
+< ./inputs/workflow_run/completed.json
 
 ?? status == 201
