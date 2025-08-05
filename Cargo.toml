@@ -12,10 +12,7 @@ repository = "https://github.com/cdviz-dev/cdviz-collector"
 publish = true
 
 [package.metadata.cargo-machete]
-ignored = [
-    # "handlebars_misc_helpers",
-    "humantime-serde",
-] # auto-registered and used at runtime
+ignored = ["humantime-serde"] # auto-registered and used at runtime
 
 [[bin]]
 name = "cdviz-collector"
@@ -57,12 +54,11 @@ source_sse = ["dep:reqwest-eventsource", "dep:uuid"]
 config_remote = ["dep:opendal"]
 
 #! ### Transformers
-transformer_hbs = ["dep:handlebars", "dep:handlebars_misc_helpers"]
 transformer_vrl = ["dep:vrl"]
 
 #! ### Tools
 tool_ui = ["dep:cliclack", "dep:console", "dep:similar"]
-tool_transform = ["source_opendal", "tool_ui", "transformer_hbs", "transformer_vrl"]
+tool_transform = ["source_opendal", "tool_ui", "transformer_vrl"]
 
 [dependencies]
 axum = "0.8"
@@ -85,13 +81,6 @@ figment = { version = "0.10", features = ["toml", "env"] }
 figment_file_provider_adapter = "0.1"
 futures = "0.3"
 globset = { version = "0.4", optional = true }
-handlebars = { version = "6", optional = true }
-handlebars_misc_helpers = { version = "0.17", optional = true, default-features = false, features = [
-  "string",
-  "json",
-  "regex",
-  "uuid",
-] }
 hmac = "0.12"
 humantime-serde = "1"
 init-tracing-opentelemetry = { version = "0.30", features = [
