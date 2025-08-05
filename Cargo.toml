@@ -25,6 +25,7 @@ doc = false
 [features]
 ## default is "full" feature set
 default = [
+    "config_remote",
     "sink_db",
     "sink_folder",
     "sink_http",
@@ -32,6 +33,7 @@ default = [
     "source_opendal",
     "source_sse",
     "tool_transform",
+    "transformer_vrl",
 ]
 #! ### Sinks
 sink_db = ["dep:sqlx"]
@@ -48,17 +50,11 @@ sink_http = [
 ]
 sink_sse = ["dep:tokio-stream"]
 #! ### Sources
-source_opendal = [
-    "dep:bytes",
-    "dep:csv",
-    "dep:globset",
-    "dep:handlebars",
-    "dep:handlebars_misc_helpers",
-    "dep:opendal",
-    "transformer_hbs",
-    "transformer_vrl",
-]
+source_opendal = ["dep:bytes", "dep:csv", "dep:globset", "dep:opendal"]
 source_sse = ["dep:reqwest-eventsource", "dep:uuid"]
+
+#! ### Configuration
+config_remote = ["dep:opendal"]
 
 #! ### Transformers
 transformer_hbs = ["dep:handlebars", "dep:handlebars_misc_helpers"]
@@ -107,7 +103,12 @@ miette = { version = "7", features = ["fancy"] }
 multihash = "0.19"
 opendal = { version = "0.54", default-features = false, features = [
   "services-fs",
+  # "services-ftp",
+  "services-gcs",
+  "services-github",
+  "services-http",
   "services-s3",
+  "services-sftp",
 ], optional = true }
 opentelemetry = "0.30"
 regex = "1"
