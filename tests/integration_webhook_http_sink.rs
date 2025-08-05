@@ -1,3 +1,6 @@
+#![allow(clippy::unwrap_used)]
+
+use miette::Result;
 use serde_json::json;
 use std::time::Duration;
 use tempfile::TempDir;
@@ -10,8 +13,8 @@ async fn lauch_collector(
     temp_dir: &TempDir,
     collector_port: u16,
     sink_url: &str,
-) -> tokio::process::Child {
-    // ) -> tokio::task::JoinHandle<Result<bool>> {
+    //) -> tokio::process::Child {
+) -> tokio::task::JoinHandle<Result<bool>> {
     let config_path = temp_dir.path().join("test-config.toml");
 
     // Configuration for cdviz-collector with webhook source and HTTP sink
@@ -38,44 +41,46 @@ destination = "{sink_url}/events"
 
     std::fs::write(&config_path, config_content).unwrap();
 
-    // blocking: build the application (could take a while ~ 20s-60s)
-    // use test profile, like the current running test, to reduce (re) building
-    let _ = std::process::Command::new("cargo")
-        .args(&["build", "--profile", "test"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .spawn()
-        .expect("Failed to build cdviz-collector")
-        .wait()
-        .expect("Failed to build cdviz-collector");
+    // // blocking: build the application (could take a while ~ 20s-60s)
+    // // use test profile, like the current running test, to reduce (re) building
+    // let _ = std::process::Command::new("cargo")
+    //     .args(&["build", "--profile", "test"])
+    //     .current_dir(env!("CARGO_MANIFEST_DIR"))
+    //     .spawn()
+    //     .expect("Failed to build cdviz-collector")
+    //     .wait()
+    //     .expect("Failed to build cdviz-collector");
 
-    // Start cdviz-collector in the background
-    let mut cmd = tokio::process::Command::new(format!("{}/target/debug/cdviz-collector", env!("CARGO_MANIFEST_DIR")))
-        .args(&["connect", "--config"])
-        .arg(&config_path)
-        //.stdout(Stdio::piped())
-        //.stderr(Stdio::piped())
-        .spawn()
-        .expect("Failed to start cdviz-collector");
-    // let task = tokio::spawn(async move {
-    //     let cli = Cli::parse_from(vec!["connect", "--config", &config_path.to_string_lossy()]);
-    //     run(cli).await
-    // });
+    // // Start cdviz-collector in the background
+    // let mut cmd = tokio::process::Command::new(format!("{}/target/debug/cdviz-collector", env!("CARGO_MANIFEST_DIR")))
+    //     .args(&["connect", "--config"])
+    //     .arg(&config_path)
+    //     //.stdout(Stdio::piped())
+    //     //.stderr(Stdio::piped())
+    //     .spawn()
+    //     .expect("Failed to start cdviz-collector");
+
+    // launch collector as library to avoid (re) building it
+    let task = tokio::spawn(async move {
+        cdviz_collector::run_with_args(vec!["connect", "--config", &config_path.to_string_lossy()])
+            .await
+    });
 
     // Wait for collector to start (server takes time to initialize)
-    sleep(Duration::from_millis(5000)).await;
+    sleep(Duration::from_secs(3)).await;
 
-    // Verify the process is still running
-    match cmd.try_wait() {
-        Ok(Some(status)) => {
-            panic!("cdviz-collector exited unexpectedly with status: {}", status);
-        }
-        Ok(None) => {
-            // Process is still running, which is expected for server mode
-        }
-        Err(e) => {
-            panic!("Error checking process status: {}", e);
-        }
-    }
+    // // Verify the process is still running
+    // match cmd.try_wait() {
+    //     Ok(Some(status)) => {
+    //         panic!("cdviz-collector exited unexpectedly with status: {}", status);
+    //     }
+    //     Ok(None) => {
+    //         // Process is still running, which is expected for server mode
+    //     }
+    //     Err(e) => {
+    //         panic!("Error checking process status: {}", e);
+    //     }
+    // }
 
     // Wait for the HTTP server to be ready by trying the webhook endpoint
     let health_client = reqwest::Client::new();
@@ -94,11 +99,12 @@ destination = "{sink_url}/events"
         attempts += 1;
     }
 
-    cmd
+    // cmd
+    task
 }
 
 /// Integration test for webhook source -> HTTP sink pipeline
-/// Tests CDEvent passthrough and trace_id propagation behavior
+/// Tests `CDEvent` passthrough and `trace_id` propagation behavior
 #[tokio::test]
 async fn test_webhook_to_http_sink_with_trace_propagation() {
     // Setup mock HTTP sink server
@@ -129,7 +135,7 @@ async fn test_webhook_to_http_sink_with_trace_propagation() {
     // Create temporary directory for config
     let temp_dir = TempDir::new().unwrap();
 
-    let mut cmd = lauch_collector(&temp_dir, collector_port, &sink_url).await;
+    let cmd = lauch_collector(&temp_dir, collector_port, &sink_url).await;
 
     // Send test CDEvent to webhook with trace context
     let test_event = create_test_cdevent();
@@ -150,14 +156,14 @@ async fn test_webhook_to_http_sink_with_trace_propagation() {
     sleep(Duration::from_millis(1000)).await;
 
     // Clean up
-    cmd.kill().await.ok();
-    // cmd.abort();
+    // cmd.kill().await.ok();
+    cmd.abort();
 
     // Verify mock expectations were met
     mock_server.verify().await;
 }
 
-/// Test CDEvent passthrough without incoming trace context
+/// Test `CDEvent` passthrough without incoming `trace_id` context
 #[tokio::test]
 async fn test_webhook_to_http_sink_without_trace_context() {
     // Setup mock HTTP sink server
@@ -180,7 +186,7 @@ async fn test_webhook_to_http_sink_without_trace_context() {
     // Create temporary directory for config
     let temp_dir = TempDir::new().unwrap();
 
-    let mut cmd = lauch_collector(&temp_dir, collector_port, &sink_url).await;
+    let cmd = lauch_collector(&temp_dir, collector_port, &sink_url).await;
 
     // Send test CDEvent to webhook WITHOUT trace context
     let test_event = create_test_cdevent();
@@ -200,13 +206,14 @@ async fn test_webhook_to_http_sink_without_trace_context() {
     sleep(Duration::from_millis(1000)).await;
 
     // Clean up
-    cmd.kill().await.ok();
+    // cmd.kill().await.ok();
+    cmd.abort();
 
     // Verify mock expectations were met
     mock_server.verify().await;
 }
 
-/// Create a test CDEvent for sending to the webhook
+/// Create a test `CDEvent` for sending to the webhook
 fn create_test_cdevent() -> serde_json::Value {
     json!({
         "context": {
