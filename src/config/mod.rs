@@ -1,3 +1,6 @@
+#[cfg(feature = "config_remote")]
+mod remote_file_adapter;
+
 use crate::{
     errors::{Error, IntoDiagnostic, Result},
     http, sinks, sources,
@@ -7,6 +10,8 @@ use figment::{
     providers::{Env, Format, Toml},
 };
 use figment_file_provider_adapter::FileAdapter;
+#[cfg(feature = "config_remote")]
+use remote_file_adapter::RemoteFileAdapter;
 use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -33,12 +38,35 @@ impl Config {
                 .into_diagnostic();
             }
         }
-        let config_file_base = include_str!("assets/cdviz-collector.base.toml");
+        let config_file_base = include_str!("../assets/cdviz-collector.base.toml");
 
+        #[cfg(feature = "config_remote")]
+        let mut figment = Figment::new()
+            .merge(RemoteFileAdapter::wrap(FileAdapter::wrap(Toml::string(config_file_base))));
+        #[cfg(not(feature = "config_remote"))]
         let mut figment = Figment::new().merge(FileAdapter::wrap(Toml::string(config_file_base)));
+
         if let Some(config_file) = config_file {
-            figment = figment.merge(FileAdapter::wrap(Toml::file(config_file.as_path())));
+            #[cfg(feature = "config_remote")]
+            {
+                figment = figment.merge(RemoteFileAdapter::wrap(FileAdapter::wrap(Toml::file(
+                    config_file.as_path(),
+                ))));
+            }
+            #[cfg(not(feature = "config_remote"))]
+            {
+                figment = figment.merge(FileAdapter::wrap(Toml::file(config_file.as_path())));
+            }
         }
+
+        #[cfg(feature = "config_remote")]
+        let mut config: Config = figment
+            .merge(RemoteFileAdapter::wrap(FileAdapter::wrap(
+                Env::prefixed("CDVIZ_COLLECTOR__").split("__"),
+            )))
+            .extract()
+            .into_diagnostic()?;
+        #[cfg(not(feature = "config_remote"))]
         let mut config: Config = figment
             .merge(FileAdapter::wrap(Env::prefixed("CDVIZ_COLLECTOR__").split("__")))
             .extract()
