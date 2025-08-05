@@ -42,5 +42,7 @@ jobs:
           # without cache, missing components are installed
           # with cache, nothing is installed, but as rust tool is symlinked, it is not cached => missing components failure
           cache: false
+          cache_save: false
+          experimental: true
       - run: mise run --jobs 1 ci
         shell: bash
