@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.9.1...0.10.0) - 2025-08-05
+
+### Added
+
+- [**breaking**] remove the hbs transformer
+- *(config)* allow to read "template" from remote file
+- propagate opentelemetry trace 
+
+### Other
+
+- build cli instead of "cargo run" for test
+- group per transformer
+- *(deps)* update and lint
+- [**breaking**] change the format of `headers` configuration from array to table
+- convert the crate into a library to accelerate integration test
+- fix biome's config to not format output
+
 ## [0.9.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.9.0...0.9.1) - 2025-07-28
 
 ### Fixed
