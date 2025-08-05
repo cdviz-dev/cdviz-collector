@@ -10,10 +10,9 @@
 # enabled = false
 # type = "sse"
 # id = "001"
-# headers = [
-#   { header = "Authorization", rule = { type = "exists" } },
-#   { header = "X-API-Key", rule = { type = "matches", pattern = "^[a-zA-Z0-9]{32}$" } }
-# ]
+# [sinks.sse_001.headers]
+# "Authorization" = { type = "exists" }
+# "X-API-Key" = { type = "matches", pattern = "^[a-zA-Z0-9]{32}$" }
 
 [sinks.cdevents_local_json]
 enabled = false
@@ -93,11 +92,10 @@ type = "webhook"
 id = "000-github"
 headers_to_keep = []
 # token override by environment variable reads from the secret
-headers = [
-#   { header = "Authorization", rule = { type = "exists" } },
-#   { header = "X-API-Key", rule = { type = "matches", pattern = "^[a-zA-Z0-9]{32}$" } }
-  { header = "x-hub-signature-256", rule = { type = "signature", signature_encoding = "hex", signature_on = "body", signature_prefix = "sha256=", token = "changeme" }}
-]
+[sources.github_webhook.extractor.headers]
+# "Authorization" = { type = "exists" }
+# "X-API-Key" = { type = "matches", pattern = "^[a-zA-Z0-9]{32}$" }
+"x-hub-signature-256" = { type = "signature", signature_encoding = "hex", signature_on = "body", signature_prefix = "sha256=", token = "changeme" }
 
 [transformers.github_events]
 type = "vrl"
@@ -152,9 +150,8 @@ enabled = false
 [sources.cdevents_sse.extractor]
 type = "sse"
 url = "http://localhost:8080/sse/001"
-# headers = [
-#   { header = "Authorization", rule = { type = "static", value = "Bearer your-token-here" } },
-#   { header = "X-API-Key", rule = { type = "secret", value = "your-api-key-from-env" } },
-#   { header = "X-Signature-256", rule = { type = "signature", token = "webhook-secret", signature_prefix = "sha256=" } }
-# ]
+[sources.cdevents_sse.extractor.headers]
+# "Authorization" = { type = "static", value = "Bearer your-token-here" }
+# "X-API-Key" = { type = "secret", value = "your-api-key-from-env" }
+# "X-Signature-256" = { type = "signature", token = "webhook-secret", signature_prefix = "sha256=" }
 # max_retries = 10
