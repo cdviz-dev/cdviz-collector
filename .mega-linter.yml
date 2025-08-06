@@ -10,6 +10,7 @@ DISABLE:
 DISABLE_LINTERS:
   - CSS_STYLELINT # not tailwindcss compatible
   - DOCKERFILE_DOCKERFILELINT
+  - EDITORCONFIG_EDITORCONFIG_CHECKER # conflict with too many generated files (by AI, Changelog,...)
   - HTML_HTMLHINT # not tailwindcss compatible
   - JSON_JSONLINT # doesn't support json5 / jsonc
   - JSON_V8R # use wrong version schema for biome, ...
