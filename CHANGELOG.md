@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.10.0...0.11.0) - 2025-08-06
+
+### Other
+
+- *(config)* add integration tests for remote file adapter
+- [**breaking**] rename the default sink `cdviz_db` to `database`
+- disable linter editorconfig-checker
+
 ## [0.10.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.9.1...0.10.0) - 2025-08-05
 
 ### Added
