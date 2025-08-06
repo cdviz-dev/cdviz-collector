@@ -215,12 +215,34 @@ impl<T: Provider> RemoteFileAdapter<T> {
         let operator = Operator::via_iter(scheme, remote_config.parameters.clone())?;
 
         // Read the file content
-        let rt = tokio::runtime::Handle::current();
-        let content_bytes = rt.block_on(async { operator.read(path).await })?;
+        // Clone path for error reporting
+        let path_str = path.to_string();
+
+        let content_bytes = if tokio::runtime::Handle::try_current().is_ok() {
+            // We're already in an async context, try to spawn a blocking task
+            let operator = operator.clone();
+            let path_clone = path_str.clone();
+            std::thread::spawn(move || -> std::result::Result<opendal::Buffer, opendal::Error> {
+                let rt = tokio::runtime::Runtime::new().map_err(|e| {
+                    opendal::Error::new(
+                        opendal::ErrorKind::Unexpected,
+                        format!("Failed to create runtime: {e}"),
+                    )
+                })?;
+                rt.block_on(async { operator.read(&path_clone).await })
+            })
+            .join()
+            .map_err(|_| RemoteFileError::IoError("Thread join failed".to_string()))??
+        } else {
+            // Create a new runtime
+            let rt = tokio::runtime::Runtime::new()
+                .map_err(|e| RemoteFileError::IoError(format!("Failed to create runtime: {e}")))?;
+            rt.block_on(async { operator.read(&path_str).await })?
+        };
 
         // Convert to string
         String::from_utf8(content_bytes.to_vec())
-            .map_err(|_| RemoteFileError::InvalidUtf8(path.to_string()))
+            .map_err(|_| RemoteFileError::InvalidUtf8(path_str))
     }
 }
 
@@ -291,5 +313,132 @@ mod tests {
         let remote_error = RemoteFileError::RemoteNotFound("test_remote".to_string());
         let figment_error: FigmentError = remote_error.into();
         assert!(figment_error.to_string().contains("Remote configuration 'test_remote' not found"));
+    }
+
+    #[tokio::test]
+    async fn test_github_remote_file_integration() {
+        use assert2::{check, let_assert};
+        use figment::providers::Serialized;
+        use serde_json::json;
+
+        // Create a configuration with a GitHub remote and a transformer that references it
+        let config_data = json!({
+            "remote": {
+                "github": {
+                    "type": "github",
+                    "owner": "cdviz-dev",
+                    "repo": "cdviz-collector",
+                    "reference": "0.10.0"
+                }
+            },
+            "transformers": {
+                "test_transformer": {
+                    "transformer_rfile": "github:///transformers/github_events/transformer.vrl"
+                }
+            }
+        });
+
+        let provider = Serialized::defaults(config_data);
+        let adapter = RemoteFileAdapter::wrap(provider);
+
+        // This should resolve the remote file reference and read the VRL transformer from GitHub
+        let result = adapter.data();
+
+        let map = result.expect("Failed to read remote file configuration");
+
+        // Check that we have the data for the default profile
+        let_assert!(Some(dict) = map.get(&figment::Profile::Default));
+
+        // Check that transformers dict exists
+        let_assert!(Some(Value::Dict(_, transformers_dict)) = dict.get("transformers"));
+
+        // Check that test_transformer exists
+        let_assert!(
+            Some(Value::Dict(_, test_transformer_dict)) = transformers_dict.get("test_transformer")
+        );
+
+        // Check that the _rfile key was replaced with the actual content
+        check!(test_transformer_dict.contains_key("transformer"));
+        check!(!test_transformer_dict.contains_key("transformer_rfile"));
+
+        // Verify the content is a string and contains VRL-like content
+        let_assert!(Some(Value::String(_, content)) = test_transformer_dict.get("transformer"));
+
+        // The VRL file should contain transformation logic
+        check!(
+            content.contains("# VRL") || content.contains('.') || !content.is_empty(),
+            "Expected VRL content, got: {}",
+            content
+        );
+
+        // Verify we got a reasonable amount of content
+        check!(
+            content.len() > 1000,
+            "Expected substantial VRL content, got {} characters",
+            content.len()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_http_remote_file_integration() {
+        use assert2::{check, let_assert};
+        use figment::providers::Serialized;
+        use serde_json::json;
+
+        // Create a configuration with an HTTP remote and a transformer that references it
+        let config_data = json!({
+            "remote": {
+                "raw_github": {
+                    "type": "http",
+                    "endpoint": "https://raw.githubusercontent.com"
+                }
+            },
+            "transformers": {
+                "test_http_transformer": {
+                    "transformer_rfile": "raw_github:///cdviz-dev/cdviz-collector/refs/tags/0.10.0/transformers/github_events/transformer.vrl"
+                }
+            }
+        });
+
+        let provider = Serialized::defaults(config_data);
+        let adapter = RemoteFileAdapter::wrap(provider);
+
+        // This should resolve the remote file reference and read the VRL transformer from GitHub via HTTP
+        let result = adapter.data();
+
+        let map = result.expect("Failed to read remote file configuration");
+
+        // Check that we have the data for the default profile
+        let_assert!(Some(dict) = map.get(&figment::Profile::Default));
+
+        // Check that transformers dict exists
+        let_assert!(Some(Value::Dict(_, transformers_dict)) = dict.get("transformers"));
+
+        // Check that test_http_transformer exists
+        let_assert!(
+            Some(Value::Dict(_, test_transformer_dict)) =
+                transformers_dict.get("test_http_transformer")
+        );
+
+        // Check that the _rfile key was replaced with the actual content
+        check!(test_transformer_dict.contains_key("transformer"));
+        check!(!test_transformer_dict.contains_key("transformer_rfile"));
+
+        // Verify the content is a string and contains VRL-like content
+        let_assert!(Some(Value::String(_, content)) = test_transformer_dict.get("transformer"));
+
+        // The VRL file should contain transformation logic
+        check!(
+            content.contains("# VRL") || content.contains('.') || !content.is_empty(),
+            "Expected VRL content, got: {}",
+            content
+        );
+
+        // Verify we got a reasonable amount of content
+        check!(
+            content.len() > 1000,
+            "Expected substantial VRL content, got {} characters",
+            content.len()
+        );
     }
 }
