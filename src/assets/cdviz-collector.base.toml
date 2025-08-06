@@ -12,10 +12,10 @@ type = "folder"
 kind = "fs"
 parameters = { root = "./sink" }
 
-[sinks.cdviz_db]
+[sinks.database]
 enabled = false
 type = "db"
-url = "postgresql://postgres:passwd@localhost:5432/cdviz"
+url = "postgresql://postgres:passwd@localhost:5432/cdviz?search_path=cdviz"
 pool_connections_min = 1
 pool_connections_max = 10
 
