@@ -13,7 +13,7 @@ PG_OFFLINE_URL = "postgres://{{env.PG_OFFLINE_USER}}:{{env.PG_OFFLINE_PWD}}@127.
 
 [tools]
 # "aqua:hadolint/hadolint" = "2"         # hadolint is a Dockerfile linter
-rust = { version = "1.88.0", profile="minimal", components="rustfmt,clippy,llvm-tools"} # the rust tool stack (with cargo, fmt, clippy) to build source
+rust = { version = "1.89.0", profile="minimal", components="rustfmt,clippy,llvm-tools"} # the rust tool stack (with cargo, fmt, clippy) to build source
 "aqua:cargo-bins/cargo-binstall" = "1" # do not use cargo-binstall (it's a special name used by mise)
 "ubi:mozilla/grcov" = "0.8"
 "cargo:cargo-hack" = "latest"
