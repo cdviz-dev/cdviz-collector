@@ -81,7 +81,8 @@ The application follows a pipeline architecture with three main stages:
 ### Message Flow
 
 Events flow through the system as:
-1. Raw input → `extractors::Extractor` 
+
+1. Raw input → `extractors::Extractor`
 2. Transformation via VRL or Handlebars → CDEvent
 3. In-memory broadcast queue → Multiple sinks
 4. Final dispatch to configured destinations
@@ -89,8 +90,9 @@ Events flow through the system as:
 ## Feature Flags
 
 Key Cargo features that affect compilation:
+
 - `sink_db` - PostgreSQL database sink
-- `sink_folder` - File system folder sink  
+- `sink_folder` - File system folder sink
 - `sink_http` - HTTP endpoint sink
 - `sink_sse` - Server-Sent Events sink
 - `source_opendal` - OpenDAL file/S3 sources
@@ -110,7 +112,7 @@ Key Cargo features that affect compilation:
 ## Key Dependencies
 
 - `tokio` - Async runtime
-- `axum` - HTTP server framework  
+- `axum` - HTTP server framework
 - `sqlx` - Database operations
 - `figment` - Configuration management
 - `serde`/`serde_json` - Serialization
