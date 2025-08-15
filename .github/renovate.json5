@@ -12,6 +12,7 @@
   labels: ["dependencies"],
   prHourlyLimit: 2,
   lockFileMaintenance: { enabled: false },
+  ignorePaths: [".github/workflows/release.yml"],
   packageRules: [
     {
       // Do not look at Cargo.lock
