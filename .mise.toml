@@ -67,7 +67,7 @@ run = [
 
 [tasks."lint"]
 depends = ["lint:rust"]
-description = "Lint all the code (megalinter + lint_rust)"
+description = "Lint all the code (lint_rust)"
 # cargo install --locked cargo-binstall
 # use Rustls rather than OpenSSL (be sure to add the features for the databases you intend to use!)
 # no binstall available
