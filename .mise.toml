@@ -21,7 +21,7 @@ rust = { version = "1.89.0", profile="minimal", components="rustfmt,clippy,llvm-
 "cargo:cargo-machete" = "latest"
 "cargo:cargo-deny" = "latest"
 "cargo:cargo-nextest" = "latest"
-"biome" = "latest"
+"dprint" = "latest"
 "ubi:davidB/json-simple-obfuscator" = "latest"
 
 [tasks."install:sqlx-cli"]
@@ -49,7 +49,7 @@ description = "Format the code and sort dependencies"
 run = [
   "cargo --locked fmt",
   "cargo --locked sort --grouped",
-  "biome check --write",
+  "dprint fmt",
 ]
 
 [tasks.obfuscate]
