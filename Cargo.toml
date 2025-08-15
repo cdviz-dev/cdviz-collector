@@ -135,7 +135,15 @@ tracing = "0.1"
 tracing-opentelemetry = "0.31"
 tracing-opentelemetry-instrumentation-sdk = { version = "0.29" }
 uuid = { version = "1", optional = true }
-vrl = { version = "0.26", optional = true }
+vrl = { version = "0.26", optional = true, default-features = false, features = [
+  "compiler",
+  "core",
+  "diagnostic",
+  "path",
+  "parser",
+  "stdlib",
+  "value",
+] }
 
 [target.'cfg(all(target_env = "musl", target_pointer_width = "64"))'.dependencies.jemallocator]
 version = "0.5"
