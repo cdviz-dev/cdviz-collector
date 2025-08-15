@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.11.0...0.11.1) - 2025-08-15
+
+### Fixed
+
+- *(deps)* update rust crate vrl to 0.26 ([#134](https://github.com/cdviz-dev/cdviz-collector/pull/134))
+
+### Other
+
+- migrate to dprint to format json, yaml, md
+- ignore automatic update on release.yml
+- apply clippy suggestion following rust 1.89 upgrade
+- switch megalinter to flavor documentation (faster ci)
+- *(deps)* update dependencies
+- *(deps)* update dependency rust to v1.89.0
+
 ## [0.11.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.10.0...0.11.0) - 2025-08-06
 
 ### Other
