@@ -40,10 +40,9 @@ impl Resource {
             }
             content_length = stats.as_ref().map(Metadata::content_length).unwrap_or_default();
         }
-        if try_to_load_headers_json {
-            if let Some(headers) = load_header_json(entry.path(), op).await {
-                x_headers.extend(headers);
-            }
+        if try_to_load_headers_json && let Some(headers) = load_header_json(entry.path(), op).await
+        {
+            x_headers.extend(headers);
         }
         Self { entry, root: op.info().root().to_string(), last_modified, content_length, x_headers }
     }

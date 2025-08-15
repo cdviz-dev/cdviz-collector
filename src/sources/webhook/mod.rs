@@ -71,11 +71,11 @@ async fn webhook(
     //tracing::trace!(?body, "received");
 
     // Validate headers if any rules are configured
-    if !state.headers.is_empty() {
-        if let Err(validation_error) = validate_headers(&headers, &state.headers, Some(&body)) {
-            tracing::warn!(error = ?validation_error, "Webhook rejected due to header rule validation failure");
-            return validation_error.into_response();
-        }
+    if !state.headers.is_empty()
+        && let Err(validation_error) = validate_headers(&headers, &state.headers, Some(&body))
+    {
+        tracing::warn!(error = ?validation_error, "Webhook rejected due to header rule validation failure");
+        return validation_error.into_response();
     }
 
     let maybe_json = Json::from_bytes(&body);

@@ -191,6 +191,7 @@ impl IntoResponse for SignatureError {
 
 #[cfg(test)]
 #[allow(clippy::min_ident_chars)]
+#[allow(clippy::explicit_deref_methods)]
 mod tests {
 
     use super::*;
