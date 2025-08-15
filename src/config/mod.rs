@@ -30,13 +30,11 @@ pub(crate) struct Config {
 
 impl Config {
     pub fn from_file(config_file: Option<PathBuf>) -> Result<Self> {
-        if let Some(ref config_file) = config_file {
-            if !config_file.exists() {
-                return Err(Error::ConfigNotFound {
-                    path: config_file.to_string_lossy().to_string(),
-                })
+        if let Some(ref config_file) = config_file
+            && !config_file.exists()
+        {
+            return Err(Error::ConfigNotFound { path: config_file.to_string_lossy().to_string() })
                 .into_diagnostic();
-            }
         }
         let config_file_base = include_str!("../assets/cdviz-collector.base.toml");
 

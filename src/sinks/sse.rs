@@ -90,11 +90,11 @@ async fn sse_handler(
     tracing::debug!("New SSE client connected");
 
     // Validate headers if any rules are configured
-    if !state.headers.is_empty() {
-        if let Err(validation_error) = validate_headers(&headers, &state.headers, None) {
-            tracing::warn!(error = ?validation_error, "SSE connection rejected due to header rule validation failure");
-            return validation_error.into_response();
-        }
+    if !state.headers.is_empty()
+        && let Err(validation_error) = validate_headers(&headers, &state.headers, None)
+    {
+        tracing::warn!(error = ?validation_error, "SSE connection rejected due to header rule validation failure");
+        return validation_error.into_response();
     }
 
     let rx = state.tx.subscribe();
@@ -387,16 +387,15 @@ mod integration_tests {
                     }
                     Ok(Some(Ok(Event::Message(message)))) => {
                         // Only process 'cdevent' type messages, ignore keep-alive
-                        if message.event == "cdevent" {
-                            if let Ok(event_data) =
+                        if message.event == "cdevent"
+                            && let Ok(event_data) =
                                 serde_json::from_str::<serde_json::Value>(&message.data)
-                            {
-                                received_events.push((
-                                    message.event.clone(),
-                                    message.id.clone(),
-                                    event_data,
-                                ));
-                            }
+                        {
+                            received_events.push((
+                                message.event.clone(),
+                                message.id.clone(),
+                                event_data,
+                            ));
                         }
                     }
                     Ok(Some(Err(err))) => {

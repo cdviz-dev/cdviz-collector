@@ -29,7 +29,7 @@ pub(crate) struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        Self { host: IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)), port: 8080 }
+        Self { host: IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), port: 8080 }
     }
 }
 
