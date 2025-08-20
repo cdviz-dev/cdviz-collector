@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.11.1...0.11.2) - 2025-08-20
+
+### Other
+
+- update Cargo.lock dependencies
+
 ## [0.11.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.11.0...0.11.1) - 2025-08-15
 
 ### Fixed
