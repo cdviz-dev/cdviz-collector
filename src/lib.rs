@@ -55,6 +55,10 @@ enum Command {
     #[command(arg_required_else_help = true)]
     Connect(connect::ConnectArgs),
 
+    /// Send JSON data directly to a sink (useful for testing and scripting).
+    #[command(arg_required_else_help = true)]
+    Send(tools::send::SendArgs),
+
     /// Transform local files and potentially check them.
     /// The input & output files are expected to be json files.
     /// The filename of output files will be the same as the input file but with a '.out.json'
@@ -129,6 +133,7 @@ pub(crate) async fn run(cli: Cli) -> Result<bool> {
     }
     match cli.command {
         Command::Connect(args) => connect::connect(args).await,
+        Command::Send(args) => tools::send::send(args).await,
         #[cfg(feature = "tool_transform")]
         Command::Transform(args) => tools::transform::transform(args).await,
     }
