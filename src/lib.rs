@@ -20,6 +20,8 @@ use clap_verbosity_flag::Verbosity;
 pub(crate) use connect::{Message, Receiver, Sender};
 use errors::{IntoDiagnostic, Result};
 use init_tracing_opentelemetry::otlp::OtelGuard;
+use tracing::subscriber::DefaultGuard;
+use tracing_subscriber::layer::SubscriberExt;
 
 // Use Jemalloc only for musl-64 bits platforms
 // see [Default musl allocator considered harmful (to performance)](https://nickb.dev/blog/default-musl-allocator-considered-harmful-to-performance/)
@@ -30,10 +32,14 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 // TODO add options (or subcommand) to `check-configuration` (regardless of enabled), `configuration-dump` (after consolidation (with filter or not enabled) and exit or not),
 // TODO add options to overide config from cli arguments (like from env)
 #[derive(Debug, Clone, Parser)]
-#[command(args_conflicts_with_subcommands = true,flatten_help = true,version, about, long_about = None)]
+#[command(flatten_help = true,version, about, long_about = None)]
 pub(crate) struct Cli {
     #[command(flatten)]
     verbose: clap_verbosity_flag::Verbosity,
+
+    /// Disable OpenTelemetry initialization, use minimal tracing setup (useful for testing)
+    #[clap(long = "disable-otel", global = true)]
+    disable_otel: bool,
 
     #[command(subcommand)]
     command: Command,
@@ -55,16 +61,34 @@ enum Command {
     Transform(tools::transform::TransformArgs),
 }
 
-//TODO use logfmt
-fn init_log(verbose: Verbosity) -> Result<OtelGuard> {
+// wrapper for various possible guard
+// that should trigger drop on wrapped guard when enum is dropped
+#[allow(dead_code)]
+enum ObservabilityGuard {
+    DefaultGuard(DefaultGuard),
+    OtelGuard(OtelGuard),
+}
+
+fn init_log(verbose: Verbosity, disable_otel: bool) -> Result<ObservabilityGuard> {
+    use init_tracing_opentelemetry::tracing_subscriber_ext::{
+        build_level_filter_layer, build_logger_text, init_subscribers_and_loglevel,
+    };
     let level = if verbose.is_present() {
         verbose.log_level().map(|level| level.to_string()).unwrap_or_default()
     } else {
         // in this case environment variable RUST_LOG (or OTEL_LOG_LEVEL) will be used, else "info"
         String::new()
     };
-    init_tracing_opentelemetry::tracing_subscriber_ext::init_subscribers_and_loglevel(&level)
-        .into_diagnostic()
+
+    if disable_otel {
+        let subscriber = tracing_subscriber::registry()
+            .with(build_level_filter_layer(&level).into_diagnostic()?)
+            .with(build_logger_text());
+        Ok(ObservabilityGuard::DefaultGuard(tracing::subscriber::set_default(subscriber)))
+    } else {
+        // Full OpenTelemetry setup for production use
+        init_subscribers_and_loglevel(&level).map(ObservabilityGuard::OtelGuard).into_diagnostic()
+    }
 }
 
 /// to call from main.rs.
@@ -95,6 +119,7 @@ where
 }
 
 pub(crate) async fn run(cli: Cli) -> Result<bool> {
+    let _guard = init_log(cli.verbose, cli.disable_otel)?;
     let _guard = init_log(cli.verbose)?;
     match cli.command {
         Command::Connect(args) => connect::connect(args).await,
