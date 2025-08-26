@@ -4,7 +4,7 @@ use indoc::indoc;
 use serde_json::json;
 use std::time::Duration;
 use tokio::time::sleep;
-use wiremock::matchers::{header, method, path};
+use wiremock::matchers::{header, header_exists, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// Integration test for send command -> HTTP sink pipeline
@@ -353,4 +353,72 @@ fn create_test_cdevent_with_id(id: &str) -> serde_json::Value {
             }
         }
     })
+}
+
+/// Integration test for send command with HMAC signature validation
+#[tokio::test]
+async fn test_send_command_with_signature_validation() {
+    // Setup mock HTTP sink server
+    let mock_server = MockServer::start().await;
+    let sink_url = mock_server.uri();
+
+    let webhook_secret = "test-webhook-secret";
+    let test_event = create_test_cdevent();
+    let event_json = serde_json::to_string(&test_event).unwrap();
+
+    // We'll validate that the signature header exists - exact payload verification would require
+    // knowing the CloudEvents serialization format which is created during the pipeline
+
+    // Setup mock expectation - should receive signature header
+    let mock = Mock::given(method("POST"))
+        .and(path("/webhook"))
+        .and(header("ce-specversion", "1.0"))
+        .and(header_exists("x-signature-256"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "status": "received",
+            "message": "Signed webhook processed successfully"
+        })))
+        .expect(1);
+
+    mock_server.register(mock).await;
+
+    // Create temporary config file with signature configuration
+    let config_content = format!(
+        indoc! {r#"
+        [sinks.http.headers.x-signature-256]
+        type = "signature"
+        token = "{}"
+        algorithm = "sha256"
+        prefix = "sha256="
+    "#},
+        webhook_secret
+    );
+
+    let temp_config = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(temp_config.path(), config_content).unwrap();
+
+    // Run send command with signature config
+    let result = cdviz_collector::run_with_args(vec![
+        "--disable-otel",
+        "send",
+        "-d",
+        &event_json,
+        "-u",
+        &format!("{sink_url}/webhook"),
+        "--config",
+        temp_config.path().to_str().unwrap(),
+    ])
+    .await;
+
+    // Command should succeed
+    match result {
+        Ok(success) => assert!(success, "Command completed but returned false"),
+        Err(e) => panic!("Command failed with error: {e:?}"),
+    }
+
+    // Give a moment for the request to be processed
+    sleep(Duration::from_millis(100)).await;
+
+    // Verify mock expectations were met (including signature header validation)
+    mock_server.verify().await;
 }

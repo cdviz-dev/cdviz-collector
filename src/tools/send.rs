@@ -30,6 +30,18 @@
 //! # With custom headers
 //! cdviz-collector send --data '{"test": "value"}' --url http://example.com/webhook \
 //!   --header "X-API-Key: secret" --header "X-Custom: value"
+//!
+//! # Send with HMAC signature for webhook security
+//! # Create a config file with signature header generation:
+//! # cat > send-config.toml << EOF
+//! # [sinks.http.headers.x-signature-256]
+//! # type = "signature"
+//! # token = "your-webhook-secret"
+//! # algorithm = "sha256"
+//! # prefix = "sha256="
+//! # EOF
+//! cdviz-collector send --data '{"test": "value"}' --url https://api.example.com/webhook \
+//!   --config send-config.toml
 //! ```
 //!
 //! # Architecture

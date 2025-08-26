@@ -1,3 +1,18 @@
+//! Connect command for cdviz-collector.
+//!
+//! The `connect` command launches the collector as a server, enabling configured sources
+//! to collect events and dispatch them to configured sinks through the pipeline.
+//!
+//! # Usage
+//!
+//! ```bash
+//! cdviz-collector connect --config cdviz-collector.toml
+//! ```
+//!
+//! The server runs with HTTP endpoints enabled, allowing webhook sources and
+//! SSE sinks to register their routes. The pipeline orchestrates the complete
+//! event collection and dispatch workflow.
+
 use crate::{config::Config, errors::Result, pipeline::PipelineBuilder};
 use clap::Args;
 use std::path::PathBuf;
