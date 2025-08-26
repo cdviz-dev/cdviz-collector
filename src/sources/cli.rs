@@ -2,13 +2,16 @@ use super::{EventSource, EventSourcePipe};
 use crate::errors::{IntoDiagnostic, Result};
 use crate::pipes::Pipe;
 use serde::{Deserialize, Serialize};
-use std::io::Read;
-use tokio_util::sync::CancellationToken;
+use std::{
+    fs::File,
+    io::{Cursor, Read},
+};
 use tracing::instrument;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub(crate) struct Config {
-    // CLI extractor doesn't need configuration - data comes from the stream
+    /// Data source specification - can be direct JSON, @filename, or @- for stdin
+    pub data: Option<String>,
 }
 
 pub(crate) struct CliExtractor {
@@ -21,8 +24,18 @@ impl CliExtractor {
         Self { reader, next }
     }
 
+    pub(crate) fn from_config(config: &Config, next: EventSourcePipe) -> Result<Self> {
+        let data = config
+            .data
+            .as_ref()
+            .ok_or_else(|| miette::miette!("CLI source requires 'data' configuration"))?;
+
+        let reader = create_reader_from_data(data)?;
+        Ok(Self::new(reader, next))
+    }
+
     #[instrument(skip(self))]
-    pub(crate) async fn run(mut self, _cancel_token: CancellationToken) -> Result<()> {
+    pub(crate) async fn run(mut self) -> Result<()> {
         // Read all data from the stream
         let mut data = String::new();
         self.reader.read_to_string(&mut data).into_diagnostic()?;
@@ -68,6 +81,23 @@ impl CliExtractor {
     }
 }
 
+/// Create a reader from data specification (direct string, @file, or @- for stdin).
+fn create_reader_from_data(data: &str) -> Result<Box<dyn Read + Send>> {
+    if let Some(path) = data.strip_prefix('@') {
+        if path == "-" {
+            // Read from stdin
+            Ok(Box::new(std::io::stdin()))
+        } else {
+            // Read from file
+            let file = File::open(path).into_diagnostic()?;
+            Ok(Box::new(file))
+        }
+    } else {
+        // Direct JSON string
+        Ok(Box::new(Cursor::new(data.to_string())))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -83,10 +113,8 @@ mod tests {
         let pipe = Box::new(collector.create_pipe());
         let extractor = CliExtractor::new(reader, pipe);
 
-        let cancel_token = CancellationToken::new();
-
         // Run the extractor
-        extractor.run(cancel_token).await.unwrap();
+        extractor.run().await.unwrap();
 
         // Check collected events
         let events: Vec<EventSource> = collector.try_into_iter().unwrap().collect();
@@ -104,10 +132,8 @@ mod tests {
         let pipe = Box::new(collector.create_pipe());
         let extractor = CliExtractor::new(reader, pipe);
 
-        let cancel_token = CancellationToken::new();
-
         // Run the extractor
-        extractor.run(cancel_token).await.unwrap();
+        extractor.run().await.unwrap();
 
         // Check collected events
         let events: Vec<EventSource> = collector.try_into_iter().unwrap().collect();
@@ -127,10 +153,8 @@ mod tests {
         let pipe = Box::new(collector.create_pipe());
         let extractor = CliExtractor::new(reader, pipe);
 
-        let cancel_token = CancellationToken::new();
-
         // Should not fail with empty data
-        extractor.run(cancel_token).await.unwrap();
+        extractor.run().await.unwrap();
 
         let events: Vec<EventSource> = collector.try_into_iter().unwrap().collect();
         assert_eq!(events.len(), 0);
@@ -145,9 +169,7 @@ mod tests {
         let pipe = Box::new(collector.create_pipe());
         let extractor = CliExtractor::new(reader, pipe);
 
-        let cancel_token = CancellationToken::new();
-
         // Should fail with invalid JSON
-        assert!(extractor.run(cancel_token).await.is_err());
+        assert!(extractor.run().await.is_err());
     }
 }
