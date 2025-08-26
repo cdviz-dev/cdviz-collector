@@ -25,10 +25,6 @@ pub(crate) struct TransformArgs {
     #[clap(long = "config", env("CDVIZ_COLLECTOR_CONFIG"))]
     config: Option<PathBuf>,
 
-    /// The directory to use as the working directory.
-    #[clap(short = 'C', long = "directory")]
-    directory: Option<PathBuf>,
-
     /// Names of transformers to chain (comma separated or multiple args)
     #[clap(short = 't', long = "transformer-refs", default_value = "passthrough", value_delimiter= ',', num_args = 1..)]
     transformer_refs: Vec<String>,
@@ -74,10 +70,6 @@ enum TransformMode {
 }
 
 pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
-    if let Some(dir) = &args.directory {
-        std::env::set_current_dir(dir).into_diagnostic()?;
-    }
-
     let config = config::Config::from_file(args.config)?;
     cliclack::intro("Transforming files...").into_diagnostic()?;
 

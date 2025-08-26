@@ -13,7 +13,7 @@ mod sources;
 mod tools;
 mod utils;
 
-use std::ffi::OsString;
+use std::{ffi::OsString, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
@@ -40,6 +40,10 @@ pub(crate) struct Cli {
     /// Disable OpenTelemetry initialization, use minimal tracing setup (useful for testing)
     #[clap(long = "disable-otel", global = true)]
     disable_otel: bool,
+
+    /// The directory to use as the working directory.
+    #[clap(short = 'C', long = "directory", global = true)]
+    directory: Option<PathBuf>,
 
     #[command(subcommand)]
     command: Command,
@@ -120,7 +124,9 @@ where
 
 pub(crate) async fn run(cli: Cli) -> Result<bool> {
     let _guard = init_log(cli.verbose, cli.disable_otel)?;
-    let _guard = init_log(cli.verbose)?;
+    if let Some(dir) = &cli.directory {
+        std::env::set_current_dir(dir).into_diagnostic()?;
+    }
     match cli.command {
         Command::Connect(args) => connect::connect(args).await,
         #[cfg(feature = "tool_transform")]

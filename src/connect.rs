@@ -29,10 +29,6 @@ pub(crate) struct ConnectArgs {
     /// The configuration file to use.
     #[clap(long = "config", env("CDVIZ_COLLECTOR_CONFIG"))]
     config: Option<PathBuf>,
-
-    /// The directory to use as the working directory.
-    #[clap(short = 'C', long = "directory")]
-    directory: Option<PathBuf>,
 }
 
 pub(crate) type Sender<T> = tokio::sync::broadcast::Sender<T>;
@@ -117,10 +113,6 @@ impl From<CDEvent> for Message {
 //TODO integrations with kafka / redpanda, nats,
 /// retuns true if the connection service ran successfully
 pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
-    if let Some(dir) = &args.directory {
-        std::env::set_current_dir(dir).into_diagnostic()?;
-    }
-
     let config = config::Config::from_file(args.config)?;
 
     let (tx, _) = broadcast::channel::<Message>(100);
