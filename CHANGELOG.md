@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.11.2...0.12.0) - 2025-08-26
+
+### Added
+
+- add `send` subcommand to push event without curl, openssl,...
+- add `--disable-otel` option on cli
+
+### Fixed
+
+- *(deps)* update opentelemetry to 0.30
+
+### Other
+
+- *(deps)* update
+- update documentation / sample of `connect.rs` and ``send.rs`
+- share pipeline code between `send` and `connect`
+- make `-C` option a common global option
+
 ## [0.11.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.11.1...0.11.2) - 2025-08-20
 
 ### Other
