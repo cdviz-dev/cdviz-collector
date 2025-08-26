@@ -6,7 +6,7 @@
 //! # Features
 //!
 //! - **CLI Source**: Reads JSON data from command line arguments, files, or stdin
-//! - **HTTP Sink**: Default sink for sending data to HTTP endpoints with CloudEvents format
+//! - **HTTP Sink**: Default sink for sending data to HTTP endpoints with `CloudEvents` format
 //! - **curl-like Interface**: Uses `--data`/`-d` flag similar to curl for JSON input
 //! - **Flexible Input**: Supports direct JSON strings, `@filename`, or `@-` for stdin
 //! - **Configuration Override**: Command line arguments can override default sink configuration
@@ -36,7 +36,7 @@
 //!
 //! The send command follows the same pipeline architecture as the connect command:
 //! 1. **CLI Source**: Reads and parses JSON data from various input sources
-//! 2. **Event Pipeline**: Converts raw JSON to CDEvents format via broadcast channel
+//! 2. **Event Pipeline**: Converts raw JSON to `CDEvents` format via broadcast channel
 //! 3. **Sinks**: Processes and dispatches events to configured destinations
 //!
 //! # Configuration
@@ -50,21 +50,19 @@
 //! is disabled to avoid duplicate output.
 
 use crate::{
-    config,
+    config::Config,
     errors::{IntoDiagnostic, Result},
-    sinks,
-    sources::{EventSourcePipe, cli, send_cdevents},
+    pipeline::PipelineBuilder,
 };
 use clap::Args;
-use reqwest::Url;
-use std::{
-    fs::File,
-    io::{Cursor, Read},
-    path::PathBuf,
+use figment::{
+    Figment,
+    providers::{Format, Toml},
 };
-use tokio::sync::broadcast;
-use tokio_util::sync::CancellationToken;
+use reqwest::Url;
+use std::path::PathBuf;
 
+/// Arguments for send command
 #[derive(Debug, Clone, Args)]
 #[command(args_conflicts_with_subcommands = true, flatten_help = true, about, long_about = None)]
 pub(crate) struct SendArgs {
@@ -107,78 +105,17 @@ type = "cli"
 "#;
 
 pub(crate) async fn send(args: SendArgs) -> Result<bool> {
-    if let Some(dir) = &args.directory {
-        std::env::set_current_dir(dir).into_diagnostic()?;
-    }
-
-    // Parse data input
-    let reader = create_reader_from_data(&args.data)?;
-
-    // Load configuration
+    // Load configuration with CLI overrides
     let config = load_config(&args)?;
 
-    // Create broadcast channel for message passing
-    let (tx, _rx) = broadcast::channel(1024);
+    // Create and run pipeline
+    let pipeline = PipelineBuilder::new(config);
 
-    // Create pipeline components
-    let pipe: EventSourcePipe = Box::new(send_cdevents::Processor::new(tx.clone()));
-
-    // Create CLI extractor with the reader
-    let cli_extractor = cli::CliExtractor::new(reader, pipe);
-
-    // Create sinks
-    let sink_handles = create_sinks(&config, &tx)?;
-
-    // Run the CLI extractor
-    let cancel_token = CancellationToken::new();
-
-    tracing::info!("Starting to send data");
-
-    // Run the CLI extractor
-    cli_extractor.run(cancel_token.clone()).await?;
-
-    // Give sinks a moment to process messages
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-
-    // Cancel sinks
-    cancel_token.cancel();
-
-    // Wait for sinks to finish with a reasonable timeout
-    let shutdown_timeout = std::time::Duration::from_millis(500);
-    for handle in sink_handles {
-        match tokio::time::timeout(shutdown_timeout, handle).await {
-            Ok(Ok(_)) => tracing::debug!("Sink shutdown successfully"),
-            Ok(Err(e)) => tracing::warn!("Sink error during shutdown: {}", e),
-            Err(_) => tracing::warn!("Sink shutdown timed out"),
-        }
-    }
-
-    tracing::info!("Send operation completed");
-    Ok(true)
+    pipeline.run(false).await
 }
 
-fn create_reader_from_data(data: &str) -> Result<Box<dyn Read + Send>> {
-    if let Some(path) = data.strip_prefix('@') {
-        if path == "-" {
-            // Read from stdin
-            Ok(Box::new(std::io::stdin()))
-        } else {
-            // Read from file
-            let file = File::open(path).into_diagnostic()?;
-            Ok(Box::new(file))
-        }
-    } else {
-        // Direct JSON string
-        Ok(Box::new(Cursor::new(data.to_string())))
-    }
-}
-
-fn load_config(args: &SendArgs) -> Result<config::Config> {
-    use figment::{
-        Figment,
-        providers::{Format, Toml},
-    };
-
+/// Load configuration with CLI argument overrides (used by send command).
+fn load_config(args: &SendArgs) -> Result<Config> {
     // Start with base configuration
     let mut figment = Figment::new().merge(Toml::string(SEND_BASE_CONFIG));
 
@@ -197,12 +134,17 @@ fn load_config(args: &SendArgs) -> Result<config::Config> {
     figment.extract().into_diagnostic()
 }
 
-// Create CLI override configuration from command line arguments
-// return an empty string if nothing to overrides
+/// Create CLI override configuration from command line arguments.
+/// Returns an empty string if nothing to override.
 fn convert_args_into_toml(args: &SendArgs) -> Result<String> {
     use std::fmt::Write as _;
 
     let mut cli_overrides = std::collections::HashMap::<String, String>::new();
+
+    // Always inject the CLI data
+    // Use triple-quoted string to avoid escaping issues with JSON
+    let data_toml = format!("\"\"\"{}\"\"\"", args.data);
+    cli_overrides.insert("sources.cli.extractor.data".to_string(), data_toml);
 
     // Override the HTTP sink configuration
     if let Some(url) = &args.url {
@@ -233,6 +175,9 @@ fn convert_args_into_toml(args: &SendArgs) -> Result<String> {
         // Handle boolean values without quotes
         if value == "true" || value == "false" {
             writeln!(&mut cli_toml, "{key} = {value}").into_diagnostic()?;
+        } else if key == "sources.cli.extractor.data" {
+            // Data is already formatted as a TOML value (triple-quoted string)
+            writeln!(&mut cli_toml, "{key} = {value}").into_diagnostic()?;
         } else {
             writeln!(&mut cli_toml, "{key} = \"{value}\"").into_diagnostic()?;
         }
@@ -240,53 +185,9 @@ fn convert_args_into_toml(args: &SendArgs) -> Result<String> {
     Ok(cli_toml)
 }
 
-fn create_sinks(
-    config: &config::Config,
-    tx: &broadcast::Sender<crate::Message>,
-) -> Result<Vec<tokio::task::JoinHandle<Result<()>>>> {
-    let mut handles = Vec::new();
-
-    for (name, sink_config) in &config.sinks {
-        if sink_config.is_enabled() {
-            tracing::info!(sink = name, "starting sink");
-
-            let rx = tx.subscribe();
-            let sink_config = sink_config.clone();
-            let name = name.clone();
-
-            let handle = sinks::start(name, sink_config, rx);
-            handles.push(handle);
-        }
-    }
-
-    Ok(handles)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_create_reader_from_data_direct_json() {
-        let data = r#"{"test": "value"}"#;
-        let reader = create_reader_from_data(data).unwrap();
-
-        // Read the data back
-        let mut buf = String::new();
-        let mut reader = reader;
-        reader.read_to_string(&mut buf).unwrap();
-
-        assert_eq!(buf, data);
-    }
-
-    #[test]
-    fn test_create_reader_from_data_stdin() {
-        let data = "@-";
-        let reader = create_reader_from_data(data);
-
-        // Should succeed (we can't easily test stdin in unit tests)
-        assert!(reader.is_ok());
-    }
 
     #[tokio::test]
     async fn test_load_config_with_base() {

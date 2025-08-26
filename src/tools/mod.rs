@@ -1,3 +1,4 @@
+pub mod connect;
 #[cfg(feature = "tool_transform")]
 pub mod difference;
 pub mod send;

@@ -47,12 +47,13 @@ impl Config {
                 drop(next); // to drop in cascade channel's sender
                 Ok(())
             })),
-            Config::Cli(_config) => {
-                // CLI extractor is handled specially by the send command
-                // This case should not be reached in normal config-based operation
-                return Err(miette::miette!(
-                    "CLI extractor should be created directly by send command, not through config"
-                ));
+            Config::Cli(config) => {
+                let extractor = cli::CliExtractor::from_config(config, next)?;
+                Extractor::Task(tokio::spawn(async move {
+                    extractor.run().await?;
+                    tracing::info!(name, kind = "source", "exiting");
+                    Ok(())
+                }))
             }
             Config::Webhook(config) => Extractor::Webhook(webhook::make_route(config, next)),
             #[cfg(feature = "source_opendal")]

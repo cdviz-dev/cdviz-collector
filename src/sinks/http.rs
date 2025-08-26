@@ -83,7 +83,7 @@ fn add_source_headers(
 /// Add W3C Trace Context headers using OpenTelemetry propagation
 fn add_trace_context_headers(
     mut req: RequestBuilder,
-    trace_context: Option<&crate::connect::TraceContext>,
+    trace_context: Option<&crate::message::TraceContext>,
 ) -> RequestBuilder {
     if let Some(trace_ctx) = trace_context {
         // Create OpenTelemetry context with trace information

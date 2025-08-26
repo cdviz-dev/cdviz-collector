@@ -3,9 +3,10 @@
 #![doc(html_logo_url = "https://cdviz.dev/favicon.svg")]
 
 mod config;
-mod connect;
 mod errors;
 mod http;
+mod message;
+mod pipeline;
 mod pipes;
 mod security;
 mod sinks;
@@ -17,9 +18,9 @@ use std::{ffi::OsString, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
-pub(crate) use connect::{Message, Receiver, Sender};
 use errors::{IntoDiagnostic, Result};
 use init_tracing_opentelemetry::otlp::OtelGuard;
+pub(crate) use message::{Message, Receiver, Sender};
 use tracing::subscriber::DefaultGuard;
 use tracing_subscriber::layer::SubscriberExt;
 
@@ -53,7 +54,7 @@ pub(crate) struct Cli {
 enum Command {
     /// Launch as a server and connect sources to sinks.
     #[command(arg_required_else_help = true)]
-    Connect(connect::ConnectArgs),
+    Connect(tools::connect::ConnectArgs),
 
     /// Send JSON data directly to a sink (useful for testing and scripting).
     #[command(arg_required_else_help = true)]
@@ -132,7 +133,7 @@ pub(crate) async fn run(cli: Cli) -> Result<bool> {
         std::env::set_current_dir(dir).into_diagnostic()?;
     }
     match cli.command {
-        Command::Connect(args) => connect::connect(args).await,
+        Command::Connect(args) => tools::connect::connect(args).await,
         Command::Send(args) => tools::send::send(args).await,
         #[cfg(feature = "tool_transform")]
         Command::Transform(args) => tools::transform::transform(args).await,
