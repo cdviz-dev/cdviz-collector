@@ -1,6 +1,6 @@
 #[cfg(feature = "source_sse")]
 use super::sse;
-use super::{EventSourcePipe, opendal, webhook};
+use super::{EventSourcePipe, cli, opendal, webhook};
 use crate::errors::Result;
 use axum::Router;
 use serde::Deserialize;
@@ -13,6 +13,8 @@ pub(crate) enum Config {
     #[serde(alias = "noop")]
     #[default]
     Sleep,
+    #[serde(alias = "cli")]
+    Cli(cli::Config),
     #[serde(alias = "webhook")]
     Webhook(webhook::Config),
     #[cfg(feature = "source_opendal")]
@@ -45,6 +47,13 @@ impl Config {
                 drop(next); // to drop in cascade channel's sender
                 Ok(())
             })),
+            Config::Cli(_config) => {
+                // CLI extractor is handled specially by the send command
+                // This case should not be reached in normal config-based operation
+                return Err(miette::miette!(
+                    "CLI extractor should be created directly by send command, not through config"
+                ));
+            }
             Config::Webhook(config) => Extractor::Webhook(webhook::make_route(config, next)),
             #[cfg(feature = "source_opendal")]
             Config::Opendal(config) => {
