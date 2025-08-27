@@ -79,15 +79,16 @@ impl TryFrom<EventSource> for CDEvent {
 
     fn try_from(value: EventSource) -> std::result::Result<Self, Self::Error> {
         let mut body = value.body;
-        set_id_zero_to_cid(&mut body)?;
+        set_timestamp_if_missing(&mut body);
+        set_id_zero_or_missing_to_cid(&mut body)?;
         // TODO if source is empty, set a default value based on configuration TBD
         let cdevent: CDEvent = serde_json::from_value(body).into_diagnostic()?;
         Ok(cdevent)
     }
 }
 
-#[allow(clippy::indexing_slicing)]
-fn set_id_zero_to_cid(body: &mut serde_json::Value) -> Result<()> {
+//#[allow(clippy::indexing_slicing)]
+fn set_id_zero_or_missing_to_cid(body: &mut serde_json::Value) -> Result<()> {
     use cid::Cid;
     use multihash::Multihash;
     use serde_json::json;
@@ -96,12 +97,18 @@ fn set_id_zero_to_cid(body: &mut serde_json::Value) -> Result<()> {
     const RAW: u64 = 0x55;
     const SHA2_256: u64 = 0x12;
 
-    if body["context"]["id"] == json!("0") {
+    let compute_id = body
+        .get("context")
+        .and_then(|context| context.get("id"))
+        .is_none_or(|v| v.as_str() == Some("0"));
+    if compute_id {
         // Do not use multihash-codetable because one of it's transitive dependency raise
         // an alert "unmaintained advisory detected" about `proc-macro-error`
         // https://rustsec.org/advisories/RUSTSEC-2024-0370
         // let hash = Code::Sha2_256.digest(serde_json::to_string(&input.body)?.as_bytes());
         let mut hasher = Sha256::new();
+        // remove the field before computation to create the same hash when set to "0" or missing
+        body["context"].as_object_mut().map(|obj| obj.remove("id"));
         hasher.update(serde_json::to_string(&body).into_diagnostic()?.as_bytes());
         let hash = hasher.finalize();
         let mhash = Multihash::<64>::wrap(SHA2_256, hash.as_slice()).into_diagnostic()?;
@@ -109,6 +116,16 @@ fn set_id_zero_to_cid(body: &mut serde_json::Value) -> Result<()> {
         body["context"]["id"] = json!(cid.to_string());
     }
     Ok(())
+}
+
+fn set_timestamp_if_missing(body: &mut serde_json::Value) {
+    use serde_json::json;
+    let compute_timestamp =
+        body.get("context").is_none_or(|context| context.get("timestamp").is_none());
+    if compute_timestamp {
+        let timestamp = chrono::Utc::now().to_rfc3339();
+        body["context"]["timestamp"] = json!(timestamp);
+    }
 }
 
 pub(crate) fn create_sources_and_routes(
@@ -137,7 +154,36 @@ pub(crate) fn create_sources_and_routes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert2::{assert, let_assert};
+    use chrono::{DateTime, Utc};
     use serde_json::json;
+
+    #[test]
+    fn test_set_id_preserve_non_zero_id() {
+        let mut body = json!({
+            "context": {
+                "id": "my-id",
+                "source": "/event/source/123",
+                "type": "dev.cdevents.service.deployed.0.1.1",
+                "timestamp": "2023-03-20T14:27:05.315384Z"
+            },
+            "subject": {
+                "id": "mySubject123",
+                "source": "/event/source/123",
+                "type": "service",
+                "content": {
+                    "environment": {
+                        "id": "test123"
+                    },
+                    "artifactId": "pkg:oci/myapp@sha256%3A0b31b1c02ff458ad9b7b81cbdf8f028bd54699fa151f221d1e8de6817db93427"
+                }
+            }
+        });
+
+        set_id_zero_or_missing_to_cid(&mut body).unwrap();
+
+        assert_eq!(body["context"]["id"], json!("my-id"));
+    }
 
     #[test]
     fn test_set_id_zero_to_cid() {
@@ -161,11 +207,66 @@ mod tests {
             }
         });
 
-        set_id_zero_to_cid(&mut body).unwrap();
+        set_id_zero_or_missing_to_cid(&mut body).unwrap();
 
         assert_eq!(
             body["context"]["id"],
-            json!("bafkreid4ehbvqs3ae6l3htd35xhxbhbfehfkrq3gyf242s6nfcsnz2ueve")
+            json!("bafkreicuuogf3pc3lkdewdnngcnxgfrnontlfvtiihmxvcxqqxphxson3m")
         );
+    }
+
+    #[test]
+    fn test_set_id_missing_to_cid() {
+        let mut body = json!({
+            "context": {
+                "source": "/event/source/123",
+                "type": "dev.cdevents.service.deployed.0.1.1",
+                "timestamp": "2023-03-20T14:27:05.315384Z"
+            },
+            "subject": {
+                "id": "mySubject123",
+                "source": "/event/source/123",
+                "type": "service",
+                "content": {
+                    "environment": {
+                        "id": "test123"
+                    },
+                    "artifactId": "pkg:oci/myapp@sha256%3A0b31b1c02ff458ad9b7b81cbdf8f028bd54699fa151f221d1e8de6817db93427"
+                }
+            }
+        });
+
+        set_id_zero_or_missing_to_cid(&mut body).unwrap();
+
+        assert_eq!(
+            body["context"]["id"],
+            json!("bafkreicuuogf3pc3lkdewdnngcnxgfrnontlfvtiihmxvcxqqxphxson3m")
+        );
+    }
+
+    #[test]
+    fn test_set_timestamp_if_missing() {
+        let mut body = json!({
+            "context": {
+                "source": "/event/source/123",
+                "type": "dev.cdevents.service.deployed.0.1.1",
+            },
+            "subject": {
+                "id": "mySubject123",
+                "source": "/event/source/123",
+                "type": "service",
+                "content": {
+                    "environment": {
+                        "id": "test123"
+                    },
+                    "artifactId": "pkg:oci/myapp@sha256%3A0b31b1c02ff458ad9b7b81cbdf8f028bd54699fa151f221d1e8de6817db93427"
+                }
+            }
+        });
+
+        assert!(!body["context"]["timestamp"].is_string());
+        set_timestamp_if_missing(&mut body);
+        let_assert!(Some(datetime) = body["context"]["timestamp"].as_str());
+        let_assert!(Ok(_) = datetime.parse::<DateTime<Utc>>());
     }
 }

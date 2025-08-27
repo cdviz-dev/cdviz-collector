@@ -301,7 +301,3 @@ We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md)
 Note: This project has been developed with assistance from Claude Code. All AI-generated code has been carefully reviewed, tested, and validated to ensure quality, security, and adherence to Rust best practices.
 
 [cdevents]: https://cdevents.dev/
-
-```
-
-```
