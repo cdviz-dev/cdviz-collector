@@ -76,25 +76,51 @@ use std::path::PathBuf;
 
 /// Arguments for send command
 #[derive(Debug, Clone, Args)]
-#[command(args_conflicts_with_subcommands = true, flatten_help = true, about, long_about = None)]
+#[command(args_conflicts_with_subcommands = true, flatten_help = true)]
 pub(crate) struct SendArgs {
-    /// JSON data to send. Can be a JSON string, @filename, or @- for stdin
+    /// JSON data to send to the sink.
+    ///
+    /// Can be specified as:
+    /// - Direct JSON string: '{"test": "value"}'
+    /// - File path: @data.json
+    /// - Stdin: @-
+    ///
+    /// The JSON data will be processed through the configured pipeline
+    /// and sent to the specified sink.
     #[clap(short = 'd', long = "data")]
     data: String,
 
-    /// HTTP URL to send the data to (default sink)
+    /// HTTP URL to send the data to.
+    ///
+    /// When specified, automatically enables the HTTP sink and disables
+    /// the debug sink. The data will be sent as `CloudEvents` format to
+    /// the specified endpoint.
+    ///
+    /// Example: `--url <https://api.example.com/webhook>`
     #[clap(short = 'u', long = "url")]
     url: Option<Url>,
 
-    /// The configuration file to use for advanced sink configuration
+    /// Configuration file for advanced sink settings.
+    ///
+    /// Optional TOML configuration file for advanced sink configuration
+    /// such as authentication, headers generation, or custom sink types.
+    /// Command line arguments will override configuration file settings.
     #[clap(long = "config", env("CDVIZ_COLLECTOR_CONFIG"))]
     config: Option<PathBuf>,
 
-    /// The directory to use as the working directory
+    /// Working directory for relative paths.
+    ///
+    /// Changes the working directory before processing. This affects
+    /// relative paths in configuration files and data file references.
     #[clap(short = 'C', long = "directory")]
     directory: Option<PathBuf>,
 
-    /// Additional headers for HTTP sink (can be specified multiple times)
+    /// Additional HTTP headers for the request.
+    ///
+    /// Specify custom headers for HTTP sink requests. Can be used multiple
+    /// times to add several headers. Format: "Header-Name: value"
+    ///
+    /// Example: `--header "X-API-Key: secret" --header "Content-Type: application/json"`
     #[clap(short = 'H', long = "header")]
     headers: Vec<String>,
 }

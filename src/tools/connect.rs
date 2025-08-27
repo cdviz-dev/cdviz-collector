@@ -18,9 +18,16 @@ use clap::Args;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Args)]
-#[command(args_conflicts_with_subcommands = true,flatten_help = true, about, long_about = None)]
+#[command(args_conflicts_with_subcommands = true, flatten_help = true)]
 pub(crate) struct ConnectArgs {
-    /// The configuration file to use.
+    /// Configuration file path for sources, sinks, and transformers.
+    ///
+    /// Specifies the TOML configuration file that defines the pipeline behavior.
+    /// If not provided, the collector will use the base configuration with default
+    /// settings. The configuration can also be specified via the `CDVIZ_COLLECTOR_CONFIG`
+    /// environment variable.
+    ///
+    /// Example: `--config cdviz-collector.toml`
     #[clap(long = "config", env("CDVIZ_COLLECTOR_CONFIG"))]
     config: Option<PathBuf>,
 }

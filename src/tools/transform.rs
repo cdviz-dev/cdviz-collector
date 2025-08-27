@@ -1,3 +1,82 @@
+//! Transform command for cdviz-collector.
+//!
+//! The `transform` command processes JSON files from an input directory through
+//! configured transformers and writes the results to an output directory. This is
+//! primarily used for testing transformations, validating transformer configurations,
+//! and batch processing of event files.
+//!
+//! # Features
+//!
+//! - **Batch Processing**: Recursively processes all JSON files in input directory
+//! - **Transformer Chaining**: Apply multiple transformers in sequence
+//! - **`CDEvent` Validation**: Validates output against `CDEvents` specification
+//! - **Interactive Review**: Review differences before accepting changes
+//! - **Flexible Output Modes**: Review, overwrite, or check modes for managing output
+//! - **Metadata Export**: Optional export of headers and metadata to separate files
+//!
+//! # Usage Examples
+//!
+//! ```bash
+//! # Basic transformation with passthrough
+//! cdviz-collector transform --input ./events --output ./transformed
+//!
+//! # Apply specific transformers
+//! cdviz-collector transform -i ./events -o ./transformed \
+//!   --transformer-refs github_events,add_metadata
+//!
+//! # Review mode (default) - interactive review of changes
+//! cdviz-collector transform -i ./events -o ./transformed --mode review
+//!
+//! # Overwrite mode - replace existing files without prompting
+//! cdviz-collector transform -i ./events -o ./transformed --mode overwrite
+//!
+//! # Check mode - fail if differences found (useful for CI)
+//! cdviz-collector transform -i ./events -o ./transformed --mode check
+//!
+//! # Export headers and metadata alongside transformed files
+//! cdviz-collector transform -i ./events -o ./transformed \
+//!   --export-headers --export-metadata
+//!
+//! # Skip CDEvent validation for non-CDEvent JSON
+//! cdviz-collector transform -i ./events -o ./transformed --no-check-cdevent
+//! ```
+//!
+//! # File Processing
+//!
+//! The transform command processes files as follows:
+//! 1. **Input Discovery**: Recursively finds `*.json` files in input directory
+//! 2. **File Filtering**: Excludes `*.headers.json`, `*.metadata.json`, and `*.json.new` files
+//! 3. **Transformation**: Applies configured transformers in sequence
+//! 4. **Temporary Output**: Creates `*.json.new` files with transformed content
+//! 5. **Validation**: Validates output against `CDEvents` specification (if enabled)
+//! 6. **Mode Processing**: Handles conflicts according to selected mode
+//! 7. **Cleanup**: Removes temporary files (unless `--keep-new-files` specified)
+//!
+//! # Modes
+//!
+//! - **Review Mode**: Interactive review showing differences between existing and new files
+//! - **Overwrite Mode**: Automatically replaces existing files with new versions
+//! - **Check Mode**: Compares files and fails if differences are found (useful for CI/testing)
+//!
+//! # Configuration
+//!
+//! The command requires a configuration file that defines available transformers:
+//!
+//! ```toml
+//! [transformers.github_events]
+//! type = "vrl"
+//! script = '''
+//! .type = "dev.cdevents.repository.created.0.1.1"
+//! .subject.id = .repository.full_name
+//! '''
+//!
+//! [transformers.add_metadata]
+//! type = "vrl"
+//! script = '''
+//! .customData.processed_at = now()
+//! '''
+//! ```
+
 use crate::{
     config,
     errors::{IntoDiagnostic, Result, miette},
@@ -18,54 +97,90 @@ use std::{
 };
 
 #[derive(Debug, Clone, Args)]
-#[command(args_conflicts_with_subcommands = true,flatten_help = true, about, long_about = None)]
+#[command(args_conflicts_with_subcommands = true, flatten_help = true)]
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct TransformArgs {
-    /// The configuration file to use.
+    /// Configuration file defining transformers and their settings.
+    ///
+    /// TOML configuration file that defines available transformers. The file
+    /// should contain transformer definitions that can be referenced by name
+    /// using the --transformer-refs option.
     #[clap(long = "config", env("CDVIZ_COLLECTOR_CONFIG"))]
     config: Option<PathBuf>,
 
-    /// Names of transformers to chain (comma separated or multiple args)
+    /// Names of transformers to chain together.
+    ///
+    /// Comma-separated list or multiple arguments specifying which transformers
+    /// to apply in sequence. Transformers are applied in the order specified.
+    ///
+    /// Example: `--transformer-refs github_events,add_metadata`
+    /// Example: `-t github_events -t add_metadata`
     #[clap(short = 't', long = "transformer-refs", default_value = "passthrough", value_delimiter= ',', num_args = 1..)]
     transformer_refs: Vec<String>,
 
-    /// The input directory with json files.
+    /// Input directory containing JSON files to transform.
+    ///
+    /// Directory path containing the JSON files to be processed. The tool will
+    /// recursively search for *.json files, excluding *.headers.json,
+    /// *.metadata.json, and *.json.new files.
     #[clap(short = 'i', long = "input")]
     input: PathBuf,
 
-    /// The output directory with json files.
+    /// Output directory for transformed JSON files.
+    ///
+    /// Directory where transformed files will be written. The directory structure
+    /// from the input will be preserved. Files will initially be created with
+    /// .json.new extension before being processed according to the selected mode.
     #[clap(short = 'o', long = "output")]
     output: PathBuf,
 
-    /// How to handle new vs existing output files
+    /// How to handle conflicts between new and existing output files.
+    ///
+    /// Controls the behavior when output files already exist:
+    /// - review: Interactive review of differences (default)
+    /// - overwrite: Replace existing files without prompting
+    /// - check: Fail if differences are found
     #[clap(short = 'm', long = "mode", value_enum, default_value_t = TransformMode::Review)]
     mode: TransformMode,
 
-    /// Do not check if output's body is a cdevent
+    /// Skip validation that output body is a valid `CDEvent`.
+    ///
+    /// By default, the tool validates that transformation results produce
+    /// valid `CDEvent` objects. Use this flag to disable validation if you're
+    /// working with non-CDEvent JSON data.
     #[clap(long)]
     no_check_cdevent: bool,
 
-    /// Export headers to .headers.json files
+    /// Export headers to separate .headers.json files.
+    ///
+    /// When enabled, HTTP headers from the original request will be exported
+    /// to .headers.json files alongside the main JSON output files.
     #[clap(long)]
     export_headers: bool,
 
-    /// Export metadata to .metadata.json files
+    /// Export metadata to separate .metadata.json files.
+    ///
+    /// When enabled, event metadata (timestamps, source info, etc.) will be
+    /// exported to .metadata.json files alongside the main JSON output files.
     #[clap(long)]
     export_metadata: bool,
 
-    /// Keep the .json.new files after transformation (temporary generated files)
+    /// Keep temporary .json.new files after processing.
+    ///
+    /// Normally, temporary .json.new files created during transformation are
+    /// cleaned up after processing. Use this flag to preserve them for debugging.
     #[clap(long)]
     keep_new_files: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Default)]
 enum TransformMode {
-    /// interactive review generated against existing output
+    /// Interactive review of differences between new and existing output files
     #[default]
     Review,
-    /// overwrite existing output files without checking
+    /// Overwrite existing output files without prompting
     Overwrite,
-    /// check generated against existing output and failed on difference
+    /// Check for differences and fail if any are found
     Check,
 }
 
