@@ -33,16 +33,32 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 // TODO add options (or subcommand) to `check-configuration` (regardless of enabled), `configuration-dump` (after consolidation (with filter or not enabled) and exit or not),
 // TODO add options to overide config from cli arguments (like from env)
 #[derive(Debug, Clone, Parser)]
-#[command(flatten_help = true,version, about, long_about = None)]
+#[command(
+    flatten_help = true,
+    version,
+    about,
+    long_about = "cdviz-collector provides a configurable pipeline architecture that can receive events \
+from various sources (webhooks, files, SSE), transform them using VRL or Handlebars, and send them \
+to multiple destinations (HTTP endpoints, databases, files). It supports real-time event processing \
+with CloudEvents format and CDEvents specification compliance."
+)]
 pub(crate) struct Cli {
     #[command(flatten)]
     verbose: clap_verbosity_flag::Verbosity,
 
-    /// Disable OpenTelemetry initialization, use minimal tracing setup (useful for testing)
+    /// Disable OpenTelemetry initialization and use minimal tracing setup.
+    ///
+    /// This is useful for testing environments or when you want to avoid
+    /// OpenTelemetry overhead. When disabled, only basic console logging
+    /// will be available without distributed tracing capabilities.
     #[clap(long = "disable-otel", global = true)]
     disable_otel: bool,
 
-    /// The directory to use as the working directory.
+    /// Change working directory before executing the command.
+    ///
+    /// This affects relative paths in configuration files and data files.
+    /// Useful when running the collector from a different location than
+    /// where your configuration and data files are located.
     #[clap(short = 'C', long = "directory", global = true)]
     directory: Option<PathBuf>,
 
@@ -52,19 +68,28 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Clone, Subcommand)]
 enum Command {
-    /// Launch as a server and connect sources to sinks.
+    /// Launch collector as a server to connect sources to sinks.
+    ///
+    /// Runs the collector in server mode, enabling configured sources to collect
+    /// events and dispatch them to configured sinks through the pipeline. The server
+    /// provides HTTP endpoints for webhook sources and SSE sinks.
     #[command(arg_required_else_help = true)]
     Connect(tools::connect::ConnectArgs),
 
-    /// Send JSON data directly to a sink (useful for testing and scripting).
+    /// Send JSON data directly to a sink for testing and scripting.
+    ///
+    /// This command allows sending JSON data directly to configured sinks without
+    /// running a full server. Useful for testing transformations, debugging sink
+    /// configurations, or scripting event dispatch.
     #[command(arg_required_else_help = true)]
     Send(tools::send::SendArgs),
 
-    /// Transform local files and potentially check them.
-    /// The input & output files are expected to be json files.
-    /// The filename of output files will be the same as the input file but with a '.out.json'
-    /// extension (input file with this extension will be ignored).
-    /// The output files include body, metdata and header fields.
+    /// Transform local JSON files using configured transformers.
+    ///
+    /// Processes JSON files from an input directory through configured transformers
+    /// and writes results to an output directory. Supports validation against `CDEvents`
+    /// specification and provides interactive review, overwrite, or check modes for
+    /// managing output files.
     #[cfg(feature = "tool_transform")]
     #[command(arg_required_else_help = true)]
     Transform(tools::transform::TransformArgs),
