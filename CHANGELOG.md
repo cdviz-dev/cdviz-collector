@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.12.1...0.13.0) - 2025-08-27
+
+### Added
+
+- create `context.id` and `context.timestamp` if missing
+
 ## [0.12.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.12.0...0.12.1) - 2025-08-27
 
 ### Other
