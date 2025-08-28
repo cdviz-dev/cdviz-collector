@@ -67,10 +67,6 @@ use crate::{
     pipeline::PipelineBuilder,
 };
 use clap::Args;
-use figment::{
-    Figment,
-    providers::{Format, Toml},
-};
 use reqwest::Url;
 use std::path::PathBuf;
 
@@ -143,7 +139,7 @@ type = "cli"
 "#;
 
 pub(crate) async fn send(args: SendArgs) -> Result<bool> {
-    // Load configuration with CLI overrides
+    // Load configuration with CLI overrides using ConfigBuilder
     let config = load_config(&args)?;
 
     // Create and run pipeline
@@ -154,22 +150,16 @@ pub(crate) async fn send(args: SendArgs) -> Result<bool> {
 
 /// Load configuration with CLI argument overrides (used by send command).
 fn load_config(args: &SendArgs) -> Result<Config> {
-    // Start with base configuration
-    let mut figment = Figment::new().merge(Toml::string(SEND_BASE_CONFIG));
-
-    // Merge user config file if provided
-    if let Some(config_file) = &args.config {
-        figment = figment.merge(Toml::file(config_file));
-    }
-
     // Create CLI override configuration from command line arguments
     let cli_toml = convert_args_into_toml(args)?;
-    if !cli_toml.is_empty() {
-        figment = figment.merge(Toml::string(&cli_toml));
-    }
 
-    // Extract final configuration
-    figment.extract().into_diagnostic()
+    // Use ConfigBuilder with send-specific base config and CLI overrides
+    Config::builder()
+        .with_base_config(SEND_BASE_CONFIG)
+        .with_config_file(args.config.clone())
+        .with_cli_overrides(if cli_toml.is_empty() { None } else { Some(cli_toml) })
+        .with_env_vars(true) // Now environment variables are supported!
+        .build()
 }
 
 /// Create CLI override configuration from command line arguments.
