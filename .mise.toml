@@ -157,6 +157,16 @@ run = [
     "CDVIZ_COLLECTOR__SINKS__DEBUG__ENABLED=true cargo run -- connect -vv --config cdviz-collector.toml --directory ./examples/assets",
 ]
 
+[tasks."examples:debug-formats"]
+description = "demonstrate debug sink format options (rust_debug vs json)"
+run = [
+    "echo '=== Debug Sink with Rust Debug Format ==='",
+    "CDVIZ_COLLECTOR__SINKS__DEBUG__ENABLED=true CDVIZ_COLLECTOR__SINKS__DEBUG__FORMAT=rust_debug cargo run -- send --data @examples/assets/inputs/cdevents_json/artifact_published.json",
+    "echo '=== Debug Sink with JSON Format ==='",
+    "CDVIZ_COLLECTOR__SINKS__DEBUG__ENABLED=true CDVIZ_COLLECTOR__SINKS__DEBUG__FORMAT=json cargo run -- send --data @examples/assets/inputs/cdevents_json/artifact_published.json",
+    "echo '=== Format comparison complete. Check the logs above to see the difference between rust_debug and json formats ==='",
+]
+
 [tasks."ci"]
 depends = ["lint", "test", "deny"]
 description = "set of tasks run by CI"
