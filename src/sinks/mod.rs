@@ -47,7 +47,7 @@ pub(crate) enum Config {
 
 impl Default for Config {
     fn default() -> Self {
-        Self::Debug(debug::Config { enabled: true })
+        Self::Debug(debug::Config { enabled: true, ..debug::Config::default() })
     }
 }
 
