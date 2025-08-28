@@ -108,10 +108,11 @@ fn init_log(verbose: Verbosity, disable_otel: bool) -> Result<ObservabilityGuard
         build_level_filter_layer, build_logger_text, init_subscribers_and_loglevel,
     };
     let level = if verbose.is_present() {
-        verbose.log_level().map(|level| level.to_string()).unwrap_or_default()
+        verbose.log_level_filter().as_str().to_lowercase()
     } else {
-        // in this case environment variable RUST_LOG (or OTEL_LOG_LEVEL) will be used, else "info"
-        String::new()
+        std::env::var("RUST_LOG")
+            .or_else(|_| std::env::var("OTEL_LOG_LEVEL"))
+            .unwrap_or_else(|_| "err".to_string())
     };
 
     if disable_otel {
