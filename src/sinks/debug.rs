@@ -8,25 +8,49 @@
 //!
 //! The debug sink supports two display formats for `CDEvents`:
 //!
-//! ### Rust Debug Format (`rust_debug`)
-//! The default format that uses Rust's `Debug` trait to display the `CDEvent` structure.
-//! This format is compact and shows the internal structure of the event object.
-//!
-//! ```toml
-//! [sinks.debug]
-//! enabled = true
-//! format = "rust_debug"  # Default, can be omitted
-//! ```
-//!
 //! ### JSON Format (`json`)
-//! Pretty-printed JSON format with 2-space indentation for better readability.
+//! The default format that displays events as pretty-printed JSON with 2-space indentation.
 //! This format is useful when you need to see the exact JSON structure or copy
 //! events for testing purposes.
 //!
 //! ```toml
 //! [sinks.debug]
 //! enabled = true
-//! format = "json"
+//! format = "json"  # Default, can be omitted
+//! ```
+//!
+//! ### Rust Debug Format (`rust_debug`)
+//! Alternative format that uses Rust's `Debug` trait to display the `CDEvent` structure.
+//! This format is compact and shows the internal structure of the event object.
+//!
+//! ```toml
+//! [sinks.debug]
+//! enabled = true
+//! format = "rust_debug"
+//! ```
+//!
+//! ## Destination Options
+//!
+//! The debug sink supports two output destinations:
+//!
+//! ### Standard Output (`stdout`)
+//! The default destination that prints events directly to stdout with pretty formatting.
+//! This is ideal for development and troubleshooting as it provides clean, readable output.
+//!
+//! ```toml
+//! [sinks.debug]
+//! enabled = true
+//! destination = "stdout"  # Default, can be omitted
+//! ```
+//!
+//! ### Structured Logging (`log_info`)
+//! Alternative destination that sends events through the structured logging system.
+//! Uses compact formatting to work well with log aggregation systems.
+//!
+//! ```toml
+//! [sinks.debug]
+//! enabled = true
+//! destination = "log_info"
 //! ```
 //!
 //! ## Environment Variables
@@ -34,6 +58,7 @@
 //! Configuration can also be set via environment variables:
 //! - `CDVIZ_COLLECTOR__SINKS__DEBUG__ENABLED=true`
 //! - `CDVIZ_COLLECTOR__SINKS__DEBUG__FORMAT=json`
+//! - `CDVIZ_COLLECTOR__SINKS__DEBUG__DESTINATION=stdout`
 //!
 //! ## Usage Examples
 //!
@@ -71,11 +96,20 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Default)]
 pub(crate) enum Format {
-    #[default]
     #[serde(rename = "rust_debug")]
     RustDebug,
+    #[default]
     #[serde(rename = "json")]
     Json,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Default)]
+pub(crate) enum Destination {
+    #[serde(rename = "log_info")]
+    LogInfo,
+    #[default]
+    #[serde(rename = "stdout")]
+    Stdout,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -85,31 +119,55 @@ pub(crate) struct Config {
     /// Display format for `CDEvents`
     #[serde(default)]
     pub(crate) format: Format,
+    /// Output destination for debug messages
+    #[serde(default)]
+    pub(crate) destination: Destination,
 }
 
 impl TryFrom<Config> for DebugSink {
     type Error = Report;
 
     fn try_from(value: Config) -> Result<Self> {
-        Ok(DebugSink { format: value.format })
+        Ok(DebugSink { format: value.format, destination: value.destination })
     }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct DebugSink {
     format: Format,
+    destination: Destination,
 }
 
 impl Sink for DebugSink {
     #[tracing::instrument(skip(self, msg), fields(cdevent_id = %msg.cdevent.id()))]
+    #[allow(clippy::print_stdout, clippy::disallowed_macros)]
     async fn send(&self, msg: &Message) -> Result<()> {
-        match self.format {
-            Format::RustDebug => {
-                tracing::info!(cdevent=?msg.cdevent, "mock sending");
+        match self.destination {
+            Destination::LogInfo => {
+                // Use compact format for logging to avoid issues with structured logging
+                match self.format {
+                    Format::RustDebug => {
+                        tracing::info!(cdevent=?msg.cdevent, "mock sending");
+                    }
+                    Format::Json => {
+                        // Use compact JSON for logging
+                        let json = serde_json::to_string(&msg.cdevent).into_diagnostic()?;
+                        tracing::info!(cdevent=%json, "mock sending");
+                    }
+                }
             }
-            Format::Json => {
-                let json = serde_json::to_string_pretty(&msg.cdevent).into_diagnostic()?;
-                tracing::info!(cdevent=%json, "mock sending");
+            Destination::Stdout => {
+                // Print directly to stdout with human-readable formatting, no prefix message
+                match self.format {
+                    Format::RustDebug => {
+                        println!("{:#?}", msg.cdevent);
+                    }
+                    Format::Json => {
+                        // Use pretty JSON for direct stdout output
+                        let json = serde_json::to_string_pretty(&msg.cdevent).into_diagnostic()?;
+                        println!("{json}");
+                    }
+                }
             }
         }
         Ok(())
@@ -162,10 +220,10 @@ mod tests {
         let config = Config { enabled: false, ..Config::default() };
         let_assert!(Ok(_) = DebugSink::try_from(config));
 
-        let config = Config { enabled: true, format: Format::Json };
+        let config = Config { enabled: true, format: Format::Json, ..Config::default() };
         let_assert!(Ok(_) = DebugSink::try_from(config));
 
-        let config = Config { enabled: false, format: Format::RustDebug };
+        let config = Config { enabled: false, format: Format::RustDebug, ..Config::default() };
         let_assert!(Ok(_) = DebugSink::try_from(config));
     }
 
@@ -174,12 +232,13 @@ mod tests {
         let config = Config { enabled: true, ..Config::default() };
         let serialized = serde_json::to_string(&config).unwrap();
         assert!(serialized.contains("true"));
-        assert!(serialized.contains("rust_debug"));
+        assert!(serialized.contains("json"));
+        assert!(serialized.contains("stdout"));
 
-        let config = Config { enabled: false, format: Format::Json };
+        let config = Config { enabled: false, format: Format::RustDebug, ..Config::default() };
         let serialized = serde_json::to_string(&config).unwrap();
         assert!(serialized.contains("false"));
-        assert!(serialized.contains("json"));
+        assert!(serialized.contains("rust_debug"));
     }
 
     #[test]
@@ -187,12 +246,12 @@ mod tests {
         let json = r#"{"enabled": true}"#;
         let config: Config = serde_json::from_str(json).unwrap();
         assert!(config.enabled);
-        assert_eq!(config.format, Format::RustDebug); // Default format
+        assert_eq!(config.format, Format::Json);
 
         let json = r#"{"enabled": false}"#;
         let config: Config = serde_json::from_str(json).unwrap();
         assert!(!config.enabled);
-        assert_eq!(config.format, Format::RustDebug); // Default format
+        assert_eq!(config.format, Format::Json);
 
         let json = r#"{"enabled": true, "format": "json"}"#;
         let config: Config = serde_json::from_str(json).unwrap();
@@ -211,7 +270,7 @@ mod tests {
         cases = 10
     )]
     async fn test_debug_sink_json_format(msg: Message) {
-        let config = Config { enabled: true, format: Format::Json };
+        let config = Config { enabled: true, format: Format::Json, ..Config::default() };
         let sink = DebugSink::try_from(config).unwrap();
 
         // This should not fail even with JSON serialization
