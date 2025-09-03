@@ -2,6 +2,8 @@
 
 Every contribution is welcome!
 
+By contributing to this project, you agree to the [Contributor License Agreement (CLA)](https://gist.github.com/davidB/254da6bb70028559f4730fa78c917eaf).
+
 ## How to contribute
 
 ### Reporting bugs
@@ -19,6 +21,13 @@ If you want to contribute documentation, please open a pull request, and start a
 ### Contributing code
 
 If you want to contribute code, please open an [issue] first to discuss what you want to do. Do not open a new [issue] to work on an existing [issue]. Then fork the repository, create a branch, and open a pull request.
+
+1. Fork the repository.
+2. Create a branch for your changes.
+3. Commit with `git commit -s` to sign off your work.
+4. Submit a pull request.
+
+All contributions must include a `Signed-off-by` line.
 
 ## How to build
 
