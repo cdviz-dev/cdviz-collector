@@ -1,7 +1,6 @@
 # cdviz-collector
 
 keywords: `cdevents`, `sdlc`, `cicd`
-status: wip
 
 A service & cli to collect SDLC/CI/CD events and to dispatch as [cdevents].
 
@@ -285,7 +284,7 @@ This software is distributed under a dual-licensing model:
 - The software is available under the AGPL 3.0 license. This means you can use, modify, and distribute the software under the terms of the AGPL 3.0. Any modifications or derivative works must also be licensed under AGPL 3.0.
 - For more details, see the [AGPL-3.0-only](LICENSE).
 
-2. Proprietary License:
+2. Commercial License:
 
 - Alternatively, the software is available under a proprietary license. This option is suitable for users who require different terms or additional permissions not granted by the AGPL 3.0.
 - For more information about obtaining a proprietary license, please contact us at <contact@cdviz.dev>.
@@ -294,9 +293,16 @@ By using this software, you agree to comply with the terms of one of the above l
 
 For exceptions, see [LICENSING.md](LICENSING.md).
 
+### Scripts, Transformer's template and Licensing
+
+- **Built-in scripts** (included in this repository) are licensed under AGPL-3.0.
+- **User-provided scripts** (loaded at runtime) are **not subject to AGPL** and can be under any license.
+
 ## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md) for more details.
+
+By contributing to this project, you agree to the [Contributor License Agreement (CLA)](https://gist.github.com/davidB/254da6bb70028559f4730fa78c917eaf), which allows Alchim312 SAS to use your contributions under **both licenses**.
 
 Note: This project has been developed with assistance from Claude Code. All AI-generated code has been carefully reviewed, tested, and validated to ensure quality, security, and adherence to Rust best practices.
 
