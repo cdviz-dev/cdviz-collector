@@ -26,4 +26,9 @@ target "cdviz-collector" {
     "linux/amd64",
     "linux/arm64",
   ]
+  annotations = [
+    "org.opencontainers.image.source=https://github.com/cdviz-dev/cdviz-collector",
+    "org.opencontainers.image.licenses=AGPL-3.0",
+    "org.opencontainers.image.description=A service & cli to collect SDLC/CI/CD events and to dispatch as cdevents.",
+  ]
 }
