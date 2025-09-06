@@ -34,11 +34,8 @@ use crate::{
 };
 use axum::Router;
 use futures::future::TryJoinAll;
-use std::sync::LazyLock;
 use tokio::{sync::broadcast, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-
-static SHUTDOWN_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 
 /// Pipeline builder for creating and managing cdviz-collector pipelines.
 ///
@@ -126,7 +123,7 @@ impl PipelineBuilder {
 
         // Create sources using standard pattern
         let (source_handles, source_routes) =
-            self.create_sources(&SHUTDOWN_TOKEN, enable_http_server)?;
+            self.create_sources(&crate::SHUTDOWN_TOKEN, enable_http_server)?;
 
         let operation = if enable_http_server { "server" } else { "send" };
         tracing::info!("Starting {} operation", operation);
@@ -143,7 +140,8 @@ impl PipelineBuilder {
             routes.extend(source_routes);
             routes.extend(sink_routes);
 
-            let server_handle = crate::http::launch(&self.config.http, routes, &SHUTDOWN_TOKEN);
+            let server_handle =
+                crate::http::launch(&self.config.http, routes, &crate::SHUTDOWN_TOKEN);
             all_handles.push(server_handle);
         }
 
@@ -183,5 +181,5 @@ async fn handle_shutdown_signal() {
         () = ctrl_c => {},
         () = terminate => {},
     }
-    SHUTDOWN_TOKEN.cancel();
+    crate::SHUTDOWN_TOKEN.cancel();
 }
