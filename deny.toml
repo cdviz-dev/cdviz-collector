@@ -226,8 +226,8 @@ skip = [
     # "tower",
     # "sync_wrapper",
     "syn",
-    "regex-syntax",
-    "regex-automata",
+    # "regex-syntax",
+    # "regex-automata",
     # "redox_syscall",
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
