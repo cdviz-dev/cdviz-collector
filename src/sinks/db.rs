@@ -114,16 +114,19 @@ mod tests {
 
     use super::*;
     use rstest::*;
-    use rustainers::Container;
-    use rustainers::images::Postgres;
-    use rustainers::runner::{RunOption, Runner};
+    use testcontainers::{
+        GenericImage, ImageExt,
+        core::ContainerAsync,
+        core::{IntoContainerPort, WaitFor},
+        runners::AsyncRunner,
+    };
 
     struct TestContext {
         pub sink: DbSink,
-        // keep db container to drop it after the test
+        // Keep db container reference - testcontainers will automatically remove container when dropped
         #[allow(dead_code)]
-        db_guard: Container<Postgres>,
-        // keep tracing subscriber
+        db_guard: ContainerAsync<GenericImage>,
+        // Keep tracing subscriber
         #[allow(dead_code)]
         tracing_guard: tracing::subscriber::DefaultGuard,
     }
@@ -137,30 +140,30 @@ mod tests {
     // }
 
     #[fixture]
-    async fn async_pg() -> (DbSink, Container<Postgres>) {
-        let runner = Runner::auto().expect("container runner");
-        let image = Postgres::default().with_tag("16");
-        // runner should remove the container after the test (on drop)
-        let pg_container = runner
-            .start_with_options(
-                image,
-                RunOption::builder()
-                    .with_remove(true)
-                    //.with_name("test_cdviz") // use random name for parallel test
-                    .build(),
-            )
+    async fn async_pg() -> (DbSink, ContainerAsync<GenericImage>) {
+        let pg_container = GenericImage::new("postgres", "16")
+            .with_exposed_port(5432.tcp())
+            .with_wait_for(WaitFor::message_on_stdout(
+                "database system is ready to accept connections",
+            ))
+            .with_wait_for(WaitFor::message_on_stderr(
+                "database system is ready to accept connections",
+            ))
+            .with_network("bridge")
+            .with_env_var("POSTGRES_DB", "postgres")
+            .with_env_var("POSTGRES_USER", "postgres")
+            .with_env_var("POSTGRES_PASSWORD", "postgres")
+            .start()
             .await
             .expect("start container");
 
         let config = Config {
             enabled: true,
-            url: pg_container
-                .url()
-                .await
-                .expect("find db url")
-                // replace localhost by 127.0.0.1 because localhost in ipv6 doesn't work (fixed with rustainers 0.15)
-                //.replace("localhost", "127.0.0.1")
-                .into(),
+            url: {
+                // testcontainers automatically maps container port 5432 to a random host port
+                let host_port = pg_container.get_host_port_ipv4(5432).await.expect("get port");
+                format!("postgresql://postgres:postgres@127.0.0.1:{}/postgres", host_port).into()
+            },
             pool_connections_min: 1,
             pool_connections_max: 30,
         };
@@ -179,7 +182,9 @@ mod tests {
     // servers() is called once per test, so db could only started several times.
     // We could not used `static` (or the once on fixtures) because statis are not dropped at end of the test
     #[fixture]
-    async fn testcontext(#[future] async_pg: (DbSink, Container<Postgres>)) -> TestContext {
+    async fn testcontext(
+        #[future] async_pg: (DbSink, ContainerAsync<GenericImage>),
+    ) -> TestContext {
         let subscriber = tracing_subscriber::FmtSubscriber::builder()
             .with_max_level(tracing::Level::WARN)
             .finish();
