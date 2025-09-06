@@ -14,13 +14,14 @@ mod sources;
 mod tools;
 mod utils;
 
-use std::{ffi::OsString, path::PathBuf};
+use std::{ffi::OsString, path::PathBuf, sync::LazyLock};
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
 use errors::{IntoDiagnostic, Result};
 use init_tracing_opentelemetry::otlp::OtelGuard;
 pub(crate) use message::{Message, Receiver, Sender};
+use tokio_util::sync::CancellationToken;
 use tracing::subscriber::DefaultGuard;
 use tracing_subscriber::layer::SubscriberExt;
 
@@ -29,6 +30,9 @@ use tracing_subscriber::layer::SubscriberExt;
 #[cfg(all(target_env = "musl", target_pointer_width = "64"))]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
+// Static variable used as central hook to shutdown
+static SHUTDOWN_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 
 // TODO add options (or subcommand) to `check-configuration` (regardless of enabled), `configuration-dump` (after consolidation (with filter or not enabled) and exit or not),
 // TODO add options to overide config from cli arguments (like from env)

@@ -73,8 +73,9 @@ fn app(routes: Vec<Router>) -> Router {
         .layer(OtelInResponseLayer)
         //start OpenTelemetry trace on incoming request
         .layer(OtelAxumLayer::default())
-        .route("/healthz", get(health)) // request processed without span / trace
-        .route("/readyz", get(health)) // request processed without span / trace
+        // request processed without span / trace
+        .route("/healthz", get(health))
+        .route("/readyz", get(ready))
         .layer((
             cors,
             SetSensitiveRequestHeadersLayer::new(std::iter::once(http::header::AUTHORIZATION)),
@@ -87,6 +88,14 @@ fn app(routes: Vec<Router>) -> Router {
             // Replace the default of 2MB with 1MB.
             DefaultBodyLimit::max(1024*1024),
         ))
+}
+
+async fn ready() -> impl IntoResponse {
+    if crate::SHUTDOWN_TOKEN.is_cancelled() {
+        http::StatusCode::PRECONDITION_FAILED
+    } else {
+        http::StatusCode::OK
+    }
 }
 
 async fn health() -> impl IntoResponse {
