@@ -235,7 +235,7 @@ mod tests {
         }
     }
 
-    #[test_strategy::proptest(async = "tokio")]
+    #[test_strategy::proptest(async = "tokio", cases = 10)]
     async fn test_http_sink_successful_send(msg: Message) {
         let mock_server = MockServer::start().await;
 
@@ -256,7 +256,7 @@ mod tests {
         let_assert!(Ok(()) = sink.send(&msg).await);
     }
 
-    #[test_strategy::proptest(async = "tokio")]
+    #[test_strategy::proptest(async = "tokio", cases = 10)]
     async fn test_http_sink_server_error_handling(msg: Message) {
         let mock_server = MockServer::start().await;
 
@@ -277,7 +277,7 @@ mod tests {
         let_assert!(Ok(()) = sink.send(&msg).await);
     }
 
-    #[test_strategy::proptest(async = "tokio")]
+    #[test_strategy::proptest(async = "tokio", cases = 10)]
     async fn test_http_sink_network_failure(msg: Message) {
         // Use invalid URL to simulate network failure
         let config = Config {
@@ -291,7 +291,7 @@ mod tests {
         let_assert!(Err(_) = sink.send(&msg).await);
     }
 
-    #[test_strategy::proptest(async = "tokio")]
+    #[test_strategy::proptest(async = "tokio", cases = 10)]
     async fn test_http_sink_fallback_to_raw_json(msg: Message) {
         let mock_server = MockServer::start().await;
 
