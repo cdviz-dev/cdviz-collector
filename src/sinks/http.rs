@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use super::Sink;
 use crate::Message;
 use crate::errors::{IntoDiagnostic, Report, Result};
@@ -12,6 +14,7 @@ use opentelemetry::trace::TraceContextExt;
 use opentelemetry::{Context, global};
 use reqwest::Url;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
+use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use reqwest_tracing::TracingMiddleware;
 use serde::Deserialize;
 
@@ -23,13 +26,20 @@ pub(crate) struct Config {
     /// Header generation for outgoing HTTP requests - new map format
     #[serde(default)]
     pub(crate) headers: OutgoingHeaderMap,
+    /// Timeout for message production (default 30m)
+    #[serde(with = "humantime_serde", default = "default_total_duration_of_retries")]
+    pub(crate) total_duration_of_retries: Duration,
+}
+
+fn default_total_duration_of_retries() -> Duration {
+    Duration::from_secs(30 * 60)
 }
 
 impl TryFrom<Config> for HttpSink {
     type Error = Report;
 
     fn try_from(value: Config) -> Result<Self> {
-        Ok(HttpSink::new(value.destination, value.headers))
+        Ok(HttpSink::new(value.destination, value.headers, value.total_duration_of_retries))
     }
 }
 
@@ -41,14 +51,19 @@ pub(crate) struct HttpSink {
 }
 
 impl HttpSink {
-    pub(crate) fn new(url: Url, headers: OutgoingHeaderMap) -> Self {
+    pub(crate) fn new(
+        url: Url,
+        headers: OutgoingHeaderMap,
+        total_duration_of_retries: Duration,
+    ) -> Self {
         // Retry up to 3 times with increasing intervals between attempts.
-        //let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
+        let retry_policy = ExponentialBackoff::builder()
+            .build_with_total_retry_duration_and_max_retries(total_duration_of_retries);
         let client = ClientBuilder::new(reqwest::Client::new())
             // Trace HTTP requests. See the tracing crate to make use of these traces.
             .with(TracingMiddleware::default())
             // Retry failed requests.
-            //.with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
         Self { dest: url, client, headers }
     }
@@ -200,10 +215,20 @@ impl Sink for HttpSink {
 mod tests {
     use super::*;
     use crate::Message;
+    use crate::security::header::HeaderSource;
     use assert2::let_assert;
     use reqwest::Url;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn build_config(url: &str) -> Config {
+        Config {
+            enabled: true,
+            destination: Url::parse(url).unwrap(),
+            headers: OutgoingHeaderMap::new(),
+            total_duration_of_retries: Duration::from_secs(1),
+        }
+    }
 
     #[tokio::test]
     async fn test_http_sink() {
@@ -220,11 +245,7 @@ mod tests {
         .mount(&mock_server)
         .await;
 
-        let config = Config {
-            enabled: true,
-            destination: Url::parse(&format!("{}/events", &mock_server.uri())).unwrap(),
-            headers: OutgoingHeaderMap::new(),
-        };
+        let config = build_config(&format!("{}/events", &mock_server.uri()));
 
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -246,11 +267,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let config = Config {
-            enabled: true,
-            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: OutgoingHeaderMap::new(),
-        };
+        let config = build_config(&format!("{}/events", mock_server.uri()));
         let sink = HttpSink::try_from(config).unwrap();
 
         let_assert!(Ok(()) = sink.send(&msg).await);
@@ -266,11 +283,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let config = Config {
-            enabled: true,
-            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: OutgoingHeaderMap::new(),
-        };
+        let config = build_config(&format!("{}/events", mock_server.uri()));
         let sink = HttpSink::try_from(config).unwrap();
 
         // Should not fail even on server error (logs warning)
@@ -280,11 +293,7 @@ mod tests {
     #[test_strategy::proptest(async = "tokio", cases = 10)]
     async fn test_http_sink_network_failure(msg: Message) {
         // Use invalid URL to simulate network failure
-        let config = Config {
-            enabled: true,
-            destination: Url::parse("http://invalid-host-that-does-not-exist:9999/events").unwrap(),
-            headers: OutgoingHeaderMap::new(),
-        };
+        let config = build_config("http://invalid-host-that-does-not-exist:9999/events");
         let sink = HttpSink::try_from(config).unwrap();
 
         // Should fail with network error
@@ -302,11 +311,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let config = Config {
-            enabled: true,
-            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: OutgoingHeaderMap::new(),
-        };
+        let config = build_config(&format!("{}/events", mock_server.uri()));
         let sink = HttpSink::try_from(config).unwrap();
 
         let_assert!(Ok(()) = sink.send(&msg).await);
@@ -315,44 +320,22 @@ mod tests {
     #[test]
     fn test_http_sink_config_validation() {
         // Valid config
-        let config = Config {
-            enabled: true,
-            destination: Url::parse("https://example.com/events").unwrap(),
-            headers: OutgoingHeaderMap::new(),
-        };
+        let config = build_config("https://example.com/events");
         let_assert!(Ok(_) = HttpSink::try_from(config));
 
         // Config with various URL schemes
         let schemes = vec!["http", "https"];
         for scheme in schemes {
-            let config = Config {
-                enabled: true,
-                destination: Url::parse(&format!("{scheme}://example.com/events")).unwrap(),
-                headers: OutgoingHeaderMap::new(),
-            };
+            let config = build_config(&format!("{scheme}://example.com/events"));
             let_assert!(Ok(_) = HttpSink::try_from(config));
         }
     }
-}
-
-#[cfg(test)]
-mod security_tests {
-    use super::*;
-    use crate::Message;
-    use crate::security::header::HeaderSource;
-    use assert2::let_assert;
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
     async fn test_http_sink_rejects_non_https_in_production() {
         // In a real production environment, you might want to reject non-HTTPS URLs
         // This test documents the current behavior
-        let config = Config {
-            enabled: true,
-            destination: Url::parse("http://insecure.example.com/events").unwrap(),
-            headers: OutgoingHeaderMap::new(),
-        };
+        let config = build_config("http://insecure.example.com/events");
 
         // Currently allows HTTP - in production you might want to validate this
         let_assert!(Ok(_) = HttpSink::try_from(config));
@@ -371,11 +354,7 @@ mod security_tests {
         ];
 
         for url in internal_urls {
-            let config = Config {
-                enabled: true,
-                destination: Url::parse(url).unwrap(),
-                headers: OutgoingHeaderMap::new(),
-            };
+            let config = build_config(url);
 
             // Currently allows internal URLs - in production you might want to validate this
             let_assert!(Ok(_) = HttpSink::try_from(config));
@@ -403,11 +382,7 @@ mod security_tests {
             .mount(&mock_server)
             .await;
 
-        let config = Config {
-            enabled: true,
-            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: OutgoingHeaderMap::new(),
-        };
+        let config = build_config(&format!("{}/events", mock_server.uri()));
         let sink = HttpSink::try_from(config).unwrap();
 
         // Should handle redirects properly
@@ -441,6 +416,7 @@ mod security_tests {
                 );
                 map
             },
+            total_duration_of_retries: Duration::from_secs(1),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -461,11 +437,7 @@ mod security_tests {
             .mount(&mock_server)
             .await;
 
-        let config = Config {
-            enabled: true,
-            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: OutgoingHeaderMap::new(),
-        };
+        let config = build_config(&format!("{}/events", mock_server.uri()));
         let sink = HttpSink::try_from(config).unwrap();
 
         // Verify that tracing middleware is present and doesn't interfere
@@ -489,11 +461,7 @@ mod security_tests {
             .mount(&mock_server)
             .await;
 
-        let config = Config {
-            enabled: true,
-            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
-            headers: OutgoingHeaderMap::new(),
-        };
+        let config = build_config(&format!("{}/events", mock_server.uri()));
         let sink = HttpSink::try_from(config).unwrap();
 
         // Create a message with source headers
@@ -561,6 +529,7 @@ mod security_tests {
                 );
                 map
             },
+            total_duration_of_retries: Duration::from_secs(1),
         };
         let sink = HttpSink::try_from(config).unwrap();
 

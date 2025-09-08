@@ -211,7 +211,8 @@ async fn test_send_command_http_error_handling() {
     let mock = Mock::given(method("POST"))
         .and(path("/events"))
         .respond_with(ResponseTemplate::new(500).set_body_string("Internal Server Error"))
-        .expect(1);
+        .expect(3) // with retries the endpoint can be called several times
+        ;
 
     mock_server.register(mock).await;
 
@@ -227,6 +228,8 @@ async fn test_send_command_http_error_handling() {
         &event_json,
         "-u",
         &format!("{sink_url}/events"),
+        "--total-duration-of-retries",
+        "5s",
     ])
     .await;
 
@@ -237,7 +240,7 @@ async fn test_send_command_http_error_handling() {
     }
 
     // Give a moment for the request to be processed
-    sleep(Duration::from_millis(100)).await;
+    sleep(Duration::from_secs(6)).await;
 
     // Verify mock expectations were met
     mock_server.verify().await;
