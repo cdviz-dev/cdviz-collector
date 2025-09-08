@@ -96,6 +96,12 @@ pub(crate) struct SendArgs {
     #[clap(short = 'u', long = "url")]
     url: Option<Url>,
 
+    /// Total duration of retries on failed http request. (default 30s)
+    ///
+    /// Example: `--total-duration-of-retries 1m`
+    #[clap(long)]
+    total_duration_of_retries: Option<String>,
+
     /// Configuration file for advanced sink settings.
     ///
     /// Optional TOML configuration file for advanced sink configuration
@@ -131,6 +137,7 @@ type = "debug"
 enabled = false
 type = "http"
 destination = "http://localhost:8080/webhook/000"
+total_duration_of_retries = "30s"
 
 [sources.cli]
 enabled = true
@@ -179,6 +186,10 @@ fn convert_args_into_toml(args: &SendArgs) -> Result<String> {
         cli_overrides.insert("sinks.http.enabled".to_string(), "true".to_string());
         cli_overrides.insert("sinks.http.destination".to_string(), url.to_string());
         cli_overrides.insert("sinks.debug.enabled".to_string(), "false".to_string());
+        if let Some(duration) = &args.total_duration_of_retries {
+            cli_overrides
+                .insert("sinks.http.total_duration_of_retries".to_string(), duration.to_owned());
+        }
 
         // Add custom headers if provided
         if !args.headers.is_empty() {
@@ -225,6 +236,7 @@ mod tests {
             config: None,
             directory: None,
             headers: vec![],
+            total_duration_of_retries: None,
         };
 
         let config = load_config(&args).unwrap();
@@ -246,6 +258,7 @@ mod tests {
             config: None,
             directory: None,
             headers: vec!["X-API-Key: secret".to_string()],
+            total_duration_of_retries: None,
         };
 
         let config = load_config(&args).unwrap();
