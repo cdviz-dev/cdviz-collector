@@ -14,6 +14,9 @@ mod sources;
 mod tools;
 mod utils;
 
+// re-export
+pub mod cdevent_utils;
+
 use std::{ffi::OsString, path::PathBuf, sync::LazyLock};
 
 use clap::{Parser, Subcommand};
