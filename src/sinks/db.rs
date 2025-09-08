@@ -162,7 +162,7 @@ mod tests {
             url: {
                 // testcontainers automatically maps container port 5432 to a random host port
                 let host_port = pg_container.get_host_port_ipv4(5432).await.expect("get port");
-                format!("postgresql://postgres:postgres@127.0.0.1:{}/postgres", host_port).into()
+                format!("postgresql://postgres:postgres@127.0.0.1:{host_port}/postgres").into()
             },
             pool_connections_min: 1,
             pool_connections_max: 30,
