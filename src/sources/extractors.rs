@@ -1,3 +1,5 @@
+#[cfg(feature = "source_kafka")]
+use super::kafka;
 #[cfg(feature = "source_sse")]
 use super::sse;
 use super::{EventSourcePipe, cli, opendal, webhook};
@@ -17,6 +19,9 @@ pub(crate) enum Config {
     Cli(cli::Config),
     #[serde(alias = "webhook")]
     Webhook(webhook::Config),
+    #[cfg(feature = "source_kafka")]
+    #[serde(alias = "kafka")]
+    Kafka(kafka::config::Config),
     #[cfg(feature = "source_opendal")]
     #[serde(alias = "opendal")]
     Opendal(opendal::Config),
@@ -56,6 +61,15 @@ impl Config {
                 }))
             }
             Config::Webhook(config) => Extractor::Webhook(webhook::make_route(config, next)),
+            #[cfg(feature = "source_kafka")]
+            Config::Kafka(config) => {
+                let extractor = kafka::KafkaExtractor::try_from(config, next)?;
+                Extractor::Task(tokio::spawn(async move {
+                    extractor.run(cancel_token).await?;
+                    tracing::info!(name, kind = "source", "exiting");
+                    Ok(())
+                }))
+            }
             #[cfg(feature = "source_opendal")]
             Config::Opendal(config) => {
                 let mut extractor = opendal::OpendalExtractor::try_from(config, next)?;
