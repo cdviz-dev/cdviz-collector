@@ -5,6 +5,8 @@ pub(crate) mod debug;
 pub(crate) mod folder;
 #[cfg(feature = "sink_http")]
 pub(crate) mod http;
+#[cfg(feature = "sink_kafka")]
+pub(crate) mod kafka;
 #[cfg(feature = "sink_sse")]
 pub(crate) mod sse;
 
@@ -19,6 +21,8 @@ use enum_dispatch::enum_dispatch;
 use folder::FolderSink;
 #[cfg(feature = "sink_http")]
 use http::HttpSink;
+#[cfg(feature = "sink_kafka")]
+use kafka::KafkaSink;
 use serde::Deserialize;
 #[cfg(feature = "sink_sse")]
 use sse::SseSink;
@@ -37,6 +41,9 @@ pub(crate) enum Config {
     #[cfg(feature = "sink_http")]
     #[serde(alias = "http")]
     Http(http::Config),
+    #[cfg(feature = "sink_kafka")]
+    #[serde(alias = "kafka")]
+    Kafka(kafka::Config),
     #[cfg(feature = "sink_folder")]
     #[serde(alias = "folder")]
     Folder(folder::Config),
@@ -61,6 +68,8 @@ impl Config {
             Self::Folder(folder::Config { enabled, .. }) => *enabled,
             #[cfg(feature = "sink_http")]
             Self::Http(http::Config { enabled, .. }) => *enabled,
+            #[cfg(feature = "sink_kafka")]
+            Self::Kafka(kafka::Config { enabled, .. }) => *enabled,
             #[cfg(feature = "sink_sse")]
             Self::Sse(sse::Config { enabled, .. }) => *enabled,
         }
@@ -79,6 +88,8 @@ impl TryFrom<Config> for SinkEnum {
             Config::Folder(config) => FolderSink::try_from(config)?.into(),
             #[cfg(feature = "sink_http")]
             Config::Http(config) => HttpSink::try_from(config)?.into(),
+            #[cfg(feature = "sink_kafka")]
+            Config::Kafka(config) => KafkaSink::try_from(config)?.into(),
             #[cfg(feature = "sink_sse")]
             Config::Sse(config) => SseSink::try_from(config)?.into(),
         };
@@ -96,6 +107,8 @@ enum SinkEnum {
     FolderSink,
     #[cfg(feature = "sink_http")]
     HttpSink,
+    #[cfg(feature = "sink_kafka")]
+    KafkaSink,
     #[cfg(feature = "sink_sse")]
     SseSink,
 }

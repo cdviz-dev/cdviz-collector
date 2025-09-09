@@ -26,7 +26,9 @@ default = [
     "sink_db",
     "sink_folder",
     "sink_http",
+    "sink_kafka",
     "sink_sse",
+    "source_kafka",
     "source_opendal",
     "source_sse",
     "tool_transform",
@@ -45,8 +47,10 @@ sink_http = [
     "reqwest/json",
     "reqwest/rustls-tls",
 ]
+sink_kafka = ["dep:rdkafka"]
 sink_sse = ["dep:tokio-stream"]
 #! ### Sources
+source_kafka = ["dep:rdkafka"]
 source_opendal = ["dep:bytes", "dep:csv", "dep:globset", "dep:opendal"]
 source_sse = ["dep:reqwest-eventsource", "dep:uuid"]
 
@@ -100,6 +104,7 @@ opendal = { version = "0.54", default-features = false, features = [
   "services-sftp",
 ], optional = true }
 opentelemetry = "0.30"
+rdkafka = { version = "0.38", optional = true }
 regex = "1"
 reqwest = { version = "0.12", default-features = false, optional = true }
 reqwest-eventsource = { version = "0.6", optional = true }
@@ -158,10 +163,11 @@ pretty_assertions = "1"
 proptest = "1"
 reqwest-eventsource = "0.6"
 rstest = "0.26"
-testcontainers = "0.25"
 tempfile = "3"
 test-strategy = "0.4"
 test-trace = "0.3"
+testcontainers = "0.25"
+testcontainers-redpanda-rs = "0.12"
 time = "=0.3.39"                                                   # HACK explicit fix version (not used) to avoid compilation errors on domain #see https://github.com/NLnetLabs/domain/issues/502
 toml = "0.8"                                                       # same version as figment
 tower = { version = "0.5", features = ["util"] }

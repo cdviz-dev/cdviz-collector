@@ -1,5 +1,7 @@
 pub(crate) mod cli;
 pub(crate) mod extractors;
+#[cfg(feature = "source_kafka")]
+pub(crate) mod kafka;
 #[cfg(feature = "source_opendal")]
 pub(crate) mod opendal;
 pub(crate) mod send_cdevents;
