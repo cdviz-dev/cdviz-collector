@@ -91,7 +91,7 @@ impl OpendalExtractor {
     pub(crate) async fn run(&mut self, cancel_token: CancellationToken) -> Result<()> {
         while !cancel_token.is_cancelled() {
             if let Err(err) = self.run_once().await {
-                tracing::warn!(?err, filter = ?self.filter, scheme =? self.op.info().scheme(), root =? self.op.info().root(), "fail during scanning");
+                tracing::warn!(?err, scheme =? self.op.info().scheme(), root =? self.op.info().root(), "fail during scanning");
             }
             tokio::select! {
                 () = sleep(self.polling_interval) => {},
