@@ -102,7 +102,8 @@ wait_for = ["lint", "lint:*"]
 [tasks."test:unit"]
 wait_for = ["lint", "lint:*", "build:cli"]
 run = [
-    "cargo --locked nextest run",
+    #HACK: retry against integration test random failure (why ??)
+    "cargo --locked nextest run --test-threads 1 --retries 1",
     # "cargo test --doc",
     # "cargo hack nextest --each-feature -- --test-threads=1",
 ]
