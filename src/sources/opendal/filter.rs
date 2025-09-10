@@ -4,16 +4,20 @@ use chrono::DateTime;
 use chrono::Utc;
 use globset::GlobSet;
 
-#[derive(Debug, Clone)]
+#[derive(derive_more::Debug, Clone)]
 pub(crate) struct Filter {
     ts_after: DateTime<Utc>,
     ts_before: DateTime<Utc>,
+    #[debug(skip)]
     path_patterns: FilePatternMatcher,
 }
 
+const TIME_MARGIN: chrono::TimeDelta = chrono::Duration::seconds(1);
+
 impl Filter {
     pub(crate) fn from_patterns(path_patterns: FilePatternMatcher) -> Self {
-        Filter { ts_after: DateTime::<Utc>::MIN_UTC, ts_before: Utc::now(), path_patterns }
+        let ts_before = Utc::now() - TIME_MARGIN;
+        Filter { ts_after: DateTime::<Utc>::MIN_UTC, ts_before, path_patterns }
     }
 
     pub(crate) fn accept(&self, resource: &Resource) -> bool {
@@ -37,7 +41,7 @@ impl Filter {
 
     pub(crate) fn jump_to_next_ts_window(&mut self) {
         self.ts_after = self.ts_before;
-        self.ts_before = Utc::now();
+        self.ts_before = Utc::now() - TIME_MARGIN;
     }
 }
 
