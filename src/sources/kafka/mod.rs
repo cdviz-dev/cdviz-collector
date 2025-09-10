@@ -64,16 +64,12 @@ impl KafkaExtractor {
     }
 
     #[tracing::instrument(skip(self, cancel_token))]
-    #[allow(clippy::ignored_unit_patterns)]
     pub(crate) async fn run(mut self, cancel_token: CancellationToken) -> Result<()> {
         tracing::info!("Kafka source extractor starting");
 
-        loop {
+        while !cancel_token.is_cancelled() {
             tokio::select! {
-                _ = cancel_token.cancelled() => {
-                    tracing::info!("Kafka source extractor received cancellation signal");
-                    break;
-                }
+                () = cancel_token.cancelled() => {}
                 msg_result = tokio::time::timeout(self.poll_timeout, self.consumer.recv()) => {
                     match msg_result {
                         Ok(Ok(message)) => {
@@ -94,7 +90,7 @@ impl KafkaExtractor {
                 }
             }
         }
-
+        self.consumer.unsubscribe();
         tracing::info!("Kafka source extractor shutting down");
         Ok(())
     }

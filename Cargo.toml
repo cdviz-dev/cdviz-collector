@@ -23,18 +23,13 @@ doc = false
 ## default is "full" feature set
 default = [
     "config_remote",
-    "sink_db",
-    "sink_folder",
-    "sink_http",
-    "sink_kafka",
-    "sink_sse",
-    "source_kafka",
-    "source_opendal",
-    "source_sse",
+    "sink_all",
+    "source_all",
     "tool_transform",
     "transformer_vrl",
 ]
 #! ### Sinks
+sink_all = ["sink_db", "sink_folder", "sink_http", "sink_kafka", "sink_sse"]
 sink_db = ["dep:sqlx"]
 sink_folder = ["dep:opendal"]
 sink_http = [
@@ -51,6 +46,7 @@ sink_http = [
 sink_kafka = ["dep:rdkafka"]
 sink_sse = ["dep:tokio-stream"]
 #! ### Sources
+source_all = ["source_kafka", "source_opendal", "source_sse"]
 source_kafka = ["dep:rdkafka"]
 source_opendal = ["dep:bytes", "dep:csv", "dep:globset", "dep:opendal"]
 source_sse = ["dep:reqwest-eventsource", "dep:uuid"]

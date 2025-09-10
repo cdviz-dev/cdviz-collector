@@ -108,6 +108,7 @@ enum Command {
 enum ObservabilityGuard {
     DefaultGuard(DefaultGuard),
     OtelGuard(OtelGuard),
+    Nothing,
 }
 
 fn init_log(verbose: Verbosity, disable_otel: bool) -> Result<ObservabilityGuard> {
@@ -139,7 +140,7 @@ fn init_log(verbose: Verbosity, disable_otel: bool) -> Result<ObservabilityGuard
 #[allow(clippy::missing_errors_doc)]
 pub async fn run_with_sys_args() -> Result<()> {
     let cli = Cli::parse();
-    let ok = run(cli).await?;
+    let ok = run(cli, true).await?;
     if !ok {
         std::process::exit(1);
     }
@@ -153,15 +154,29 @@ where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
 {
+    run_with_args_and_log(args, true).await
+}
+
+#[allow(clippy::missing_errors_doc)]
+pub async fn run_with_args_and_log<I, T>(args: I, with_init_log: bool) -> Result<bool>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<std::ffi::OsString> + Clone,
+{
     // insert at first position a fake name of the current binary as expected by clap
     let mut cmdline = vec![OsString::from("cdviz-collector-lib")];
     cmdline.extend(args.into_iter().map(Into::into));
     let cli = Cli::try_parse_from(cmdline).into_diagnostic()?;
-    run(cli).await
+    run(cli, with_init_log).await
 }
 
-pub(crate) async fn run(cli: Cli) -> Result<bool> {
-    let _guard = init_log(cli.verbose, cli.disable_otel)?;
+#[allow(clippy::expect_used)]
+pub(crate) async fn run(cli: Cli, with_init_log: bool) -> Result<bool> {
+    let _guard = if with_init_log {
+        init_log(cli.verbose, cli.disable_otel)?
+    } else {
+        ObservabilityGuard::Nothing
+    };
     if let Some(dir) = &cli.directory {
         std::env::set_current_dir(dir).into_diagnostic()?;
     }
