@@ -1,3 +1,9 @@
+//! Configuration structures for the Kafka event source.
+//!
+//! This module defines the configuration options for the Kafka consumer source,
+//! including broker connection settings, topic subscriptions, consumer group
+//! configuration, and message processing behavior.
+
 use crate::security::rule::HeaderRuleMap;
 use serde::Deserialize;
 use std::collections::HashMap;

@@ -1,3 +1,42 @@
+//! Kafka event sink implementation.
+//!
+//! This module provides a Kafka producer sink that publishes `CDEvents` to Kafka topics.
+//! It supports:
+//!
+//! - `CDEvent` serialization to JSON with configurable content-type headers
+//! - Header generation and propagation from source messages
+//! - Configurable message keys (unset or `CDEvent` ID-based)
+//! - Producer configuration with sensible defaults for reliability
+//! - Timeout handling and error reporting with detailed logging
+//!
+//! The Kafka sink uses the rdkafka library with async/await support and integrates
+//! with the cdviz-collector's header security system for outgoing message headers.
+//!
+//! ## Configuration Example
+//!
+//! ```toml
+//! [sinks.kafka]
+//! type = "kafka"
+//! enabled = true
+//! brokers = "localhost:9092"
+//! topic = "cdevents"
+//! timeout = "30s"
+//! key_policy = "cdevent_id"  # or "unset"
+//!
+//! # Optional: Custom rdkafka producer configuration
+//! [sinks.kafka.rdkafka_config]
+//! "acks" = "all"
+//! "retries" = "5"
+//! "retry.backoff.ms" = "100"
+//! "compression.type" = "snappy"
+//!
+//! # Optional: Header generation configuration
+//! [sinks.kafka.headers.hmac]
+//! key = "your-secret-key"
+//! algorithm = "sha256"
+//! header_name = "x-signature"
+//! ```
+
 use super::Sink;
 use crate::Message;
 use crate::errors::{IntoDiagnostic, Report, Result};

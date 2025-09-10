@@ -1,3 +1,41 @@
+//! Kafka event source implementation.
+//!
+//! This module provides a Kafka consumer source that subscribes to Kafka topics
+//! and processes messages through the cdviz-collector pipeline. It supports:
+//!
+//! - Multi-topic subscription with configurable consumer groups
+//! - Header validation and selective header forwarding
+//! - JSON payload parsing with graceful fallback to string
+//! - Configurable polling timeouts and auto-commit behavior
+//! - Message metadata preservation (topic, partition, offset, timestamp)
+//!
+//! The Kafka source uses the rdkafka library and follows standard Kafka consumer
+//! patterns with async/await support for integration with the Tokio runtime.
+//!
+//! ## Configuration Example
+//!
+//! ```toml
+//! [sources.kafka]
+//! type = "kafka"
+//! enabled = true
+//! brokers = "localhost:9092"
+//! topics = ["events", "alerts"]
+//! group_id = "cdviz-collector"
+//! poll_timeout = "5s"
+//! auto_commit = true
+//! headers_to_keep = ["content-type", "x-trace-id"]
+//!
+//! # Optional: Custom rdkafka configuration
+//! [sources.kafka.rdkafka_config]
+//! "auto.offset.reset" = "earliest"
+//! "session.timeout.ms" = "30000"
+//! "enable.auto.commit" = "true"
+//!
+//! # Optional: Header validation rules
+//! [sources.kafka.headers.require]
+//! "content-type" = "application/json"
+//! ```
+
 pub(crate) mod config;
 
 use super::{EventSource, EventSourcePipe};
