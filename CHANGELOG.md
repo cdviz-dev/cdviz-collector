@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.14.2...0.15.0) - 2025-09-10
+
+### Added
+
+- *(http)* http sink retries on error
+- *(kafka)* add Kafka source and sink
+
+### Fixed
+
+- *(opendal)* filter with 1s delay to avoid missing due to concurrent scan/write
+- [**breaking**] sanitize event's id after source's processing
+
+### Other
+
+- update info about kafka support
+- *(deps)* update
+- [**breaking**] move to from AGPLv3 to ASL 2.0 (Apache License)
+- remove opendal's filter from log (unreadable)
+- add a framework (testkit) to test chain of 2 connector sink -> source
+- format & fix lint
+- avoid useless testcase (-10s)
+- migrate from rustainers to testcontainers
+
 ## [0.14.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.14.1...0.14.2) - 2025-09-06
 
 ### Fixed
