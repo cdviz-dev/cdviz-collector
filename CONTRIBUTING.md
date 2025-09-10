@@ -2,7 +2,7 @@
 
 Every contribution is welcome!
 
-By contributing to this project, you agree to the [Contributor License Agreement (CLA)](https://gist.github.com/davidB/254da6bb70028559f4730fa78c917eaf).
+By contributing to this project, you agree to the [Contributor License Agreement (CLA)](https://cla-assistant.io/cdviz-dev/cdviz-collector).
 
 ## How to contribute
 

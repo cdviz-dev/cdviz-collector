@@ -138,7 +138,7 @@ FROM scratch AS cdviz-collector
 # FROM --platform=$BUILDPLATFORM alpine:3 AS cdviz-collector
 
 LABEL org.opencontainers.image.source="https://github.com/cdviz-dev/cdviz-collector"
-LABEL org.opencontainers.image.licenses="AGPL-3.0"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.description="A service & cli to collect SDLC/CI/CD events and to dispatch as cdevents."
 
 ARG TARGETPLATFORM
