@@ -28,7 +28,8 @@ target "cdviz-collector" {
   ]
   annotations = [
     "org.opencontainers.image.source=https://github.com/cdviz-dev/cdviz-collector",
-    "org.opencontainers.image.licenses=AGPL-3.0",
+    "org.opencontainers.image.licenses=Apache-2.0",
     "org.opencontainers.image.description=A service & cli to collect SDLC/CI/CD events and to dispatch as cdevents.",
+    "org.opencontainers.image.authors=CDviz team <contact@cdviz.dev>",
   ]
 }
