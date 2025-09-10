@@ -45,10 +45,10 @@ flowchart LR
     src_cli(cli/stdin)
     src_http(HTTP)
     src_fs_content(FS folder with cdevents)
-    src_fs_activity(FS folder activity):::future
+    src_fs_activity(FS folder activity)
     src_s3_content(S3 with cdevents)
-    src_s3_activity(S3 activity):::future
-    src_kafka(Kafka):::future
+    src_s3_activity(S3 activity)
+    src_kafka(Kafka)
     src_nats(NATS):::future
     src_ecr(AWS ECR):::future
     src_misc(...):::future
@@ -68,7 +68,7 @@ flowchart LR
     sink_stdout(stdout)
     sink_db(DB)
     sink_http(HTTP)
-    sink_kafka(Kafka):::future
+    sink_kafka(Kafka)
     sink_nats(NATS):::future
   end
   q --> sink_stdout
