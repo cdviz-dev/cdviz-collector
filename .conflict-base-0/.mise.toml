@@ -1,0 +1,255 @@
+[settings]
+experimental = true
+idiomatic_version_file_enable_tools = ["rust"]
+
+[env]
+RUSTC_BOOTSTRAP= "1" # workaround to reduce cli full rebuild / conflict with rust-analyzer (see [VSCode Test Explorer regularly requires a full rebuild · Issue #17149 · rust-lang/rust-analyzer](https://github.com/rust-lang/rust-analyzer/issues/17149))
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = "http://127.0.0.1:4317"
+# OTEL_EXPORTER_OTLP_TRACES_PROTOCOL = "grpc"
+OTEL_TRACES_SAMPLER = "always_off"
+PG_OFFLINE_PWD = "mysecretpassword"
+PG_OFFLINE_USER = "me"
+PG_OFFLINE_URL = "postgres://{{env.PG_OFFLINE_USER}}:{{env.PG_OFFLINE_PWD}}@127.0.0.1:5432/{{env.PG_OFFLINE_USER}}"
+
+[tools]
+# "aqua:hadolint/hadolint" = "2"         # hadolint is a Dockerfile linter
+rust = { version = "1.89.0", profile="minimal", components="rustfmt,clippy,llvm-tools"} # the rust tool stack (with cargo, fmt, clippy) to build source
+"aqua:cargo-bins/cargo-binstall" = "1" # do not use cargo-binstall (it's a special name used by mise)
+"ubi:mozilla/grcov" = "0.8"
+"cargo:cargo-hack" = "latest"
+"cargo:cargo-sort" = "latest"
+"cargo:cargo-machete" = "latest"
+"cargo:cargo-deny" = "latest"
+"cargo:cargo-nextest" = "latest"
+"dprint" = "latest"
+"ubi:davidB/json-simple-obfuscator" = "latest"
+
+[tasks."install:sqlx-cli"]
+hide = true
+run = [
+    "cargo --locked install sqlx-cli --no-default-features --features rustls,postgres",
+]
+
+[tasks."deps:update"]
+description = "update dependencies, other calls to cargo will be `locked` for faster & reproducible builds"
+run = [
+  "cargo update",
+]
+
+[tasks."check"]
+run = "cargo --locked hack check --each-feature --no-dev-deps"
+
+[tasks."build"]
+run = "cargo --locked build"
+
+[tasks."format"]
+alias = "fmt"
+depends = ["obfuscate"]
+description = "Format the code and sort dependencies"
+run = [
+  "cargo --locked fmt",
+  "cargo --locked sort --grouped",
+  "dprint fmt",
+]
+
+[tasks.obfuscate]
+description = "obfuscate some data into the samples"
+run = [
+    "json-simple-obfuscator transformers/kubewatch_cloudevents/inputs/*/*.json",
+    "json-simple-obfuscator transformers/github_events/inputs/*/*.json",
+]
+
+[tasks."deny"]
+run = [
+    # "cargo --locked tree -i opentelemetry",
+    "cargo --locked deny --all-features check",
+]
+
+[tasks."lint"]
+depends = ["lint:rust"]
+description = "Lint all the code (lint_rust)"
+# cargo install --locked cargo-binstall
+# use Rustls rather than OpenSSL (be sure to add the features for the databases you intend to use!)
+# no binstall available
+# - lint:megalinter
+
+[tasks."lint:rust"]
+wait_for = ["build:cli"]
+run = [
+    "cargo --locked fmt --all -- --check",
+    "cargo --locked sort --grouped --check",
+    # using the profile 'test' to reduce the number of compilation when running with test
+    # => faster CI, less space used (and network for remote cache)
+    "cargo --locked clippy --workspace --all-features --all-targets --no-deps --profile test",
+]
+
+
+[tasks."lint:dependencies"]
+description = "check if dependencies are unused, outdated,..."
+run = ["cargo --locked machete --with-metadata",
+  "cargo outdated -wR",
+  # "cargo tree --duplicate", # managed by cargo deny
+  # "cargo audit", # check security, maybe done by cargo deny
+]
+
+[tasks."test"]
+# using `depends_post = ["test:transform:*"]` trigger an error
+# > Infinitive loop detected, all tasks are finished but the graph isn't empty test:...
+# So as workaround a wait_for is added to every task test:transform:...
+depends = ["test:unit", "test:transform:*"]
+wait_for = ["lint", "lint:*"]
+
+[tasks."test:unit"]
+wait_for = ["lint", "lint:*", "build:cli"]
+run = [
+    #HACK: retry against integration test random failure (why ??)
+    "cargo --locked nextest run --test-threads 1 --retries 1",
+    # "cargo test --doc",
+    # "cargo hack nextest --each-feature -- --test-threads=1",
+]
+
+[tasks."test:coverage"]
+description = "run test coverage to help identify code not executed on tests (!= code tested)"
+env = { RUSTFLAGS="-Cinstrument-coverage", LLVM_PROFILE_FILE="target/test-coverage/data/%p-%m.profraw" }
+run = [
+    "rm -rf ./target/test-coverage || true",
+    "mkdir -p ./target/test-coverage",
+    "mise run test",
+    "grcov ./target/test-coverage/data -s . --ignore 'target/*' --binary-path ./target/debug/ -t html --branch --ignore-not-existing -o ./target/test-coverage/html/",
+    "cat ./target/test-coverage/html/coverage.json",
+]
+
+# # release *arguments: install:cargo-release install:git-cliff
+# #   cargo release --workspace --execute {{ arguments }}
+# #   # git-cliff could not be used as `pre-release-hook` of cargo-release because it uses tag
+# #   git-cliff -o "CHANGELOG.md"
+# #   git add CHANGELOG.md && git commit -m "📝 update CHANGELOG" && git push
+
+[tasks."db:start"]
+description = "start a local db"
+shell = "bash -c"
+run = ["docker rm -f postgres || true", "sleep 3", """
+    docker run --name postgres \
+        -e "POSTGRES_PASSWORD=$PG_OFFLINE_PWD" \
+        -e "POSTGRES_USER=$PG_OFFLINE_USER" \
+        -v "$MISE_CONFIG_ROOT/tests/assets/db:/docker-entrypoint-initdb.d" \
+        -p 5432:5432 -d postgres:16
+    """]
+
+[tasks."db:stop"]
+description = "stop & delete a local db"
+run = ["docker rm -f postgres"]
+
+[tasks."db:prepare-offline"]
+depends = ["install:sqlx-cli"]
+description = "update db definition to be able compile sqlx code"
+run = [
+    "mise run db:start",
+    "sleep 5",
+    "sqlx database create --database-url \"$PG_OFFLINE_URL\"",
+    "cargo --locked sqlx prepare --workspace --database-url \"$PG_OFFLINE_URL\"",
+    "sqlx database drop -y --database-url \"PG_OFFLINE_URL\"",
+    "mise run db:stop",
+]
+
+[tasks."run"]
+description = "run a local server from the example configuration and src/main.rs"
+run = [
+    "CDVIZ_COLLECTOR__SINKS__DEBUG__ENABLED=true cargo run -- connect -vv --config cdviz-collector.toml --directory ./examples/assets",
+]
+
+[tasks."examples:debug-formats"]
+description = "demonstrate debug sink format options (rust_debug vs json)"
+run = [
+    "echo '=== Debug Sink with Rust Debug Format ==='",
+    "CDVIZ_COLLECTOR__SINKS__DEBUG__ENABLED=true CDVIZ_COLLECTOR__SINKS__DEBUG__FORMAT=rust_debug cargo run -- send --data @examples/assets/inputs/cdevents_json/artifact_published.json",
+    "echo '=== Debug Sink with JSON Format ==='",
+    "CDVIZ_COLLECTOR__SINKS__DEBUG__ENABLED=true CDVIZ_COLLECTOR__SINKS__DEBUG__FORMAT=json cargo run -- send --data @examples/assets/inputs/cdevents_json/artifact_published.json",
+    "echo '=== Format comparison complete. Check the logs above to see the difference between rust_debug and json formats ==='",
+]
+
+[tasks."ci"]
+depends = ["lint", "test", "deny"]
+description = "set of tasks run by CI"
+
+[tasks."list:containers"]
+description = "list all containers images"
+run = ["""docker image ls --tree --filter 'reference=*/*/cdviz-collector*'"""]
+
+[tasks."debug:bake"]
+description = "show the 'resolved' bake definition"
+run = ["docker buildx bake --print"]
+
+[tasks."build:container"]
+description = "build container image `cdviz-collector:wip` by downloading binary from github release (e.g. `mise run build:container --version 0.4.0`)"
+run = ["""
+    export VERSION={{option(name="version")}}
+    docker buildx bake --progress=plain cdviz-collector
+"""]
+
+[tasks."run:container"]
+run = ["""
+  docker run \
+      --name cdviz-collector \
+      --rm -it \
+      ghcr.io/cdviz-dev/cdviz-collector:latest
+"""]
+
+[tasks."publish:container"]
+description = "build the container image `cdviz-collector` and push it to ghcr.io"
+run = ["""
+    export VERSION={{option(name="version")}}
+    docker buildx bake --push cdviz-collector
+"""]
+
+[tasks."build:cli"]
+description = "build a cli, mainly for local development and test"
+hide = true
+run = "cargo --locked build --profile test"
+
+[tasks."test:transform:passthrough"]
+description = "run the transformation example passthrough (use `--mode review` to review and update)"
+wait_for = ["test:unit"]
+depends = ["build:cli"]
+run = """./target/debug/cdviz-collector \
+  transform \
+  --mode {{option(name="mode", default="check")}} \
+  --directory ./transformers/passthrough \
+  --config ./cdviz-collector.toml \
+  -t passthrough \
+  --input ./inputs \
+  --output ./outputs
+"""
+
+[tasks."test:transform:github_events"]
+description = "run the transformation example github_events (use `--mode review` to review and update)"
+wait_for = ["test:unit"]
+depends = ["build:cli"]
+run = """./target/debug/cdviz-collector \
+  transform \
+  --mode {{option(name="mode", default="check")}} \
+  --directory ./transformers/github_events \
+  --config ./cdviz-collector.toml \
+  -t github_events \
+  --input ./inputs \
+  --output ./outputs
+"""
+
+[tasks."test:transform:kubewatch_cloudevents"]
+description = "run the transformation example kubewatch_cloudevents (cloudevents) (use `--mode review` to review and update)"
+wait_for = ["test:unit"]
+depends = ["build:cli"]
+run = """./target/debug/cdviz-collector \
+  transform \
+  --mode {{option(name="mode", default="check")}} \
+  --directory ./transformers/kubewatch_cloudevents \
+  --config ./cdviz-collector.toml \
+  -t kubewatch_metadata,kubewatch_cloudevents \
+  --input ./inputs \
+  --output ./outputs
+"""
+
+[tasks."examples:httpyac"]
+description = "run the httpyac on `examples/assets` (default to `**/*.http`, eg. `mise run examples:httpyac '**/*.http'`)"
+dir = "examples/assets"
+run = """docker run -it --rm --network=host -v ${PWD}:/data ghcr.io/anweber/httpyac:latest '{{arg(default="**/*.http", var=true)}}'"""

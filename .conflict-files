@@ -1,0 +1,3 @@
+ancestorEntries = ["Cargo.toml", "Dockerfile"]
+ourEntries = ["Cargo.toml", "Dockerfile"]
+theirEntries = ["Cargo.toml", "Dockerfile"]

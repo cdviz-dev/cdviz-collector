@@ -1,0 +1,19 @@
+{
+  "context": {
+    "id": "0",
+    "source": "/kubewatch",
+    "timestamp": "2024-12-18T17:58:39.674637507+00:00",
+    "type": "dev.cdevents.service.upgraded.0.2.0",
+    "version": "0.4.1"
+  },
+  "subject": {
+    "content": {
+      "artifactId": "pkg:oci/aaaaaaaaa?repository_url=docker.io/robustadev/aaaaaaaaa&tag=v2%2E9%2E0",
+      "environment": {
+        "id": "cluster/A-dev"
+      }
+    },
+    "id": "aaaaaaaaa/aaaaaaaaa/aaaaaaaaa",
+    "type": "service"
+  }
+}

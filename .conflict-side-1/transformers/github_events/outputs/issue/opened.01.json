@@ -1,0 +1,34 @@
+{
+  "context": {
+    "id": "0",
+    "source": "cdviz-collector/github",
+    "timestamp": "2025-05-21T17:43:50+00:00",
+    "type": "dev.cdevents.ticket.created.0.1.0",
+    "version": "0.4.1"
+  },
+  "customData": {
+    "github": {
+      "repository": {
+        "url": "https://api.github.com/repos/aaaaa-aaa/aaaaa-aaaaaaaaa"
+      },
+      "sender": {
+        "login": "aaaaaA"
+      }
+    }
+  },
+  "subject": {
+    "content": {
+      "assignees": [],
+      "creator": "aaaaaA",
+      "labels": [
+        "question"
+      ],
+      "milestone": null,
+      "summary": "test title",
+      "ticketType": null,
+      "uri": "https://github.com/aaaaa-aaa/aaaaa-aaaaaaaaa/issues/98"
+    },
+    "id": "https://api.github.com/repos/aaaaa-aaa/aaaaa-aaaaaaaaa/issues/98",
+    "type": "ticket"
+  }
+}
