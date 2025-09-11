@@ -286,8 +286,8 @@ For exceptions, see [LICENSING.md](LICENSING.md).
 
 ### Scripts, Transformer's template and Licensing
 
-- **Built-in scripts** (included in this repository) are licensed under AGPL-3.0.
-- **User-provided scripts** (loaded at runtime) are **not subject to AGPL** and can be under any license.
+- **Built-in scripts** (included in this repository) are licensed under Apache Software License 2.0 [ASL-2.0](LICENSE).
+- **User-provided scripts** (loaded at runtime) are **not subject to ASL-2.0** and can be under any license.
 
 ## Contributing
 
