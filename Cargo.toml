@@ -106,7 +106,13 @@ opendal = { version = "0.54", default-features = false, features = [
   "services-sftp",
 ], optional = true }
 opentelemetry = "0.30"
-rdkafka = { version = "0.38", optional = true }
+rdkafka = { version = "0.38", features = [
+  "cmake-build",
+  "libz-static",
+  "static-linking",
+  "ssl-vendored",
+  "tokio",
+], default-features = false, optional = true }
 regex = "1"
 reqwest = { version = "0.12", default-features = false, optional = true }
 reqwest-eventsource = { version = "0.6", optional = true }

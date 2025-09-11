@@ -6,7 +6,7 @@ members = ["cargo:."]
 # Config for 'dist'
 [dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.28.0"
+cargo-dist-version = "0.30.0"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
@@ -14,7 +14,7 @@ installers = ["shell", "homebrew"]
 # A GitHub repo to push Homebrew formulas to
 tap = "cdviz-dev/homebrew-tap"
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-unknown-linux-musl", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl"]
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
 github-build-setup = "release-build-setup.yml.part"
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
@@ -37,9 +37,9 @@ dispatch-releases = false
 # of which actually rely on the specific Linux version.
 global = "ubuntu-latest"
 
-# buildjet could be used to build the binaries (faster, cheaper? than github's runners)
-# aarch64-unknown-linux-gnu = "buildjet-8vcpu-ubuntu-2204-arm" # "ubuntu-24.04-arm"
-aarch64-unknown-linux-musl = "buildjet-8vcpu-ubuntu-2204-arm" # "ubuntu-24.04-arm"
+# Use GitHub's native ARM64 runners instead of buildjet for cost-free native compilation
+aarch64-unknown-linux-gnu = "ubuntu-24.04-arm"
+aarch64-unknown-linux-musl = "ubuntu-24.04-arm" # "buildjet-8vcpu-ubuntu-2204-arm" #
 x86_64-unknown-linux-musl = "ubuntu-latest"
 
 [dist.github-custom-runners.aarch64-apple-darwin]
@@ -56,12 +56,10 @@ runner = "macos-14"
 runner = "ubuntu-latest"
 # container = { image = "quay.io/pypa/manylinux_2_28_x86_64", host = "x86_64-unknown-linux-musl" }
 
-[dist.github-custom-runners.aarch64-unknown-linux-gnu]
-# # See `x86_64-unknown-linux-gnu` comments
-# # For ARM Linux, dist actually uses an x86_64 host and uses cargo-zigbuild to cross compile,
-# # since GitHub doesn't offer a reliable free ARM Linux host yet.
-runner = "ubuntu-latest"
-# container = { image = "quay.io/pypa/manylinux_2_28_x86_64", host = "x86_64-unknown-linux-musl" }
+# [dist.github-custom-runners.aarch64-unknown-linux-gnu]
+# # Use native ARM64 runner instead of cross-compilation with zigbuild
+# # This avoids cross-compilation toolchain issues with complex C dependencies like librdkafka
+# runner = "ubuntu-24.04-arm"
 
 # [dist.github-custom-runners.aarch64-pc-windows-msvc]
 # # This setup is nearly identical to specifying nothing, but dist defaults to the oldest possible
