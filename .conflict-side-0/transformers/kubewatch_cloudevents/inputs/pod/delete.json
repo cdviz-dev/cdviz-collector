@@ -1,0 +1,368 @@
+{
+  "specversion": "1.0",
+  "type": "KUBERNETES_TOPOLOGY_CHANGE",
+  "source": "https://github.com/aantn/aaaaaaaaa",
+  "subject": "",
+  "id": "1111111111-11",
+  "time": "2024-12-18T17:58:40.787314783Z",
+  "datacontenttype": "application/json",
+  "data": {
+    "operation": "delete",
+    "kind": "Pod",
+    "clusterUid": "TODO",
+    "description": "A `Pod` in namespace `aaaaaaaaa` has been `Deleted`:\n`aaaaaaaaa-111a1a1a1a-1a1aa`",
+    "apiVersion": "v1",
+    "obj": {
+      "metadata": {
+        "name": "aaaaaaaaa-111a1a1a1a-1a1aa",
+        "generateName": "aaaaaaaaa-111a1a1a1a-",
+        "namespace": "aaaaaaaaa",
+        "uid": "8a966a72-f625-4d4f-bcfc-1f82fa707862",
+        "resourceVersion": "131517",
+        "creationTimestamp": "2024-12-18T17:48:56Z",
+        "deletionTimestamp": "2024-12-18T17:58:39Z",
+        "deletionGracePeriodSeconds": 0,
+        "labels": {
+          "app.kubernetes.io/instance": "aaaaaaaaa",
+          "app.kubernetes.io/managed-by": "Helm",
+          "app.kubernetes.io/name": "aaaaaaaaa",
+          "helm.sh/chart": "aaaaaaaaa-3.5.0",
+          "pod-template-hash": "598d5c9c5f"
+        },
+        "annotations": {
+          "checksum/config-map": "214ef15509770086add51e48f393f763ffed32da27f86576a159251f281cef95"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "ReplicaSet",
+            "name": "aaaaaaaaa-598d5c9c5f",
+            "uid": "8d4da537-1ac6-444f-8014-d5f5c5a9dbcb",
+            "controller": true,
+            "blockOwnerDeletion": true
+          }
+        ],
+        "managedFields": [
+          {
+            "manager": "kube-controller-manager",
+            "operation": "Update",
+            "apiVersion": "v1",
+            "time": "2024-12-18T17:48:56Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {
+                "f:annotations": {
+                  ".": {},
+                  "f:checksum/config-map": {}
+                },
+                "f:generateName": {},
+                "f:labels": {
+                  ".": {},
+                  "f:app.kubernetes.io/instance": {},
+                  "f:app.kubernetes.io/managed-by": {},
+                  "f:app.kubernetes.io/name": {},
+                  "f:helm.sh/chart": {},
+                  "f:pod-template-hash": {}
+                },
+                "f:ownerReferences": {
+                  ".": {},
+                  "k:{\"uid\":\"8d4da537-1ac6-444f-8014-d5f5c5a9dbcb\"}": {}
+                }
+              },
+              "f:spec": {
+                "f:affinity": {
+                  ".": {},
+                  "f:podAntiAffinity": {
+                    ".": {},
+                    "f:preferredDuringSchedulingIgnoredDuringExecution": {}
+                  }
+                },
+                "f:containers": {
+                  "k:{\"name\":\"aaaaaaaaa\"}": {
+                    ".": {},
+                    "f:image": {},
+                    "f:imagePullPolicy": {},
+                    "f:name": {},
+                    "f:resources": {},
+                    "f:terminationMessagePath": {},
+                    "f:terminationMessagePolicy": {},
+                    "f:volumeMounts": {
+                      ".": {},
+                      "k:{\"mountPath\":\"/opt/bitnami/aaaaaaaaa/.aaaaaaaaa.yaml\"}": {
+                        ".": {},
+                        "f:mountPath": {},
+                        "f:name": {},
+                        "f:subPath": {}
+                      }
+                    }
+                  }
+                },
+                "f:dnsPolicy": {},
+                "f:enableServiceLinks": {},
+                "f:restartPolicy": {},
+                "f:schedulerName": {},
+                "f:securityContext": {},
+                "f:serviceAccount": {},
+                "f:serviceAccountName": {},
+                "f:terminationGracePeriodSeconds": {},
+                "f:volumes": {
+                  ".": {},
+                  "k:{\"name\":\"configuration\"}": {
+                    ".": {},
+                    "f:configMap": {
+                      ".": {},
+                      "f:defaultMode": {},
+                      "f:name": {}
+                    },
+                    "f:name": {}
+                  }
+                }
+              }
+            }
+          },
+          {
+            "manager": "kubelet",
+            "operation": "Update",
+            "apiVersion": "v1",
+            "time": "2024-12-18T17:58:39Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:status": {
+                "f:conditions": {
+                  "k:{\"type\":\"ContainersReady\"}": {
+                    ".": {},
+                    "f:lastProbeTime": {},
+                    "f:lastTransitionTime": {},
+                    "f:reason": {},
+                    "f:status": {},
+                    "f:type": {}
+                  },
+                  "k:{\"type\":\"Initialized\"}": {
+                    ".": {},
+                    "f:lastProbeTime": {},
+                    "f:lastTransitionTime": {},
+                    "f:reason": {},
+                    "f:status": {},
+                    "f:type": {}
+                  },
+                  "k:{\"type\":\"PodReadyToStartContainers\"}": {
+                    ".": {},
+                    "f:lastProbeTime": {},
+                    "f:lastTransitionTime": {},
+                    "f:status": {},
+                    "f:type": {}
+                  },
+                  "k:{\"type\":\"Ready\"}": {
+                    ".": {},
+                    "f:lastProbeTime": {},
+                    "f:lastTransitionTime": {},
+                    "f:reason": {},
+                    "f:status": {},
+                    "f:type": {}
+                  }
+                },
+                "f:containerStatuses": {},
+                "f:hostIP": {},
+                "f:hostIPs": {},
+                "f:phase": {},
+                "f:podIP": {},
+                "f:podIPs": {
+                  ".": {},
+                  "k:{\"ip\":\"10.244.0.21\"}": {
+                    ".": {},
+                    "f:ip": {}
+                  }
+                },
+                "f:startTime": {}
+              }
+            }
+          }
+        ]
+      },
+      "spec": {
+        "volumes": [
+          {
+            "name": "configuration",
+            "configMap": {
+              "name": "aaaaaaaaa-config",
+              "defaultMode": 420
+            }
+          },
+          {
+            "name": "kube-api-access-vqbjd",
+            "projected": {
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "name": "kube-root-ca.crt",
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "path": "namespace",
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "defaultMode": 420
+            }
+          }
+        ],
+        "containers": [
+          {
+            "name": "aaaaaaaaa",
+            "image": "robustadev/aaaaaaaaa:v2.9.0",
+            "resources": {},
+            "volumeMounts": [
+              {
+                "name": "configuration",
+                "mountPath": "/opt/bitnami/aaaaaaaaa/.aaaaaaaaa.yaml",
+                "subPath": ".aaaaaaaaa.yaml"
+              },
+              {
+                "name": "kube-api-access-vqbjd",
+                "readOnly": true,
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount"
+              }
+            ],
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "imagePullPolicy": "IfNotPresent"
+          }
+        ],
+        "restartPolicy": "Always",
+        "terminationGracePeriodSeconds": 30,
+        "dnsPolicy": "ClusterFirst",
+        "serviceAccountName": "aaaaaaaaa",
+        "serviceAccount": "aaaaaaaaa",
+        "nodeName": "aaaaa-aaaaaaa-aaaaa",
+        "securityContext": {},
+        "affinity": {
+          "podAntiAffinity": {
+            "preferredDuringSchedulingIgnoredDuringExecution": [
+              {
+                "weight": 1,
+                "podAffinityTerm": {
+                  "labelSelector": {
+                    "matchLabels": {
+                      "app.kubernetes.io/instance": "aaaaaaaaa",
+                      "app.kubernetes.io/name": "aaaaaaaaa"
+                    }
+                  },
+                  "namespaces": ["aaaaaaaaa"],
+                  "topologyKey": "kubernetes.io/hostname"
+                }
+              }
+            ]
+          }
+        },
+        "schedulerName": "aaaaaaa-aaaaaaaaa",
+        "tolerations": [
+          {
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "effect": "NoExecute",
+            "tolerationSeconds": 300
+          },
+          {
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "effect": "NoExecute",
+            "tolerationSeconds": 300
+          }
+        ],
+        "priority": 0,
+        "enableServiceLinks": true,
+        "preemptionPolicy": "PreemptLowerPriority"
+      },
+      "status": {
+        "phase": "Succeeded",
+        "conditions": [
+          {
+            "type": "PodReadyToStartContainers",
+            "status": "False",
+            "lastProbeTime": null,
+            "lastTransitionTime": "2024-12-18T17:58:39Z"
+          },
+          {
+            "type": "Initialized",
+            "status": "True",
+            "lastProbeTime": null,
+            "lastTransitionTime": "2024-12-18T17:48:56Z",
+            "reason": "PodCompleted"
+          },
+          {
+            "type": "Ready",
+            "status": "False",
+            "lastProbeTime": null,
+            "lastTransitionTime": "2024-12-18T17:58:39Z",
+            "reason": "PodCompleted"
+          },
+          {
+            "type": "ContainersReady",
+            "status": "False",
+            "lastProbeTime": null,
+            "lastTransitionTime": "2024-12-18T17:58:39Z",
+            "reason": "PodCompleted"
+          },
+          {
+            "type": "PodScheduled",
+            "status": "True",
+            "lastProbeTime": null,
+            "lastTransitionTime": "2024-12-18T17:48:56Z"
+          }
+        ],
+        "hostIP": "172.20.0.2",
+        "podIP": "10.244.0.21",
+        "podIPs": [
+          {
+            "ip": "10.244.0.21"
+          }
+        ],
+        "startTime": "2024-12-18T17:48:56Z",
+        "containerStatuses": [
+          {
+            "name": "aaaaaaaaa",
+            "state": {
+              "terminated": {
+                "exitCode": 0,
+                "reason": "Completed",
+                "startedAt": "2024-12-18T17:48:56Z",
+                "finishedAt": "2024-12-18T17:58:39Z",
+                "containerID": "containerd://a275682d4eb42d956ee817b3b48f3d15b2a197bd4ba32b0a5c7be9010133ddd7"
+              }
+            },
+            "lastState": {},
+            "ready": false,
+            "restartCount": 0,
+            "image": "docker.io/robustadev/aaaaaaaaa:v2.9.0",
+            "imageID": "docker.io/robustadev/aaaaaaaaa@sha256:0457a51e36e8c082376bef001925f8327945252135090661480522732e154b10",
+            "containerID": "containerd://a275682d4eb42d956ee817b3b48f3d15b2a197bd4ba32b0a5c7be9010133ddd7",
+            "started": false
+          }
+        ],
+        "qosClass": "BestEffort"
+      }
+    },
+    "oldObj": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "Request URL": "https://webhook.example.com/ab6c0a6a-a301-4949-9af7-de7bc678a90d",
+  "Request method": "POST",
+  "Accept": "*/*",
+  "Content-Type": "application/json",
+  "User-Agent": "GitHub-Hookshot/47c50cc",
+  "X-GitHub-Delivery": "39b9dfb0-d8f3-11ef-9c16-6fb0b3bbbff8",
+  "X-GitHub-Event": "workflow_job",
+  "X-GitHub-Hook-ID": "111111111",
+  "X-GitHub-Hook-Installation-Target-ID": "111111111",
+  "X-GitHub-Hook-Installation-Target-Type": "organization",
+  "X-Hub-Signature": "sha1=31e6c54869baf2a7d921a4f76a95c64e119e59f6",
+  "X-Hub-Signature-256": "sha256=60baff3faf6927aba3898e9d1e9977f8f4786b42832532de4eae245882bc95aa"
+}

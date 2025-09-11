@@ -1,0 +1,39 @@
+# the webhook should be configured
+
+@host = http://localhost:8080
+@github_webhook_path = /webhook/000-github
+
+# code to execute after request is buil and before sending the request
+{{@request
+  if (request.headers["x-hub-signature-256"] == "to_process") {
+    const crypto = require('crypto');
+    const signature = crypto.createHmac('sha256', 'changeme')
+    //.update(`${request.method}\u2028${request.url}\u2028${date.getTime()}`).digest("base64");
+    .update(`${request.body}`).digest("hex");
+    request.headers["x-hub-signature-256"] = `sha256=${signature}`;
+  }
+}}
+
+###
+GET /healthz
+
+?? status == 200
+
+###
+POST {{host}}{{github_webhook_path}}
+Content-Type: application/json
+
+< ./inputs/workflow_run/completed.json
+
+?? status == 401
+?? js response.parsedBody.title == Invalid Signature
+?? js response.parsedBody.detail ==signature not found or readable
+
+###
+POST {{host}}{{github_webhook_path}}
+Content-Type: application/json
+x-hub-signature-256: to_process
+
+< ./inputs/workflow_run/completed.json
+
+?? status == 201

@@ -1,0 +1,18 @@
+# passthrough is a built-in transformer
+
+# # the vrl equivalent is:
+# [transformers.vrl_identity]
+# type = "vrl"
+# template = """
+# [.]
+# """
+#
+# [transformers.vrl_copy_l1]
+# type = "vrl"
+# template = """
+# [{
+#   "metadata": .metadata,
+#   "headers": .headers,
+#   "body": .body,
+# }]
+# """
