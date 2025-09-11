@@ -1,4 +1,4 @@
-# hadolint global ignore=DL3006,DL3008,DL3003
+# hadolint global ignore=DL3006,DL3008,DL3003,DL3007
 # see [Multi-platform | Docker Docs](https://docs.docker.com/build/building/multi-platform/)
 # see [Fast multi-arch Docker build for Rust projects - DEV Community](https://dev.to/vladkens/fast-multi-arch-docker-build-for-rust-projects-an1)
 # see [How to create small Docker images for Rust](https://kerkour.com/rust-small-docker-image)
@@ -16,57 +16,57 @@
 #
 # checkov:skip=CKV_DOCKER_7:Ensure the base image uses a non latest version tag
 # trivy:ignore:AVD-DS-0001
-FROM --platform=$BUILDPLATFORM rust:1.89.0-alpine AS build
-ARG PROFILE=release
+# FROM --platform=$BUILDPLATFORM rust:1.89.0-alpine AS build
+# ARG PROFILE=release
 
-ENV PKG_CONFIG_SYSROOT_DIR=/
-RUN <<EOT
-  set -eux
-  # musl-dev is required for the musl target
-  # zig + cargo-zigbuild are used to build cross platform C code
-  # make is used by jmealloc and some C code
-  apk add --no-cache musl-dev zig make # openssl-dev
-  update-ca-certificates
-EOT
+# ENV PKG_CONFIG_SYSROOT_DIR=/
+# RUN <<EOT
+#   set -eux
+#   # musl-dev is required for the musl target
+#   # zig + cargo-zigbuild are used to build cross platform C code
+#   # make is used by jmealloc and some C code
+#   apk add --no-cache musl-dev zig make # openssl-dev
+#   update-ca-certificates
+# EOT
 
-RUN <<EOT
-  set -eux
-  rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
-  cargo install --locked cargo-zigbuild
-EOT
+# RUN <<EOT
+#   set -eux
+#   rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+#   cargo install --locked cargo-zigbuild
+# EOT
 
-# Create appuser
-ENV USER=nonroot
-ENV UID=10001
+# # Create appuser
+# ENV USER=nonroot
+# ENV UID=10001
 
-RUN adduser \
-  --disabled-password \
-  --gecos "" \
-  --home "/nonexistent" \
-  --shell "/sbin/nologin" \
-  --no-create-home \
-  --uid "${UID}" \
-  "${USER}"
+# RUN adduser \
+#   --disabled-password \
+#   --gecos "" \
+#   --home "/nonexistent" \
+#   --shell "/sbin/nologin" \
+#   --no-create-home \
+#   --uid "${UID}" \
+#   "${USER}"
 
-WORKDIR /work
+# WORKDIR /work
 
-COPY ./ .
+# COPY ./ .
 
-# reduce size of target (good for caching)
-ENV CARGO_PROFILE_TEST_DEBUG=0
-# disable incremental compilation for faster from-scratch builds
-ENV CARGO_INCREMENTAL=0
-# TODO `upx /work/target/*/${PROFILE}/cdviz-collector`
-RUN <<EOT
-  set -eux
-  cargo zigbuild --locked --target x86_64-unknown-linux-musl --target aarch64-unknown-linux-musl "--$PROFILE"
-  mkdir -p /app/linux
-  ls target
-  cp "target/aarch64-unknown-linux-musl/${PROFILE}/cdviz-collector" /app/linux/arm64
-  cp "target/x86_64-unknown-linux-musl/${PROFILE}/cdviz-collector" /app/linux/amd64
-EOT
+# # reduce size of target (good for caching)
+# ENV CARGO_PROFILE_TEST_DEBUG=0
+# # disable incremental compilation for faster from-scratch builds
+# ENV CARGO_INCREMENTAL=0
+# # TODO `upx /work/target/*/${PROFILE}/cdviz-collector`
+# RUN <<EOT
+#   set -eux
+#   cargo zigbuild --locked --target x86_64-unknown-linux-musl --target aarch64-unknown-linux-musl "--$PROFILE"
+#   mkdir -p /app/linux
+#   ls target
+#   cp "target/aarch64-unknown-linux-musl/${PROFILE}/cdviz-collector" /app/linux/arm64
+#   cp "target/x86_64-unknown-linux-musl/${PROFILE}/cdviz-collector" /app/linux/amd64
+# EOT
 
-HEALTHCHECK NONE
+# HEALTHCHECK NONE
 
 #---------------------------------------------------------------------------------------------------
 # Instead of building from source, download the binary from github release
@@ -76,6 +76,7 @@ HEALTHCHECK NONE
 # trivy:ignore:AVD-DS-0001
 FROM --platform=$BUILDPLATFORM alpine:3 AS download
 ARG VERSION
+ARG VARIANT="gnu" # "musl"
 
 RUN <<EOT
   set -eux
@@ -86,6 +87,7 @@ EOT
 # Create appuser
 ENV USER=nonroot
 ENV UID=10001
+# ENV UID=65532
 
 RUN adduser \
   --disabled-password \
@@ -104,7 +106,7 @@ RUN <<EOT
 
   mkdir x86_64
   cd x86_64
-  curl -L -o cdviz-collector.tar.xz "https://github.com/cdviz-dev/cdviz-collector/releases/download/$VERSION/cdviz-collector-x86_64-unknown-linux-musl.tar.xz"
+  curl -L -o cdviz-collector.tar.xz "https://github.com/cdviz-dev/cdviz-collector/releases/download/${VERSION}/cdviz-collector-x86_64-unknown-linux-${VARIANT}.tar.xz"
   tar -xvf cdviz-collector.tar.xz --strip-components=1
   mv cdviz-collector /app/linux/amd64
   cd ..
@@ -112,7 +114,7 @@ RUN <<EOT
 
   mkdir aarch64
   cd aarch64
-  curl -L -o cdviz-collector.tar.xz "https://github.com/cdviz-dev/cdviz-collector/releases/download/$VERSION/cdviz-collector-aarch64-unknown-linux-musl.tar.xz"
+  curl -L -o cdviz-collector.tar.xz "https://github.com/cdviz-dev/cdviz-collector/releases/download/${VERSION}/cdviz-collector-aarch64-unknown-linux-${VARIANT}.tar.xz"
   tar -xvf cdviz-collector.tar.xz --strip-components=1
   mv cdviz-collector /app/linux/arm64
   cd ..
@@ -127,13 +129,18 @@ HEALTHCHECK NONE
 # TARGETPLATFORM usage to copy right binary from builder stage
 # ARG populated by docker itself
 
-# !! musl is not fully staticlly linked (ldd =>  /lib/ld-musl-x86_64.so.1) So scratch and chainguard/static do not work as is
-# issue above seems to be fixed by `rustflags = ["-C", "target-feature=+crt-static"]` in `.cargo/config.toml`
-# but keep the comments for reminder
+# !! keep the comments below for reminder:
+# - musl is not fully staticlly linked (ldd =>  /lib/ld-musl-x86_64.so.1) So scratch and chainguard/static
+#  do not work as is issue above seems to be fixed
+#  by `rustflags = ["-C", "target-feature=+crt-static"]` in `.cargo/config.toml`
+# - librdkafka doesn't compile correctly for musl and require openssl
+#   see <https://github.com/cdviz-dev/cdviz-collector/actions/runs/17625035379/job/50079673530> or search on internet
 
-FROM scratch AS cdviz-collector
-# # use chainguard if need certificates,...
-# FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/static:latest AS cdviz-collector
+## no scratch until issue with librdkafka are resolved
+# FROM scratch AS cdviz-collector
+# use chainguard if need certificates,...
+FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/static:latest AS cdviz-collector
+# FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/glibc-dynamic:latest AS cdviz-collector
 # # use alpine if need certificates, lib/ld-musl-x86_64.so.1, shell,...
 # FROM --platform=$BUILDPLATFORM alpine:3 AS cdviz-collector
 
