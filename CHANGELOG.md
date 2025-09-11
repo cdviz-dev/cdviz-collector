@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.15.0...0.16.0) - 2025-09-11
+
+### Other
+
+- [**breaking**] stop building & packaging for musl (issue with rdkafka)
+- fix the license of built-in transformer in the README
+- replace value of license in the samples of github event
+
 ## [0.15.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.14.2...0.15.0) - 2025-09-10
 
 ### Added
