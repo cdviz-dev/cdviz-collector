@@ -1,5 +1,6 @@
 #[cfg(feature = "config_remote")]
 mod remote_file_adapter;
+mod toml_provider;
 
 use crate::{
     errors::{Error, IntoDiagnostic, Result},
@@ -7,13 +8,14 @@ use crate::{
 };
 use figment::{
     Figment,
-    providers::{Env, Format, Toml},
+    providers::{Env, Format},
 };
 use figment_file_provider_adapter::FileAdapter;
 #[cfg(feature = "config_remote")]
 use remote_file_adapter::RemoteFileAdapter;
 use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf};
+pub use toml_provider::Toml;
 
 #[derive(Clone, Debug, Deserialize, Default)]
 pub(crate) struct Config {
@@ -190,7 +192,19 @@ mod tests {
     }
 
     #[rstest]
-    fn read_samples_config(#[files("./**/cdviz-collector.toml")] path: PathBuf) {
+    fn read_config_from_examples(#[files("./**/cdviz-collector.toml")] path: PathBuf) {
+        Jail::expect_with(|_jail| {
+            assert!(path.exists());
+            //HACK change the current dir to the parent of the config file, not thread safe/ test isolation
+            //jail.change_dir(path.parent().unwrap()).unwrap();
+            std::env::set_current_dir(path.parent().unwrap()).unwrap();
+            let _config: Config = Config::from_file(Some(path)).unwrap();
+            Ok(())
+        });
+    }
+
+    #[rstest]
+    fn read_config_from_tests(#[files("./tests/assets/config_samples/*.toml")] path: PathBuf) {
         Jail::expect_with(|_jail| {
             assert!(path.exists());
             //HACK change the current dir to the parent of the config file, not thread safe/ test isolation

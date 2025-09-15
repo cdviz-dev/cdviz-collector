@@ -1,0 +1,56 @@
+[sinks.debug]
+enabled = true
+
+[sinks.database]
+enabled = false
+
+[sources.cdevents_webhook]
+enabled = false
+
+[sources.cdevents_webhook.extractor]
+type = "webhook"
+id = "000-cdevents"
+
+[sources.github_webhook]
+enabled = false
+transformer_refs = ["log"]
+
+[sources.github_webhook.extractor]
+type = "webhook"
+id = "000-github"
+headers_to_keep = []
+
+[sources.github_webhook.extractor.headers]
+"x-hub-signature-256" = { type = "signature", signature_encoding = "hex", signature_on = "body", signature_prefix = "sha256=", token = "changeme" }
+
+# [transformers.github_events]
+# type = "vrl"
+# template_file = "/etc/cdviz-collector/transformers/github_events.vrl"
+
+[sources.kubewatch_webhook]
+enabled = false
+# transformer_refs = [ "log", "kubewatch_metadata", "kubewatch_cloudevents" ]
+# transformer_refs = [ "kubewatch_metadata", "kubewatch_cloudevents" ]
+transformer_refs = ["kubewatch_metadata", "log"]
+
+[sources.kubewatch_webhook.extractor]
+type = "webhook"
+id = "000-kubewatch"
+
+[transformers.kubewatch_metadata]
+type = "vrl"
+template = """
+.metadata = object(.metadata) ?? {}
+
+[{
+  "metadata": merge(.metadata, {
+    "environment_id": "cluster/A-dev",
+  }),
+  "header": .header,
+  "body": .body,
+}]
+"""
+
+# [transformers.kubewatch_cloudevents]
+# type = "vrl"
+# template_file = "/etc/cdviz-collector/transformers/kubewatch_cloudevents.vrl"

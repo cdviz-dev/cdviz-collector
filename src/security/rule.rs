@@ -494,10 +494,8 @@ mod tests {
 
     #[test]
     fn test_comprehensive_figment_configuration_with_toml_override() {
-        use figment::{
-            Figment,
-            providers::{Format, Toml},
-        };
+        use crate::config::Toml;
+        use figment::{Figment, providers::Format};
         use figment_file_provider_adapter::FileAdapter;
         use secrecy::ExposeSecret;
 
@@ -616,9 +614,10 @@ mod tests {
 
     #[test]
     fn test_figment_environment_variable_override() {
+        use crate::config::Toml;
         use figment::{
             Figment, Jail,
-            providers::{Env, Format, Toml},
+            providers::{Env, Format},
         };
         use figment_file_provider_adapter::FileAdapter;
         use secrecy::ExposeSecret;
@@ -697,11 +696,9 @@ mod tests {
 
     #[test]
     fn test_figment_signature_validation_roundtrip() {
+        use crate::config::Toml;
         use axum::http::HeaderValue;
-        use figment::{
-            Figment,
-            providers::{Format, Toml},
-        };
+        use figment::{Figment, providers::Format};
         use figment_file_provider_adapter::FileAdapter;
         use secrecy::ExposeSecret;
 
