@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.16.0...0.17.0) - 2025-09-15
+
+### Other
+
+- extract testkit framework into a local crate
+- reduce duplicate code for handling of feature `config_remote`
+- embed toml provider for figment
+- reformat toml
+- [**breaking**] stop building & packaging for musl (issue with rdkafka)
+
 ## [0.16.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.15.0...0.16.0) - 2025-09-11
 
 ### Other
