@@ -38,7 +38,7 @@ targets = [
 # they are connected to another crate in the graph that hasn't been pruned,
 # so it should be used with care. The identifiers are [Package ID Specifications]
 # (https://doc.rust-lang.org/cargo/reference/pkgid-spec.html)
-# exclude = []
+exclude = [ "cdviz-collector-testkit" ]
 # If true, metadata will be collected with `--all-features`. Note that this can't
 # be toggled off if true, if you want to conditionally enable `--all-features` it
 # is recommended to pass `--all-features` on the cmd line instead
@@ -230,7 +230,9 @@ skip = [
   "unicode-width",
   "wasi",
   "webpki-roots",
-  # "windows-strings",
+  "windows-core",
+  "windows-result",
+  "windows-strings",
   # "windows-targets",
   # "windows_x86_64_msvc",
   # "windows_x86_64_gnullvm",

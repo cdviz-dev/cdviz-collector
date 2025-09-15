@@ -726,6 +726,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "cdevents-sdk",
+ "cdviz-collector-testkit",
  "chrono",
  "cid",
  "clap",
@@ -786,6 +787,21 @@ dependencies = [
  "uuid",
  "vrl",
  "wiremock",
+]
+
+[[package]]
+name = "cdviz-collector-testkit"
+version = "0.0.0"
+dependencies = [
+ "cdevents-sdk",
+ "cdviz-collector",
+ "indoc",
+ "miette",
+ "proptest",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

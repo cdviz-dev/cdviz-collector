@@ -14,6 +14,9 @@ description = "A service and CLI tool for collecting SDLC/CI/CD events and dispa
 [package.metadata.cargo-machete]
 ignored = ["humantime-serde"] # auto-registered and used at runtime
 
+[workspace]
+members = ["testkit"]
+
 [[bin]]
 name = "cdviz-collector"
 path = "src/main.rs"
@@ -166,6 +169,7 @@ version = "0.5"
 [dev-dependencies]
 assert2 = "0.3"
 cdevents-sdk = { version = "0.2", features = ["testkit"] }
+cdviz-collector-testkit = { path = "testkit" }
 figment = { version = "0.10", features = ["env", "test"] }
 indoc = "2"
 pretty_assertions = "1"
