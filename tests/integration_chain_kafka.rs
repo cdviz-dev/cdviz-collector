@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
 
-mod testkit;
+use cdviz_collector_testkit as testkit;
 
 use indoc::formatdoc;
 use std::time::Duration;

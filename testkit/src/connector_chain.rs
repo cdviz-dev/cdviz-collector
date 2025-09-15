@@ -3,7 +3,7 @@
 use super::cdevent_utils::{cdevent_to_json, compare_cdevents};
 use cdevents_sdk::CDEvent;
 use cdviz_collector::{cdevent_utils::sanitize_id, run_with_args_and_log};
-use indoc::{formatdoc, indoc};
+use indoc::formatdoc;
 use miette::{IntoDiagnostic, Result, miette};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
@@ -276,10 +276,11 @@ fn validate_output(env: &TestEnvironment, expected_events: &[CDEvent]) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indoc::indoc;
 
     #[test]
     fn test_environment_setup() {
-        use crate::testkit::cdevent_utils::generate_random_cdevents;
+        use crate::cdevent_utils::generate_random_cdevents;
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
