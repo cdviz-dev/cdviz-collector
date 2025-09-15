@@ -87,61 +87,47 @@ impl ConfigBuilder {
 
         // Add base configuration if provided
         if let Some(base_config) = self.base_config {
+            let provider = FileAdapter::wrap(Toml::string(&base_config));
             #[cfg(feature = "config_remote")]
-            {
-                figment = figment
-                    .merge(RemoteFileAdapter::wrap(FileAdapter::wrap(Toml::string(&base_config))));
-            }
-            #[cfg(not(feature = "config_remote"))]
-            {
-                figment = figment.merge(FileAdapter::wrap(Toml::string(&base_config)));
-            }
+            let provider = RemoteFileAdapter::wrap(provider);
+            figment = figment.merge(provider);
         }
 
         // Add user config file if provided
         if let Some(config_file) = self.config_file {
+            let provider = FileAdapter::wrap(Toml::file(config_file.as_path()));
             #[cfg(feature = "config_remote")]
-            {
-                figment = figment.merge(RemoteFileAdapter::wrap(FileAdapter::wrap(Toml::file(
-                    config_file.as_path(),
-                ))));
-            }
-            #[cfg(not(feature = "config_remote"))]
-            {
-                figment = figment.merge(FileAdapter::wrap(Toml::file(config_file.as_path())));
-            }
+            let provider = RemoteFileAdapter::wrap(provider);
+            figment = figment.merge(provider);
         }
 
         // Add environment variables if enabled
         if self.enable_env_vars {
+            let provider = FileAdapter::wrap(Env::prefixed("CDVIZ_COLLECTOR__").split("__"));
             #[cfg(feature = "config_remote")]
-            {
-                figment = figment.merge(RemoteFileAdapter::wrap(FileAdapter::wrap(
-                    Env::prefixed("CDVIZ_COLLECTOR__").split("__"),
-                )));
-            }
-            #[cfg(not(feature = "config_remote"))]
-            {
-                figment = figment
-                    .merge(FileAdapter::wrap(Env::prefixed("CDVIZ_COLLECTOR__").split("__")));
-            }
+            let provider = RemoteFileAdapter::wrap(provider);
+            figment = figment.merge(provider);
         }
 
         // Add CLI overrides if provided
         if let Some(cli_overrides) = self.cli_overrides {
+            let provider = FileAdapter::wrap(Toml::string(&cli_overrides));
             #[cfg(feature = "config_remote")]
-            {
-                figment = figment.merge(RemoteFileAdapter::wrap(FileAdapter::wrap(Toml::string(
-                    &cli_overrides,
-                ))));
-            }
-            #[cfg(not(feature = "config_remote"))]
-            {
-                figment = figment.merge(FileAdapter::wrap(Toml::string(&cli_overrides)));
-            }
+            let provider = RemoteFileAdapter::wrap(provider);
+            figment = figment.merge(provider);
         }
 
         // Extract final configuration
+        // TODO improve error reporting with :
+        // - use [deserr - crates.io: Rust Package Registry](https://crates.io/crates/deserr)
+        //   currently not a valid choise because
+        //   - it doesn't support unttaged enum (used by signature)
+        //   - deserialisation of externat type like `SecretString`
+        // - use [eserde - crates.io: Rust Package Registry](https://crates.io/crates/eserde)
+        // So we lost details on error like file name, path,...
+        // let value: serde_json::Value = figment.extract().into_diagnostic()?;
+        // let mut config: Config = serde_json::from_value(value).into_diagnostic()?;
+        // let mut config = Config::deserialize_from_value(value).into_diagnostic()?;
         let mut config: Config = figment.extract().into_diagnostic()?;
 
         // resolve transformers references
