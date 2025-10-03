@@ -36,7 +36,7 @@ bodies = []
 context_id = "0" # "0" to let collector generate an id (alternative reuse github event id: .headers["X-GitHub-Delivery"])
 # context_source = "https://api.github.com/repos/{{ .body.repository.full_name }}" ?? ""
 context_source = "cdviz-collector/github" # TODO: use collector URL or cdviz source's id
-repo_full_name = .body.repository.full_name
+repo_full_name = string!(.body.repository.full_name)
 sender = .body.sender.login
 custom_data = {
   "github": {
@@ -55,7 +55,7 @@ if exists(.body.package) {
     ts = parse_timestamp(.body.package.updated_at, "%+") ?? now()
     ts = format_timestamp!(ts, format: "%+")
     name = .body.package.name || "noname"
-    namespace = .body.package.namespace || "nonamespace"
+    namespace = string(.body.package.namespace) ?? "nonamespace"
     # [purl-spec/PURL-TYPES.rst at master · package-url/purl-spec](https://github.com/package-url/purl-spec/blob/master/PURL-TYPES.rst)
     pkgs = []
     # the case of the value seems inconsitent
@@ -67,20 +67,29 @@ if exists(.body.package) {
       # if no tag, it could be an intermediate layer => no package
       # github generate 1 event per tag
       digest = (.body.package.package_version.container_metadata.tag.digest || .body.package.package_version.version)
-      version = encode_percent(digest) ?? ""
       tag_name = .body.package.package_version.container_metadata.tag.name
-      tag = encode_percent(tag_name) ?? ""
-      pkgs = ["pkg:oci/{{ name }}@{{ version }}?repository_url=ghcr.io/{{ namespace }}&tag={{ tag }}"] ?? []
+      purl_obj = {
+        "type": "oci",
+        "name": name,
+        "version": digest,
+        "qualifiers": {"repository_url": "ghcr.io/" + namespace, "tag": tag_name}
+      }
+      pkgs = [purl_to_string(purl_obj)] ?? []
     } else if package_type == "docker" {
       # if no tag, it could be an intermediate layer => no package
       # [Docker registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-docker-registry)
-      version = encode_percent(.body.package.package_version.version) ?? ""
+      version = .body.package.package_version.version
       tag_names = filter(array!(.body.package.package_version.docker_metadata.tags || [])) -> |_index, tag_name| {
         !is_nullish(tag_name)
       }
       pkgs = map_values(tag_names) -> |tag_name|{
-        tag = encode_percent(tag_name) ?? ""
-        "pkg:oci/{{ name }}@{{ version }}?repository_url=ghcr.io/{{ namespace }}&tag={{ tag }}" ?? ""
+        purl_obj = {
+          "type": "oci",
+          "name": name,
+          "version": version,
+          "qualifiers": {"repository_url": "ghcr.io/"+ namespace, "tag": tag_name}
+        }
+        purl_to_string!(purl_obj)
       }
       pkgs = filter(pkgs) -> |_index, pkg| {
         !is_nullish(pkg)
@@ -89,27 +98,45 @@ if exists(.body.package) {
       # [Apache Maven registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry)
       # [Gradle registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-gradle-registry)
       version = .body.package.package_version.version
-      # version = encode_percent(version) ?? ""
-      repository_url = encode_percent("https://maven.pkg.github.com/{{ repo_full_name}}" ?? "")
-      pkgs = ["pkg:maven/{{ namespace }}/{{ name }}@{{ version }}?repository_url={{ repository_url }}"] ?? []
+      purl_obj = {
+        "type": "maven",
+        "namespace": namespace,
+        "name": name,
+        "version": version,
+        "qualifiers": {"repository_url": "https://maven.pkg.github.com/" + repo_full_name}
+      }
+      pkgs = [purl_to_string!(purl_obj)]
     } else if package_type == "npm" && .body.package.package_version.npm_metadata.tag.name != "" {
       # [npm registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry)
       version = (.body.package.package_version.npm_metadata.version || .body.package.package_version.npm_metadata.npm_version || .body.package.package_version.version)
-      # version = encode_percent(version) ?? ""
-      repository_url = encode_percent("https://npm.pkg.github.com")
-      pkgs = ["pkg:npm/{{ namespace }}/{{ name }}@{{ version }}?repository_url={{ repository_url }}"] ?? []
+      purl_obj = {
+        "type": "npm",
+        "namespace": namespace,
+        "name": name,
+        "version": version,
+        "qualifiers": {"repository_url": "https://npm.pkg.github.com"}
+      }
+      pkgs = [purl_to_string!(purl_obj)]
     } else if package_type == "nuget" {
       # [NuGet registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry)
       version = .body.package.package_version.version
-      # version = encode_percent(version) ?? ""
-      repository_url = encode_percent("https://nuget.pkg.github.com/{{ namespace }}" ?? "")
-      pkgs = ["pkg:nuget/{{ name }}@{{ version }}?repository_url={{ repository_url }}"] ?? []
+      purl_obj = {
+        "type": "nuget",
+        "name": name,
+        "version": version,
+        "qualifiers": {"repository_url": "https://nuget.pkg.github.com/"+ namespace }
+      }
+      pkgs = [purl_to_string!(purl_obj)]
     } else if package_type == "rubygems" {
       # [RubyGems registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-rubygems-registry)
       version = (.body.package.package_version.rugygems_metadata.version_info.version || .body.package.package_version.version)
-      # version = encode_percent(version) ?? ""
-      repository_url = encode_percent("https://rubygems.pkg.github.com/{{ namespace }}" ?? "")
-      pkgs = ["pkg:gem/{{ name }}@{{ version }}?repository_url={{ repository_url }}"] ?? []
+      purl_obj = {
+        "type": "gem",
+        "name": name,
+        "version": version,
+        "qualifiers": {"repository_url": "https://rubygems.pkg.github.com/{{ namespace }}"}
+      }
+      pkgs = [purl_to_string!(purl_obj)]
     }
     bodies = map_values(pkgs) -> |pkg|{
       {
@@ -139,8 +166,12 @@ if exists(.body.package) {
     ts = parse_timestamp(.body.release.published_at, "%+") ?? now()
     ts = format_timestamp!(ts, format: "%+")
     version = .body.release.tag_name
-    # version = encode_percent(version) ?? ""
-    pkg = "pkg:github/{{ repo_full_name }}@{{ version }}" ?? ""
+    purl_obj = {
+      "type": "github",
+      "name": repo_full_name,
+      "version": version
+    }
+    pkg = purl_to_string(purl_obj) ?? ""
     custom_data.github.release = {
       "url": .body.release.url,
       # "tag_name": version,

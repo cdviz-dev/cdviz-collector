@@ -27,56 +27,20 @@ if includes(["Deployment", "StatefulSet", "DaemonSet"], .body.data.kind) && (.bo
     # TODO? use labels: "app.kubernetes.io/name",... (in this case how to link to artifacts & packages)
 
     old_containers = map_values(array!(.body.data.oldObj.spec.template.spec.containers || [])) -> |container| {
-      # TODO use https://vector.dev/docs/reference/vrl/functions/#parse_grok and support multiple cases
-      parts = split(container.image, ":", limit: 2) ?? [container.image, "latest"]
-      tag = parts[1]
-      parts = split(parts[0], "@", limit: 2) ?? [parts[0], ""]
-      digest = parts[1]
-      version = ""
-      if !is_nullish(digest) {
-        version = ("@" + encode_percent(digest)) ?? ""
-      }
-      raw_repository_url = parts[0]
-      repository_url = raw_repository_url
-      pathfragments = split(repository_url, "/") ?? [parts[0]]
-      if !contains(string!(pathfragments[0]), ".") {
-        repository_url = "docker.io/" + repository_url ?? repository_url
-      }
-      name = pathfragments[-1]
-      container_name = container.name || name || "noname"
+      purl_obj = purl_from_oci_image!(container.image)
+      container_name = container.name || purl_obj.name || "noname"
       {
         "container_name": container_name,
-        "name": name,
-        "version": version,
-        "repository_url": repository_url,
-        "tag": tag,
+        "purl_obj": purl_obj,
       }
     }
 
     new_containers = map_values(array!(.body.data.obj.spec.template.spec.containers || [])) -> |container| {
-      # TODO use https://vector.dev/docs/reference/vrl/functions/#parse_grok and support multiple cases
-      parts = split(container.image, ":", limit: 2) ?? [container.image, "latest"]
-      tag = parts[1]
-      parts = split(parts[0], "@", limit: 2) ?? [parts[0], ""]
-      digest = parts[1]
-      version = ""
-      if !is_nullish(digest) {
-        version = ("@" + encode_percent(digest)) ?? ""
-      }
-      raw_repository_url = parts[0]
-      repository_url = raw_repository_url
-      pathfragments = split(repository_url, "/") ?? [parts[0]]
-      if !contains(string!(pathfragments[0]), ".") {
-        repository_url = "docker.io/" + repository_url ?? repository_url
-      }
-      name = pathfragments[-1]
-      container_name = container.name || name || "noname"
+      purl_obj = purl_from_oci_image!(container.image)
+      container_name = container.name || purl_obj.name || "noname"
       {
         "container_name": container_name,
-        "name": name,
-        "version": version,
-        "repository_url": repository_url,
-        "tag": tag,
+        "purl_obj": purl_obj,
       }
     }
 
@@ -89,20 +53,23 @@ if includes(["Deployment", "StatefulSet", "DaemonSet"], .body.data.kind) && (.bo
       previous = filter(old_containers) -> |_index, old_container| {
         old_container.container_name == container.container_name
       }
+      # Determine event type based on whether container existed before
       type = if is_empty(previous) {
         type = "dev.cdevents.service.deployed.0.2.0"
-      } else if (previous[0].repository_url != container.repository_url) || (previous[0].tag != container.tag) || (previous[0].version != container.version) {
-        type = "dev.cdevents.service.upgraded.0.2.0"
       } else {
-        null
+        # Compare PURL strings to detect changes
+        old_purl = purl_to_string!(previous[0].purl_obj)
+        new_purl = purl_to_string!(container.purl_obj)
+        if old_purl != new_purl {
+          type = "dev.cdevents.service.upgraded.0.2.0"
+        } else {
+          null
+        }
       }
 
       if !is_null(type) {
         container_name = container.container_name
-        name = container.name
-        version = container.version
-        repository_url = container.repository_url
-        tag = encode_percent!(container.tag)
+        artifact_id = purl_to_string!(container.purl_obj)
         output = push(output, {
           "metadata": .metadata,
           "headers": .headers,
@@ -122,7 +89,7 @@ if includes(["Deployment", "StatefulSet", "DaemonSet"], .body.data.kind) && (.bo
                 "environment": {
                   "id": .metadata.environment_id,
                 },
-                "artifactId": "pkg:oci/{{ name }}{{ version }}?repository_url={{ repository_url }}&tag={{ tag }}" ?? "",
+                "artifactId": artifact_id,
               }
             }
           }

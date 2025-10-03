@@ -1,5 +1,7 @@
 #[cfg(feature = "transformer_vrl")]
 mod vrl;
+#[cfg(feature = "transformer_vrl")]
+pub(crate) mod vrl_purl;
 
 use super::EventSourcePipe;
 use crate::{

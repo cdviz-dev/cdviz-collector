@@ -17,7 +17,9 @@ pub(crate) struct Processor {
 impl Processor {
     pub(crate) fn new(template: &str, next: EventSourcePipe) -> Result<Self> {
         // Use all of the std library functions
-        let fns = vrl::stdlib::all();
+        let mut fns = vrl::stdlib::all();
+        // Add custom PURL functions
+        fns.extend(super::vrl_purl::all_custom_functions());
         // Compile the program (and panic if it's invalid)
         //TODO check result of compilation, log the error, warning, etc.
         let src = if template.is_empty() {

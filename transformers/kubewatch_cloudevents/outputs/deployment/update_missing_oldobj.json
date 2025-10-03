@@ -8,7 +8,7 @@
   },
   "subject": {
     "content": {
-      "artifactId": "pkg:oci/aaaaaaaaa?repository_url=docker.io/robustadev/aaaaaaaaa&tag=v2%2E9%2E0",
+      "artifactId": "pkg:oci/aaaaaaaaa?repository_url=docker.io/robustadev&tag=v2.9.0",
       "environment": {
         "id": "cluster/A-dev"
       }
