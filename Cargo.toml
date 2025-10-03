@@ -108,6 +108,7 @@ opendal = { version = "0.54", default-features = false, features = [
   "services-sftp",
 ], optional = true }
 opentelemetry = "0.30"
+packageurl = "0.5"
 rdkafka = { version = "0.38", features = [
   "cmake-build",
   "libz-static",
