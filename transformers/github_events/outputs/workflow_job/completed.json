@@ -1,7 +1,7 @@
 {
   "context": {
     "id": "0",
-    "source": "cdviz-collector/github",
+    "source": "/github",
     "timestamp": "1015-01-11T19:03:48+00:00",
     "type": "dev.cdevents.taskrun.finished.0.2.0",
     "version": "0.4.1"
