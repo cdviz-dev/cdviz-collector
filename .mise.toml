@@ -55,8 +55,9 @@ run = [
 [tasks.obfuscate]
 description = "obfuscate some data into the samples"
 run = [
-  "json-simple-obfuscator transformers/kubewatch_cloudevents/inputs/*/*.json",
+  "json-simple-obfuscator transformers/argocd_notifications/inputs/*/*.json",
   "json-simple-obfuscator transformers/github_events/inputs/*/*.json",
+  "json-simple-obfuscator transformers/kubewatch_cloudevents/inputs/*/*.json",
 ]
 
 [tasks."deny"]
@@ -255,6 +256,20 @@ run = """./target/debug/cdviz-collector \
   --directory ./transformers/kubewatch_cloudevents \
   --config ./cdviz-collector.toml \
   -t kubewatch_metadata,kubewatch_cloudevents \
+  --input ./inputs \
+  --output ./outputs
+"""
+
+[tasks."test:transform:argocd_notifications"]
+description = "run the transformation example argocd_notifications (use `--mode review` to review and update)"
+wait_for = ["test:unit"]
+depends = ["build:cli"]
+run = """./target/debug/cdviz-collector \
+  transform \
+  --mode {{option(name="mode", default="check")}} \
+  --directory ./transformers/argocd_notifications \
+  --config ./cdviz-collector.toml \
+  -t argocd_metadata,argocd_notifications \
   --input ./inputs \
   --output ./outputs
 """

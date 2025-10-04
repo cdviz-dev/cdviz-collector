@@ -1,0 +1,38 @@
+{
+  "context": {
+    "id": "0",
+    "source": "/argocd",
+    "timestamp": "2025-10-02T16:06:23.018508Z",
+    "type": "dev.cdevents.service.deployed.0.2.0",
+    "version": "0.4.1"
+  },
+  "customData": {
+    "argocd": {
+      "application": {
+        "name": "aaaaa-aa",
+        "namespace": "argocd"
+      },
+      "destination": {
+        "namespace": "cdviz-dev",
+        "server": "https://kubernetes.default.svc"
+      },
+      "health": {
+        "message": "",
+        "status": "Healthy"
+      },
+      "sync": {
+        "status": "Unknown"
+      }
+    }
+  },
+  "subject": {
+    "content": {
+      "artifactId": "",
+      "environment": {
+        "id": "https://kubernetes.default.svc"
+      }
+    },
+    "id": "argocd/aaaaa-aa",
+    "type": "service"
+  }
+}

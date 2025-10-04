@@ -1,0 +1,42 @@
+{
+  "context": {
+    "id": "0",
+    "source": "/argocd",
+    "timestamp": "2025-10-02T16:45:19+00:00",
+    "type": "dev.cdevents.service.deployed.0.2.0",
+    "version": "0.4.1"
+  },
+  "customData": {
+    "argocd": {
+      "application": {
+        "name": "aaaaaaaaa",
+        "namespace": "argocd"
+      },
+      "destination": {
+        "namespace": "argocd",
+        "server": "https://kubernetes.default.svc"
+      },
+      "health": {
+        "status": "Healthy"
+      },
+      "operation": {
+        "message": "successfully synced (all tasks run)",
+        "phase": "Succeeded",
+        "revision": "a390e57286ce93cd869ef0cd157c287a7082d504"
+      },
+      "sync": {
+        "status": "Synced"
+      }
+    }
+  },
+  "subject": {
+    "content": {
+      "artifactId": "pkg:git/aaaaaaaaa@a390e57286ce93cd869ef0cd157c287a7082d504?repository_url=https://github.com/cdviz-dev/demo-cluster",
+      "environment": {
+        "id": "https://kubernetes.default.svc"
+      }
+    },
+    "id": "argocd/aaaaaaaaa",
+    "type": "service"
+  }
+}

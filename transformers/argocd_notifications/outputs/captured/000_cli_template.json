@@ -1,0 +1,38 @@
+{
+  "context": {
+    "id": "0",
+    "source": "/argocd",
+    "timestamp": "2025-10-02T18:13:13.201298+02:00",
+    "type": "dev.cdevents.incident.detected.0.1.0",
+    "version": "0.4.1"
+  },
+  "customData": {
+    "argocd": {
+      "application": {
+        "name": "aaaaaaa",
+        "namespace": "argocd"
+      },
+      "destination": {
+        "namespace": "aaaaaaa",
+        "server": "https://kubernetes.default.svc"
+      },
+      "health": {
+        "message": "",
+        "status": "Unknown"
+      },
+      "sync": {
+        "status": "Unknown"
+      }
+    }
+  },
+  "subject": {
+    "content": {
+      "description": "Health status degraded",
+      "environment": {
+        "id": "https://kubernetes.default.svc"
+      }
+    },
+    "id": "argocd/aaaaaaa",
+    "type": "incident"
+  }
+}
