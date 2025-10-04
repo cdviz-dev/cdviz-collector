@@ -35,7 +35,7 @@
 bodies = []
 context_id = "0" # "0" to let collector generate an id (alternative reuse github event id: .headers["X-GitHub-Delivery"])
 # context_source = "https://api.github.com/repos/{{ .body.repository.full_name }}" ?? ""
-context_source = "cdviz-collector/github" # TODO: use collector URL or cdviz source's id
+context_source = "/github" # TODO: use collector URL or cdviz source's id
 repo_full_name = string!(.body.repository.full_name)
 sender = .body.sender.login
 custom_data = {
