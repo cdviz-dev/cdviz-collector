@@ -76,58 +76,26 @@ source = sync_result.source || .body.app.spec.source || {}
 revisions = sync_result.revisions || []
 revision = sync_result.revision || source.targetRevision || ""
 
-# Build artifactId based on source type
-artifact_id = ""
+# Normalize: if multi-source, use first source
 if is_array(sources) && length!(sources) > 0 {
-  # Multi-source app - use first source
-  first_source = sources[0]
-  chart = first_source.chart || ""
-  repo_url = first_source.repoURL || ""
-  version = revisions[0] || ""
+  source = sources[0]
+  revision = revisions[0] || ""
+}
 
-  if chart != "" {
-    # Helm chart source
-    purl_obj = {
-      "type": "helm",
-      "name": chart,
-      "version": version,
-      "qualifiers": {"repository_url": repo_url}
-    }
-    artifact_id = purl_to_string(purl_obj) ?? ""
-  } else {
-    # Git source
-    purl_obj = {
-      "type": "git",
-      "name": app_name,
-      "version": version,
-      "qualifiers": {"repository_url": repo_url}
-    }
-    artifact_id = purl_to_string(purl_obj) ?? ""
-  }
-} else if !is_null(source.repoURL) {
-  # Single source app
-  chart = source.chart || ""
-  repo_url = source.repoURL || ""
+# Build artifactId based on source type using ArgoCD PURL helpers
+artifact_id = ""
+chart = source.chart || ""
+repo_url = source.repoURL || ""
+path = source.path
 
-  if chart != "" {
-    # Helm chart source
-    purl_obj = {
-      "type": "helm",
-      "name": chart,
-      "version": revision,
-      "qualifiers": {"repository_url": repo_url}
-    }
-    artifact_id = purl_to_string(purl_obj) ?? ""
-  } else {
-    # Git source
-    purl_obj = {
-      "type": "git",
-      "name": app_name,
-      "version": revision,
-      "qualifiers": {"repository_url": repo_url}
-    }
-    artifact_id = purl_to_string(purl_obj) ?? ""
-  }
+if chart != "" {
+  # Helm chart source (OCI or HTTP)
+  purl_obj = purl_from_argocd_helm!(repo_url, chart, revision)
+  artifact_id = purl_to_string(purl_obj) ?? ""
+} else if repo_url != "" {
+  # Git source (GitHub, Bitbucket, GitLab, etc.)
+  purl_obj = purl_from_argocd_git_source!(repo_url, path, revision)
+  artifact_id = purl_to_string(purl_obj) ?? ""
 }
 
 # Determine event type and build appropriate CDEvent
