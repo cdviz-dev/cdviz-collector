@@ -31,7 +31,7 @@
   },
   "subject": {
     "content": {
-      "artifactId": "pkg:helm/aaaaaaaa-aaaaaaa@0.6.3?repository_url=ghcr.io/cdviz-dev/charts",
+      "artifactId": "pkg:oci/aaaaaaaa-aaaaaaa@0.6.3?repository_url=ghcr.io/cdviz-dev/charts",
       "environment": {
         "id": "https://kubernetes.default.svc"
       }

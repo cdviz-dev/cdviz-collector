@@ -31,7 +31,7 @@
   },
   "subject": {
     "content": {
-      "artifactId": "pkg:helm/aaaaaaa@6.9.0?repository_url=ghcr.io/stefanprodan/charts",
+      "artifactId": "pkg:oci/aaaaaaa@6.9.0?repository_url=ghcr.io/stefanprodan/charts",
       "environment": {
         "id": "https://kubernetes.default.svc"
       }

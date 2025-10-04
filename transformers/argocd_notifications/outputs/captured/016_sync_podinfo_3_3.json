@@ -31,7 +31,7 @@
   },
   "subject": {
     "content": {
-      "artifactId": "pkg:git/aaaaaaaaa@2396abec0a4a8bb67cbe5395fbf28dadf45e0b48?repository_url=https://github.com/cdviz-dev/demo-cluster",
+      "artifactId": "pkg:github/cdviz-dev/demo-cluster@2396abec0a4a8bb67cbe5395fbf28dadf45e0b48?path=4-k8s-gitops",
       "environment": {
         "id": "https://kubernetes.default.svc"
       }

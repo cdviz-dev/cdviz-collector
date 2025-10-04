@@ -124,6 +124,144 @@ fn parse_oci_image_to_purl(image_str: &str) -> Value {
     Value::from(purl_obj)
 }
 
+/// Detect if a repository URL is an OCI registry
+fn is_oci_registry(repo_url: &str) -> bool {
+    !repo_url.starts_with("http://") && !repo_url.starts_with("https://")
+}
+
+/// Parse an `ArgoCD` Helm source into a PURL object
+///
+/// Handles both OCI and HTTP Helm repositories:
+/// - OCI registries → `pkg:oci/...`
+/// - HTTP repositories → `pkg:generic/...?type=helm`
+fn parse_argocd_helm_to_purl(repo_url: &str, chart: &str, target_revision: &str) -> Value {
+    let mut qualifiers = BTreeMap::new();
+    let pkg_type;
+
+    if is_oci_registry(repo_url) {
+        // OCI registry
+        pkg_type = "oci";
+        qualifiers.insert(KeyString::from("repository_url"), Value::from(repo_url));
+    } else {
+        // HTTP Helm repository
+        pkg_type = "generic";
+        qualifiers.insert(KeyString::from("download_url"), Value::from(repo_url));
+        qualifiers.insert(KeyString::from("type"), Value::from("helm"));
+    }
+
+    let mut purl_obj = BTreeMap::new();
+    purl_obj.insert(KeyString::from("type"), Value::from(pkg_type));
+    purl_obj.insert(KeyString::from("name"), Value::from(chart));
+    purl_obj.insert(KeyString::from("version"), Value::from(target_revision));
+    purl_obj.insert(KeyString::from("qualifiers"), Value::from(qualifiers));
+    purl_obj.insert(KeyString::from("subpath"), Value::Null);
+
+    Value::from(purl_obj)
+}
+
+/// Detect Git hosting platform from repository URL
+fn detect_git_platform(repo_url: &str) -> &str {
+    let url_lower = repo_url.to_lowercase();
+
+    if url_lower.contains("github.com") {
+        "github"
+    } else if url_lower.contains("bitbucket.org") {
+        "bitbucket"
+    } else {
+        "generic"
+    }
+}
+
+/// Extract owner and repository name from Git URL
+fn extract_git_owner_repo(repo_url: &str) -> Option<(String, String)> {
+    // Remove protocol prefix
+    let url = repo_url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_start_matches("git@")
+        .replace(':', "/"); // Handle SSH format git@host:owner/repo
+
+    // Split by '/' and find owner/repo pattern
+    let parts: Vec<&str> = url.split('/').collect();
+
+    (parts.len() >= 3).then(|| {
+        let owner = parts[1];
+        let mut repo = parts[2].to_string();
+
+        // Remove .git suffix if present
+        if std::path::Path::new(&repo)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("git"))
+        {
+            repo = repo[..repo.len() - 4].to_string();
+        }
+
+        (owner.to_string(), repo)
+    })
+}
+
+/// Parse an `ArgoCD` Git source (Kustomize/YAML/directory) into a PURL object
+///
+/// Detects Git hosting platform and uses appropriate PURL type:
+/// - GitHub → `pkg:github/...`
+/// - Bitbucket → `pkg:bitbucket/...`
+/// - Other → `pkg:generic/...?vcs_url=...&type=git`
+fn parse_argocd_git_source_to_purl(
+    repo_url: &str,
+    path: Option<&str>,
+    target_revision: &str,
+) -> Value {
+    let platform = detect_git_platform(repo_url);
+    let mut qualifiers = BTreeMap::new();
+    let mut purl_obj = BTreeMap::new();
+
+    // Normalize path: filter out None, empty string, and "." (current directory)
+    let normalized_path = path.filter(|p| !p.is_empty() && *p != ".");
+
+    match platform {
+        "github" | "bitbucket" => {
+            // Use native PURL type for GitHub/Bitbucket
+            purl_obj.insert(KeyString::from("type"), Value::from(platform));
+
+            if let Some((owner, repo)) = extract_git_owner_repo(repo_url) {
+                purl_obj.insert(KeyString::from("namespace"), Value::from(owner));
+                purl_obj.insert(KeyString::from("name"), Value::from(repo));
+            } else {
+                // Fallback if parsing fails
+                purl_obj.insert(KeyString::from("name"), Value::from("unknown"));
+            }
+
+            if let Some(p) = normalized_path {
+                qualifiers.insert(KeyString::from("path"), Value::from(p));
+            }
+        }
+        _ => {
+            // Generic type for GitLab and other Git sources
+            purl_obj.insert(KeyString::from("type"), Value::from("generic"));
+
+            // Extract repo name from URL
+            if let Some((_, repo)) = extract_git_owner_repo(repo_url) {
+                purl_obj.insert(KeyString::from("name"), Value::from(repo));
+            } else {
+                purl_obj.insert(KeyString::from("name"), Value::from("unknown"));
+            }
+
+            qualifiers.insert(KeyString::from("vcs_url"), Value::from(repo_url));
+            qualifiers.insert(KeyString::from("type"), Value::from("git"));
+
+            if let Some(p) = normalized_path {
+                qualifiers.insert(KeyString::from("path"), Value::from(p));
+            }
+        }
+    }
+
+    purl_obj.insert(KeyString::from("version"), Value::from(target_revision));
+    purl_obj.insert(KeyString::from("qualifiers"), Value::from(qualifiers));
+    purl_obj.insert(KeyString::from("subpath"), Value::Null);
+
+    Value::from(purl_obj)
+}
+
 /// Convert a PURL object to a spec-compliant PURL string
 ///
 /// Uses the packageurl crate to ensure proper encoding and formatting
@@ -325,12 +463,194 @@ impl FunctionExpression for PurlToStringFn {
 }
 
 // ============================================================================
+// VRL Function: purl_from_argocd_helm
+// ============================================================================
+
+#[derive(Clone, Copy, Debug)]
+pub struct PurlFromArgoCdHelm;
+
+impl Function for PurlFromArgoCdHelm {
+    fn identifier(&self) -> &'static str {
+        "purl_from_argocd_helm"
+    }
+
+    fn parameters(&self) -> &'static [Parameter] {
+        &[
+            Parameter { keyword: "repo_url", kind: kind::BYTES, required: true },
+            Parameter { keyword: "chart", kind: kind::BYTES, required: true },
+            Parameter { keyword: "target_revision", kind: kind::BYTES, required: true },
+        ]
+    }
+
+    fn examples(&self) -> &'static [Example] {
+        &[
+            Example {
+                title: "parse OCI Helm chart",
+                source: r#"purl_from_argocd_helm("ghcr.io/owner", "nginx", "1.0.0")"#,
+                result: Ok(
+                    r#"{"type": "oci", "name": "nginx", "version": "1.0.0", "qualifiers": {"repository_url": "ghcr.io/owner"}, "subpath": null}"#,
+                ),
+            },
+            Example {
+                title: "parse HTTP Helm repository",
+                source: r#"purl_from_argocd_helm("https://charts.bitnami.com/bitnami", "wordpress", "15.2.35")"#,
+                result: Ok(
+                    r#"{"type": "generic", "name": "wordpress", "version": "15.2.35", "qualifiers": {"download_url": "https://charts.bitnami.com/bitnami", "type": "helm"}, "subpath": null}"#,
+                ),
+            },
+        ]
+    }
+
+    fn compile(
+        &self,
+        _state: &state::TypeState,
+        _ctx: &mut FunctionCompileContext,
+        arguments: ArgumentList,
+    ) -> Compiled {
+        let repo_url = arguments.required("repo_url");
+        let chart = arguments.required("chart");
+        let target_revision = arguments.required("target_revision");
+
+        Ok(PurlFromArgoCdHelmFn { repo_url, chart, target_revision }.as_expr())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct PurlFromArgoCdHelmFn {
+    repo_url: Box<dyn Expression>,
+    chart: Box<dyn Expression>,
+    target_revision: Box<dyn Expression>,
+}
+
+impl FunctionExpression for PurlFromArgoCdHelmFn {
+    fn resolve(&self, ctx: &mut Context) -> Resolved {
+        let repo_url = self.repo_url.resolve(ctx)?;
+        let repo_url_str = repo_url.try_bytes_utf8_lossy()?;
+
+        let chart = self.chart.resolve(ctx)?;
+        let chart_str = chart.try_bytes_utf8_lossy()?;
+
+        let target_revision = self.target_revision.resolve(ctx)?;
+        let target_revision_str = target_revision.try_bytes_utf8_lossy()?;
+
+        Ok(parse_argocd_helm_to_purl(
+            repo_url_str.as_ref(),
+            chart_str.as_ref(),
+            target_revision_str.as_ref(),
+        ))
+    }
+
+    fn type_def(&self, _state: &state::TypeState) -> TypeDef {
+        TypeDef::object(Collection::from_unknown(Kind::any()))
+    }
+}
+
+// ============================================================================
+// VRL Function: purl_from_argocd_git_source
+// ============================================================================
+
+#[derive(Clone, Copy, Debug)]
+pub struct PurlFromArgoCdGitSource;
+
+impl Function for PurlFromArgoCdGitSource {
+    fn identifier(&self) -> &'static str {
+        "purl_from_argocd_git_source"
+    }
+
+    fn parameters(&self) -> &'static [Parameter] {
+        &[
+            Parameter { keyword: "repo_url", kind: kind::BYTES, required: true },
+            Parameter { keyword: "path", kind: kind::BYTES, required: false },
+            Parameter { keyword: "target_revision", kind: kind::BYTES, required: true },
+        ]
+    }
+
+    fn examples(&self) -> &'static [Example] {
+        &[
+            Example {
+                title: "parse GitHub source",
+                source: r#"purl_from_argocd_git_source("https://github.com/kubernetes-sigs/kustomize", "examples/helloWorld", "v5.0.0")"#,
+                result: Ok(
+                    r#"{"type": "github", "namespace": "kubernetes-sigs", "name": "kustomize", "version": "v5.0.0", "qualifiers": {"path": "examples/helloWorld"}, "subpath": null}"#,
+                ),
+            },
+            Example {
+                title: "parse Bitbucket source",
+                source: r#"purl_from_argocd_git_source("https://bitbucket.org/myteam/myapp", "manifests", "main")"#,
+                result: Ok(
+                    r#"{"type": "bitbucket", "namespace": "myteam", "name": "myapp", "version": "main", "qualifiers": {"path": "manifests"}, "subpath": null}"#,
+                ),
+            },
+            Example {
+                title: "parse generic Git source",
+                source: r#"purl_from_argocd_git_source("https://gitlab.com/group/project", "k8s", "v1.2.3")"#,
+                result: Ok(
+                    r#"{"type": "generic", "name": "project", "version": "v1.2.3", "qualifiers": {"path": "k8s", "type": "git", "vcs_url": "https://gitlab.com/group/project"}, "subpath": null}"#,
+                ),
+            },
+        ]
+    }
+
+    fn compile(
+        &self,
+        _state: &state::TypeState,
+        _ctx: &mut FunctionCompileContext,
+        arguments: ArgumentList,
+    ) -> Compiled {
+        let repo_url = arguments.required("repo_url");
+        let path = arguments.optional("path");
+        let target_revision = arguments.required("target_revision");
+
+        Ok(PurlFromArgoCdGitSourceFn { repo_url, path, target_revision }.as_expr())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct PurlFromArgoCdGitSourceFn {
+    repo_url: Box<dyn Expression>,
+    path: Option<Box<dyn Expression>>,
+    target_revision: Box<dyn Expression>,
+}
+
+impl FunctionExpression for PurlFromArgoCdGitSourceFn {
+    fn resolve(&self, ctx: &mut Context) -> Resolved {
+        let repo_url = self.repo_url.resolve(ctx)?;
+        let repo_url_str = repo_url.try_bytes_utf8_lossy()?;
+
+        let path_opt = if let Some(path_expr) = &self.path {
+            let path_val = path_expr.resolve(ctx)?;
+            Some(path_val.try_bytes_utf8_lossy()?.to_string())
+        } else {
+            None
+        };
+
+        let target_revision = self.target_revision.resolve(ctx)?;
+        let target_revision_str = target_revision.try_bytes_utf8_lossy()?;
+
+        Ok(parse_argocd_git_source_to_purl(
+            repo_url_str.as_ref(),
+            path_opt.as_deref(),
+            target_revision_str.as_ref(),
+        ))
+    }
+
+    fn type_def(&self, _state: &state::TypeState) -> TypeDef {
+        TypeDef::object(Collection::from_unknown(Kind::any()))
+    }
+}
+
+// ============================================================================
 // Public API
 // ============================================================================
 
 /// Returns all custom VRL functions for PURL handling
 pub fn all_custom_functions() -> Vec<Box<dyn Function>> {
-    vec![Box::new(PurlFromOciImage), Box::new(PurlToString)]
+    vec![
+        Box::new(PurlFromOciImage),
+        Box::new(PurlToString),
+        Box::new(PurlFromArgoCdHelm),
+        Box::new(PurlFromArgoCdGitSource),
+    ]
 }
 
 // ============================================================================
@@ -339,6 +659,8 @@ pub fn all_custom_functions() -> Vec<Box<dyn Function>> {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     #[test]
@@ -459,5 +781,79 @@ mod tests {
         let result = purl_object_to_string(&Value::from(purl_obj)).unwrap();
 
         assert_eq!(result, "pkg:generic/package");
+    }
+
+    #[rstest]
+    #[case("ghcr.io/owner", true)]
+    #[case("registry-1.docker.io/bitnamicharts", true)]
+    #[case("https://charts.bitnami.com/bitnami", false)]
+    #[case("http://example.com/charts", false)]
+    fn test_is_oci_registry(#[case] repo_url: &str, #[case] expected: bool) {
+        assert_eq!(is_oci_registry(repo_url), expected);
+    }
+
+    // ArgoCD Helm → PURL string tests
+    #[rstest]
+    #[case("ghcr.io/owner", "nginx", "1.0.0", "pkg:oci/nginx@1.0.0?repository_url=ghcr.io/owner")]
+    #[case(
+        "https://charts.bitnami.com/bitnami",
+        "wordpress",
+        "15.2.35",
+        "pkg:generic/wordpress@15.2.35?download_url=https://charts.bitnami.com/bitnami&type=helm"
+    )]
+    fn test_argocd_helm_to_purl_string(
+        #[case] repo_url: &str,
+        #[case] chart: &str,
+        #[case] version: &str,
+        #[case] expected: &str,
+    ) {
+        let purl = parse_argocd_helm_to_purl(repo_url, chart, version);
+        assert_eq!(purl_object_to_string(&purl).unwrap(), expected);
+    }
+
+    // ArgoCD Git source → PURL string tests
+    #[rstest]
+    #[case(
+        "https://github.com/kubernetes-sigs/kustomize",
+        Some("examples/helloWorld"),
+        "v5.0.0",
+        "pkg:github/kubernetes-sigs/kustomize@v5.0.0?path=examples/helloWorld"
+    )]
+    #[case(
+        "https://github.com/argoproj/argo-cd",
+        None,
+        "stable",
+        "pkg:github/argoproj/argo-cd@stable"
+    )]
+    #[case(
+        "git@github.com:owner/repo.git",
+        Some("config"),
+        "master",
+        "pkg:github/owner/repo@master?path=config"
+    )]
+    #[case(
+        "https://bitbucket.org/myteam/myapp",
+        Some("manifests"),
+        "main",
+        "pkg:bitbucket/myteam/myapp@main?path=manifests"
+    )]
+    #[case(
+        "https://gitlab.com/group/project",
+        Some("k8s"),
+        "v1.2.3",
+        "pkg:generic/project@v1.2.3?path=k8s&type=git&vcs_url=https://gitlab.com/group/project"
+    )]
+    // Path normalization: empty string should be omitted
+    #[case("https://github.com/owner/repo", Some(""), "v1.0.0", "pkg:github/owner/repo@v1.0.0")]
+    // Path normalization: "." (current directory) should be omitted
+    #[case("https://github.com/owner/repo", Some("."), "v1.0.0", "pkg:github/owner/repo@v1.0.0")]
+    fn test_argocd_git_source_to_purl_string(
+        #[case] repo_url: &str,
+        #[case] path: Option<&str>,
+        #[case] version: &str,
+        #[case] expected: &str,
+    ) {
+        let purl = parse_argocd_git_source_to_purl(repo_url, path, version);
+        assert_eq!(purl_object_to_string(&purl).unwrap(), expected);
     }
 }
