@@ -1,0 +1,42 @@
+{
+  "context": {
+    "id": "0",
+    "source": "/argocd",
+    "timestamp": "2025-08-14T12:19:21+00:00",
+    "type": "dev.cdevents.service.deployed.0.2.0",
+    "version": "0.4.1"
+  },
+  "customData": {
+    "argocd": {
+      "application": {
+        "name": "aaaaa-aaaaaaaaa",
+        "namespace": "argocd"
+      },
+      "destination": {
+        "namespace": "cdviz-dev",
+        "server": "https://kubernetes.default.svc"
+      },
+      "health": {
+        "status": "Healthy"
+      },
+      "operation": {
+        "message": "successfully synced (all tasks run)",
+        "phase": "Succeeded",
+        "revision": ""
+      },
+      "sync": {
+        "status": "Synced"
+      }
+    }
+  },
+  "subject": {
+    "content": {
+      "artifactId": "pkg:oci/kubewatch?repository_url=docker.io/robustadev&tag=v2.9.0",
+      "environment": {
+        "id": "https://kubernetes.default.svc"
+      }
+    },
+    "id": "argocd/aaaaa-aaaaaaaaa/kubewatch",
+    "type": "service"
+  }
+}

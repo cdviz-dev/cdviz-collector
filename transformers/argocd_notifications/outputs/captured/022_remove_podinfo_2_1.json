@@ -1,0 +1,30 @@
+{
+  "context": {
+    "id": "0",
+    "source": "/argocd",
+    "timestamp": "2025-10-02T17:05:10+00:00",
+    "type": "dev.cdevents.service.removed.0.2.0",
+    "version": "0.4.1"
+  },
+  "customData": {
+    "argocd": {
+      "application": {
+        "name": "aaaaaaa",
+        "namespace": "argocd"
+      },
+      "destination": {
+        "namespace": "aaaaaaa",
+        "server": "https://kubernetes.default.svc"
+      }
+    }
+  },
+  "subject": {
+    "content": {
+      "environment": {
+        "id": "https://kubernetes.default.svc"
+      }
+    },
+    "id": "argocd/aaaaaaa",
+    "type": "service"
+  }
+}

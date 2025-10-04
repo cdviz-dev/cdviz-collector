@@ -1,0 +1,465 @@
+{
+  "timestamp": "2025-10-02T16:57:43.943551Z",
+  "context": {
+    "argocdUrl": "https://demo.cdviz.dev",
+    "notificationType": "cdviz"
+  },
+  "app": {
+    "apiVersion": "argoproj.io/v1alpha1",
+    "kind": "Application",
+    "metadata": {
+      "annotations": {
+        "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"annotations\":{},\"finalizers\":[\"resources-finalizer.argocd.argoproj.io\"],\"name\":\"aaaaaaaaa\",\"namespace\":\"argocd\"},\"spec\":{\"destination\":{\"namespace\":\"argocd\",\"server\":\"https://kubernetes.default.svc\"},\"project\":\"default\",\"revisionHistoryLimit\":10,\"source\":{\"path\":\"4-k8s-gitops\",\"repoURL\":\"https://github.com/cdviz-dev/demo-cluster\",\"targetRevision\":\"HEAD\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true},\"retry\":{\"backoff\":{\"duration\":\"5s\",\"factor\":2,\"maxDuration\":\"3m\"},\"limit\":5},\"syncOptions\":[\"CreateNamespace=false\",\"ServerSideApply=true\"]}}}\n",
+        "notified.notifications.argoproj.io": "{\"2396abec0a4a8bb67cbe5395fbf28dadf45e0b48:on-deployed:[0].Yv81TUs0gmPTEyk-v8Lb6ZKEo0g:cdviz:\":1759424000,\"744ef414bc4880d1ac71b8296dc01ebc35f4f97c:on-deployed:[0].Yv81TUs0gmPTEyk-v8Lb6ZKEo0g:cdviz:\":1759421002,\"744ef414bc4880d1ac71b8296dc01ebc35f4f97c:on-deployed:[0].Yv81TUs0gmPTEyk-v8Lb6ZKEo0g:webhook:cdviz\":1759420702,\"94fcc5e8673e0d2d7fbca6b1c6c455ba308314fc:on-deployed:[0].Yv81TUs0gmPTEyk-v8Lb6ZKEo0g:cdviz:\":1759422059,\"a390e57286ce93cd869ef0cd157c287a7082d504:on-deployed:[0].Yv81TUs0gmPTEyk-v8Lb6ZKEo0g:cdviz:\":1759423519,\"on-sync-running:[0].ic91dZU3WrtgRdlZCpg-L8ARI0Q:cdviz:\":1759424260}"
+      },
+      "creationTimestamp": "2025-08-06T18:09:49Z",
+      "finalizers": ["resources-finalizer.argocd.argoproj.io"],
+      "generation": 682,
+      "managedFields": [
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:metadata": {
+              "f:annotations": {
+                ".": {},
+                "f:kubectl.kubernetes.io/last-applied-configuration": {}
+              },
+              "f:finalizers": {
+                ".": {},
+                "v:\"resources-finalizer.argocd.argoproj.io\"": {}
+              }
+            },
+            "f:spec": {
+              ".": {},
+              "f:destination": { ".": {}, "f:namespace": {}, "f:server": {} },
+              "f:project": {},
+              "f:revisionHistoryLimit": {},
+              "f:source": {
+                ".": {},
+                "f:path": {},
+                "f:repoURL": {},
+                "f:targetRevision": {}
+              },
+              "f:syncPolicy": {
+                ".": {},
+                "f:retry": {
+                  ".": {},
+                  "f:backoff": {
+                    ".": {},
+                    "f:duration": {},
+                    "f:factor": {},
+                    "f:maxDuration": {}
+                  },
+                  "f:limit": {}
+                },
+                "f:syncOptions": {}
+              }
+            }
+          },
+          "manager": "kubectl-client-side-apply",
+          "operation": "Update",
+          "time": "2025-08-06T20:37:04Z"
+        },
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:spec": { "f:syncPolicy": { "f:automated": {} } },
+            "f:status": { "f:sourceHydrator": {}, "f:summary": {} }
+          },
+          "manager": "argocd-server",
+          "operation": "Update",
+          "time": "2025-10-02T16:57:34Z"
+        },
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:metadata": {
+              "f:annotations": { "f:notified.notifications.argoproj.io": {} }
+            }
+          },
+          "manager": "argocd-notifications-controller",
+          "operation": "Update",
+          "time": "2025-10-02T16:57:40Z"
+        },
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:status": {
+              ".": {},
+              "f:controllerNamespace": {},
+              "f:health": {
+                ".": {},
+                "f:lastTransitionTime": {},
+                "f:status": {}
+              },
+              "f:history": {},
+              "f:operationState": {
+                ".": {},
+                "f:finishedAt": {},
+                "f:message": {},
+                "f:operation": {
+                  ".": {},
+                  "f:initiatedBy": { ".": {}, "f:automated": {} },
+                  "f:retry": {
+                    ".": {},
+                    "f:backoff": {
+                      ".": {},
+                      "f:duration": {},
+                      "f:factor": {},
+                      "f:maxDuration": {}
+                    },
+                    "f:limit": {}
+                  },
+                  "f:sync": { ".": {}, "f:revision": {}, "f:syncOptions": {} }
+                },
+                "f:phase": {},
+                "f:startedAt": {},
+                "f:syncResult": {
+                  ".": {},
+                  "f:resources": {},
+                  "f:revision": {},
+                  "f:source": {
+                    ".": {},
+                    "f:path": {},
+                    "f:repoURL": {},
+                    "f:targetRevision": {}
+                  }
+                }
+              },
+              "f:reconciledAt": {},
+              "f:resourceHealthSource": {},
+              "f:resources": {},
+              "f:sourceType": {},
+              "f:sync": {
+                ".": {},
+                "f:comparedTo": {
+                  ".": {},
+                  "f:destination": {
+                    ".": {},
+                    "f:namespace": {},
+                    "f:server": {}
+                  },
+                  "f:source": {
+                    ".": {},
+                    "f:path": {},
+                    "f:repoURL": {},
+                    "f:targetRevision": {}
+                  }
+                },
+                "f:revision": {},
+                "f:status": {}
+              }
+            }
+          },
+          "manager": "argocd-application-controller",
+          "operation": "Update",
+          "time": "2025-10-02T16:57:43Z"
+        }
+      ],
+      "name": "aaaaaaaaa",
+      "namespace": "argocd",
+      "resourceVersion": "70746100",
+      "uid": "bb42b013-3ce1-4207-a409-2898419d8e74"
+    },
+    "spec": {
+      "destination": {
+        "namespace": "argocd",
+        "server": "https://kubernetes.default.svc"
+      },
+      "project": "default",
+      "revisionHistoryLimit": 10,
+      "source": {
+        "path": "4-k8s-gitops",
+        "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+        "targetRevision": "HEAD"
+      },
+      "syncPolicy": {
+        "automated": {},
+        "retry": {
+          "backoff": { "duration": "5s", "factor": 2, "maxDuration": "3m" },
+          "limit": 5
+        },
+        "syncOptions": ["CreateNamespace=false", "ServerSideApply=true"]
+      }
+    },
+    "status": {
+      "controllerNamespace": "argocd",
+      "health": {
+        "lastTransitionTime": "2025-09-30T12:01:51Z",
+        "status": "Healthy"
+      },
+      "history": [
+        {
+          "deployStartedAt": "2025-09-30T16:11:53Z",
+          "deployedAt": "2025-09-30T16:11:56Z",
+          "id": 31,
+          "initiatedBy": { "automated": true },
+          "revision": "542158ea37c12472fa14e797e3d686d3446b5344",
+          "source": {
+            "path": "4-k8s-gitops",
+            "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+            "targetRevision": "HEAD"
+          }
+        },
+        {
+          "deployStartedAt": "2025-09-30T17:44:35Z",
+          "deployedAt": "2025-09-30T17:44:39Z",
+          "id": 32,
+          "initiatedBy": { "automated": true },
+          "revision": "0ea5a3e842def379c4ec31684018a374c7e204df",
+          "source": {
+            "path": "4-k8s-gitops",
+            "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+            "targetRevision": "HEAD"
+          }
+        },
+        {
+          "deployStartedAt": "2025-09-30T19:15:07Z",
+          "deployedAt": "2025-09-30T19:15:10Z",
+          "id": 33,
+          "initiatedBy": { "automated": true },
+          "revision": "dffec5f1be9bda180114da4f0883070d4e20f935",
+          "source": {
+            "path": "4-k8s-gitops",
+            "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+            "targetRevision": "HEAD"
+          }
+        },
+        {
+          "deployStartedAt": "2025-10-01T09:41:25Z",
+          "deployedAt": "2025-10-01T09:41:28Z",
+          "id": 34,
+          "initiatedBy": { "automated": true },
+          "revision": "018ea299634d91e529a48f4f72e32f1f332a12f5",
+          "source": {
+            "path": "4-k8s-gitops",
+            "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+            "targetRevision": "HEAD"
+          }
+        },
+        {
+          "deployStartedAt": "2025-10-02T15:32:44Z",
+          "deployedAt": "2025-10-02T15:32:47Z",
+          "id": 35,
+          "initiatedBy": { "automated": true },
+          "revision": "c351df0e1039c7e151f02f4f2a8096fbd88c7a93",
+          "source": {
+            "path": "4-k8s-gitops",
+            "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+            "targetRevision": "HEAD"
+          }
+        },
+        {
+          "deployStartedAt": "2025-10-02T15:34:45Z",
+          "deployedAt": "2025-10-02T15:34:49Z",
+          "id": 36,
+          "initiatedBy": { "automated": true },
+          "revision": "744ef414bc4880d1ac71b8296dc01ebc35f4f97c",
+          "source": {
+            "path": "4-k8s-gitops",
+            "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+            "targetRevision": "HEAD"
+          }
+        },
+        {
+          "deployStartedAt": "2025-10-02T16:20:55Z",
+          "deployedAt": "2025-10-02T16:20:59Z",
+          "id": 37,
+          "initiatedBy": { "automated": true },
+          "revision": "94fcc5e8673e0d2d7fbca6b1c6c455ba308314fc",
+          "source": {
+            "path": "4-k8s-gitops",
+            "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+            "targetRevision": "HEAD"
+          }
+        },
+        {
+          "deployStartedAt": "2025-10-02T16:45:15Z",
+          "deployedAt": "2025-10-02T16:45:19Z",
+          "id": 38,
+          "initiatedBy": { "automated": true },
+          "revision": "a390e57286ce93cd869ef0cd157c287a7082d504",
+          "source": {
+            "path": "4-k8s-gitops",
+            "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+            "targetRevision": "HEAD"
+          }
+        },
+        {
+          "deployStartedAt": "2025-10-02T16:53:16Z",
+          "deployedAt": "2025-10-02T16:53:20Z",
+          "id": 39,
+          "initiatedBy": { "automated": true },
+          "revision": "2396abec0a4a8bb67cbe5395fbf28dadf45e0b48",
+          "source": {
+            "path": "4-k8s-gitops",
+            "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+            "targetRevision": "HEAD"
+          }
+        },
+        {
+          "deployStartedAt": "2025-10-02T16:57:40Z",
+          "deployedAt": "2025-10-02T16:57:43Z",
+          "id": 40,
+          "initiatedBy": { "automated": true },
+          "revision": "224f6a2da219e7efa4178277707ac90007e133b9",
+          "source": {
+            "path": "4-k8s-gitops",
+            "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+            "targetRevision": "HEAD"
+          }
+        }
+      ],
+      "operationState": {
+        "finishedAt": "2025-10-02T16:57:43Z",
+        "message": "successfully synced (all tasks run)",
+        "operation": {
+          "initiatedBy": { "automated": true },
+          "retry": {
+            "backoff": { "duration": "5s", "factor": 2, "maxDuration": "3m" },
+            "limit": 5
+          },
+          "sync": {
+            "revision": "224f6a2da219e7efa4178277707ac90007e133b9",
+            "syncOptions": ["CreateNamespace=false", "ServerSideApply=true"]
+          }
+        },
+        "phase": "Succeeded",
+        "startedAt": "2025-10-02T16:57:40Z",
+        "syncResult": {
+          "resources": [
+            {
+              "group": "secrets.hashicorp.com",
+              "hookPhase": "Succeeded",
+              "kind": "VaultStaticSecret",
+              "message": "vaultstaticsecret.secrets.hashicorp.com/cdviz-dev-helm-oci serverside-applied",
+              "name": "cdviz-dev-helm-oci",
+              "namespace": "argocd",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1beta1"
+            },
+            {
+              "group": "argoproj.io",
+              "hookPhase": "Succeeded",
+              "kind": "AppProject",
+              "message": "appproject.argoproj.io/demo-cluster serverside-applied",
+              "name": "demo-cluster",
+              "namespace": "argocd",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1alpha1"
+            },
+            {
+              "group": "argoproj.io",
+              "hookPhase": "Succeeded",
+              "kind": "Application",
+              "message": "application.argoproj.io/podinfo serverside-applied",
+              "name": "podinfo",
+              "namespace": "argocd",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1alpha1"
+            },
+            {
+              "group": "argoproj.io",
+              "hookPhase": "Running",
+              "kind": "ApplicationSet",
+              "message": "applicationset.argoproj.io/download-history serverside-applied",
+              "name": "download-history",
+              "namespace": "argocd",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1alpha1"
+            },
+            {
+              "group": "argoproj.io",
+              "hookPhase": "Running",
+              "kind": "ApplicationSet",
+              "message": "applicationset.argoproj.io/cdviz serverside-applied",
+              "name": "cdviz",
+              "namespace": "argocd",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1alpha1"
+            }
+          ],
+          "revision": "224f6a2da219e7efa4178277707ac90007e133b9",
+          "source": {
+            "path": "4-k8s-gitops",
+            "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+            "targetRevision": "HEAD"
+          }
+        }
+      },
+      "reconciledAt": "2025-10-02T16:57:43Z",
+      "resourceHealthSource": "appTree",
+      "resources": [
+        {
+          "group": "argoproj.io",
+          "kind": "AppProject",
+          "name": "demo-cluster",
+          "namespace": "argocd",
+          "status": "Synced",
+          "version": "v1alpha1"
+        },
+        {
+          "group": "argoproj.io",
+          "kind": "Application",
+          "name": "podinfo",
+          "namespace": "argocd",
+          "status": "Synced",
+          "version": "v1alpha1"
+        },
+        {
+          "group": "argoproj.io",
+          "kind": "ApplicationSet",
+          "name": "cdviz",
+          "namespace": "argocd",
+          "status": "Synced",
+          "syncWave": 2,
+          "version": "v1alpha1"
+        },
+        {
+          "group": "argoproj.io",
+          "kind": "ApplicationSet",
+          "name": "download-history",
+          "namespace": "argocd",
+          "status": "Synced",
+          "syncWave": 2,
+          "version": "v1alpha1"
+        },
+        {
+          "group": "secrets.hashicorp.com",
+          "kind": "VaultStaticSecret",
+          "name": "cdviz-dev-helm-oci",
+          "namespace": "argocd",
+          "status": "Synced",
+          "version": "v1beta1"
+        }
+      ],
+      "sourceHydrator": {},
+      "sourceType": "Kustomize",
+      "summary": {},
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "argocd",
+            "server": "https://kubernetes.default.svc"
+          },
+          "source": {
+            "path": "4-k8s-gitops",
+            "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+            "targetRevision": "HEAD"
+          }
+        },
+        "revision": "224f6a2da219e7efa4178277707ac90007e133b9",
+        "status": "Synced"
+      }
+    }
+  }
+}

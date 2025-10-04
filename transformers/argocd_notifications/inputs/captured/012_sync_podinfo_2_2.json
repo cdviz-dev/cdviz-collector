@@ -1,0 +1,350 @@
+{
+  "timestamp": "2025-10-02T16:45:18.558968Z",
+  "context": {
+    "argocdUrl": "https://demo.cdviz.dev",
+    "notificationType": "cdviz"
+  },
+  "app": {
+    "apiVersion": "argoproj.io/v1alpha1",
+    "kind": "Application",
+    "metadata": {
+      "annotations": {
+        "argocd.argoproj.io/tracking-id": "aaaaaaaaa:aaaaaaaa.aa/Aaaaaaaaaaa:aaaaaa/aaaaaaa",
+        "notified.notifications.argoproj.io": "{\"on-health-degraded:[0].zoG5zUjYGjimkwCGgIQGjx1hO5s:cdviz:\":1759422664}"
+      },
+      "creationTimestamp": "2025-10-02T15:32:45Z",
+      "generation": 16,
+      "labels": {
+        "app.kubernetes.io/managed-by": "argocd",
+        "cdviz.dev/cluster": "demo-cluster"
+      },
+      "managedFields": [
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:metadata": {
+              "f:annotations": { "f:argocd.argoproj.io/tracking-id": {} },
+              "f:labels": {
+                "f:app.kubernetes.io/managed-by": {},
+                "f:cdviz.dev/cluster": {}
+              }
+            },
+            "f:spec": {
+              "f:destination": { "f:namespace": {}, "f:server": {} },
+              "f:project": {},
+              "f:revisionHistoryLimit": {},
+              "f:sources": {},
+              "f:syncPolicy": {
+                "f:automated": { "f:prune": {}, "f:selfHeal": {} },
+                "f:retry": {
+                  "f:backoff": {
+                    "f:duration": {},
+                    "f:factor": {},
+                    "f:maxDuration": {}
+                  },
+                  "f:limit": {}
+                },
+                "f:syncOptions": {}
+              }
+            }
+          },
+          "manager": "argocd-controller",
+          "operation": "Apply",
+          "time": "2025-10-02T16:45:16Z"
+        },
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:metadata": {
+              "f:annotations": { "f:notified.notifications.argoproj.io": {} }
+            }
+          },
+          "manager": "argocd-notifications-controller",
+          "operation": "Update",
+          "time": "2025-10-02T16:31:04Z"
+        },
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:status": {
+              ".": {},
+              "f:conditions": {},
+              "f:controllerNamespace": {},
+              "f:health": {
+                ".": {},
+                "f:lastTransitionTime": {},
+                "f:status": {}
+              },
+              "f:history": {},
+              "f:operationState": {
+                ".": {},
+                "f:finishedAt": {},
+                "f:message": {},
+                "f:operation": {
+                  ".": {},
+                  "f:initiatedBy": { ".": {}, "f:automated": {} },
+                  "f:retry": {
+                    ".": {},
+                    "f:backoff": {
+                      ".": {},
+                      "f:duration": {},
+                      "f:factor": {},
+                      "f:maxDuration": {}
+                    },
+                    "f:limit": {}
+                  },
+                  "f:sync": {
+                    ".": {},
+                    "f:prune": {},
+                    "f:revisions": {},
+                    "f:syncOptions": {}
+                  }
+                },
+                "f:phase": {},
+                "f:startedAt": {},
+                "f:syncResult": {
+                  ".": {},
+                  "f:resources": {},
+                  "f:revision": {},
+                  "f:revisions": {},
+                  "f:source": { ".": {}, "f:repoURL": {} },
+                  "f:sources": {}
+                }
+              },
+              "f:reconciledAt": {},
+              "f:resourceHealthSource": {},
+              "f:resources": {},
+              "f:sourceHydrator": {},
+              "f:sourceTypes": {},
+              "f:summary": {},
+              "f:sync": {
+                ".": {},
+                "f:comparedTo": {
+                  ".": {},
+                  "f:destination": {
+                    ".": {},
+                    "f:namespace": {},
+                    "f:server": {}
+                  },
+                  "f:source": { ".": {}, "f:repoURL": {} },
+                  "f:sources": {}
+                },
+                "f:revisions": {},
+                "f:status": {}
+              }
+            }
+          },
+          "manager": "argocd-application-controller",
+          "operation": "Update",
+          "time": "2025-10-02T16:45:18Z"
+        }
+      ],
+      "name": "aaaaaaa",
+      "namespace": "argocd",
+      "resourceVersion": "70743148",
+      "uid": "648b3973-e90b-4496-84c0-febef8536eec"
+    },
+    "spec": {
+      "destination": {
+        "namespace": "aaaaaaa",
+        "server": "https://kubernetes.default.svc"
+      },
+      "project": "demo-cluster",
+      "revisionHistoryLimit": 3,
+      "sources": [
+        {
+          "chart": "aaaaaaa",
+          "helm": {
+            "valuesObject": {
+              "PodSecurity \"restricted:latest\"": "allowPrivilegeEscalation != false (container \"aaaaaaa\" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container \"aaaaaaa\" must set securityContext.capabilities.drop=[\"ALL\"]), runAsNonRoot != true (pod or container \"aaaaaaa\" must set securityContext.runAsNonRoot=true), seccompProfile (pod or container \"aaaaaaa\" must set securityContext.seccompProfile.type to \"RuntimeDefault\" or \"Localhost\")",
+              "podSecurityContext": {
+                "runAsNonRoot": true,
+                "seccompProfile": { "type": "RuntimeDefault" }
+              },
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "capabilities": { "drop": ["ALL"] },
+                "readOnlyRootFilesystem": true,
+                "runAsGroup": "app",
+                "runAsUser": "app"
+              }
+            }
+          },
+          "repoURL": "ghcr.io/stefanprodan/charts",
+          "targetRevision": "6.9.0"
+        }
+      ],
+      "syncPolicy": {
+        "automated": { "prune": true, "selfHeal": true },
+        "retry": {
+          "backoff": { "duration": "5s", "factor": 2, "maxDuration": "3m" },
+          "limit": 5
+        },
+        "syncOptions": [
+          "CreateNamespace=true",
+          "ServerSideApply=true",
+          "ApplyOutOfSyncOnly=true"
+        ]
+      }
+    },
+    "status": {
+      "conditions": [
+        {
+          "lastTransitionTime": "2025-10-02T16:45:16Z",
+          "message": "Failed to compare desired state to live state: failed to calculate diff: error calculating structured merge diff: error building typed value from config resource: errors:\n  .spec.template.spec.containers[name=\"aaaaaaa\"].securityContext.runAsGroup: expected numeric (int or float), got string\n  .spec.template.spec.containers[name=\"aaaaaaa\"].securityContext.runAsUser: expected numeric (int or float), got string",
+          "type": "ComparisonError"
+        }
+      ],
+      "controllerNamespace": "argocd",
+      "health": {
+        "lastTransitionTime": "2025-10-02T16:31:04Z",
+        "status": "Degraded"
+      },
+      "history": [
+        {
+          "deployStartedAt": "2025-10-02T16:21:00Z",
+          "deployedAt": "2025-10-02T16:21:03Z",
+          "id": 0,
+          "initiatedBy": { "automated": true },
+          "revisions": ["6.9.0"],
+          "source": { "repoURL": "" },
+          "sources": [
+            {
+              "chart": "aaaaaaa",
+              "repoURL": "ghcr.io/stefanprodan/charts",
+              "targetRevision": "6.9.0"
+            }
+          ]
+        }
+      ],
+      "operationState": {
+        "finishedAt": "2025-10-02T16:21:03Z",
+        "message": "successfully synced (all tasks run)",
+        "operation": {
+          "initiatedBy": { "automated": true },
+          "retry": {
+            "backoff": { "duration": "5s", "factor": 2, "maxDuration": "3m" },
+            "limit": 5
+          },
+          "sync": {
+            "prune": true,
+            "revisions": ["6.9.0"],
+            "syncOptions": [
+              "CreateNamespace=true",
+              "ServerSideApply=true",
+              "ApplyOutOfSyncOnly=true"
+            ]
+          }
+        },
+        "phase": "Succeeded",
+        "startedAt": "2025-10-02T16:21:00Z",
+        "syncResult": {
+          "resources": [
+            {
+              "group": "",
+              "hookPhase": "Running",
+              "kind": "Namespace",
+              "message": "namespace/aaaaaaa serverside-applied",
+              "name": "aaaaaaa",
+              "namespace": "",
+              "status": "Synced",
+              "syncPhase": "PreSync",
+              "version": "v1"
+            },
+            {
+              "group": "",
+              "hookPhase": "Running",
+              "kind": "Service",
+              "message": "service/aaaaaaa serverside-applied",
+              "name": "aaaaaaa",
+              "namespace": "aaaaaaa",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1"
+            },
+            {
+              "group": "apps",
+              "hookPhase": "Running",
+              "kind": "Deployment",
+              "message": "deployment.apps/aaaaaaa serverside-applied",
+              "name": "aaaaaaa",
+              "namespace": "aaaaaaa",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1"
+            }
+          ],
+          "revision": "",
+          "revisions": ["6.9.0"],
+          "source": { "repoURL": "" },
+          "sources": [
+            {
+              "chart": "aaaaaaa",
+              "repoURL": "ghcr.io/stefanprodan/charts",
+              "targetRevision": "6.9.0"
+            }
+          ]
+        }
+      },
+      "reconciledAt": "2025-10-02T16:45:18Z",
+      "resourceHealthSource": "appTree",
+      "resources": [
+        {
+          "kind": "Service",
+          "name": "aaaaaaa",
+          "namespace": "aaaaaaa",
+          "status": "Unknown",
+          "version": "v1"
+        },
+        {
+          "group": "apps",
+          "kind": "Deployment",
+          "name": "aaaaaaa",
+          "namespace": "aaaaaaa",
+          "status": "Unknown",
+          "version": "v1"
+        }
+      ],
+      "sourceHydrator": {},
+      "sourceTypes": ["Helm"],
+      "summary": {},
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "aaaaaaa",
+            "server": "https://kubernetes.default.svc"
+          },
+          "source": { "repoURL": "" },
+          "sources": [
+            {
+              "chart": "aaaaaaa",
+              "helm": {
+                "valuesObject": {
+                  "PodSecurity \"restricted:latest\"": "allowPrivilegeEscalation != false (container \"aaaaaaa\" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container \"aaaaaaa\" must set securityContext.capabilities.drop=[\"ALL\"]), runAsNonRoot != true (pod or container \"aaaaaaa\" must set securityContext.runAsNonRoot=true), seccompProfile (pod or container \"aaaaaaa\" must set securityContext.seccompProfile.type to \"RuntimeDefault\" or \"Localhost\")",
+                  "podSecurityContext": {
+                    "runAsNonRoot": true,
+                    "seccompProfile": { "type": "RuntimeDefault" }
+                  },
+                  "securityContext": {
+                    "allowPrivilegeEscalation": false,
+                    "capabilities": { "drop": ["ALL"] },
+                    "readOnlyRootFilesystem": true,
+                    "runAsGroup": "app",
+                    "runAsUser": "app"
+                  }
+                }
+              },
+              "repoURL": "ghcr.io/stefanprodan/charts",
+              "targetRevision": "6.9.0"
+            }
+          ]
+        },
+        "revisions": ["6.9.0"],
+        "status": "Unknown"
+      }
+    }
+  }
+}

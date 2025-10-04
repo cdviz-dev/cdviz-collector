@@ -1,0 +1,464 @@
+# Convert ArgoCD events to CDEvents
+# Based on https://raw.githubusercontent.com/argoproj/argo-cd/dd8d34c73869c8585fb57c56c6a5f3bec78ef081/docs/proposals/argocd-cdevents-integration.md
+# https://argo-cd.readthedocs.io/en/stable/operator-manual/notifications/
+# https://cdevents.dev
+#
+# This transformer works with a unified ArgoCD notification template that sends:
+# {
+#   "timestamp": "...",
+#   "context": { "argocdUrl": "...", ... },
+#   "app": { ... full Application object ... }
+# }
+#
+# Event type detection is performed in VRL based on the app status fields.
+#
+# | done | ArgoCD Event Detection | CDEvent |
+# | --- | --- | --- |
+# | [x] | on-deployed (operationState.phase=Succeeded + health=Healthy) | service.deployed |
+# | [ ] | on-deployed (upgrade detection - TBD) | service.upgraded |
+# | [x] | on-deleted (metadata.deletionTimestamp exists) | service.removed |
+# | [x] | on-health-degraded (health.status=Degraded) | incident.detected |
+# | [x] | on-sync-failed (operationState.phase=Failed/Error) | incident.detected |
+# | [ ] | on-sync-succeeded (after failure) | incident.resolved |
+# | [x] | on-sync-running (operationState.phase=Running) | (ignored for now) |
+#
+# ## Rules (aligned with kubewatch transformer):
+#
+# - `context.id` is computed by the collector (using content id, CID computed)
+# - `context.source` is `/argocd` (following kubewatch pattern)
+# - `subject.id` follows pattern: `namespace/resource_name`
+# - `subject.source` is empty, all information are in the `subject.id` (global id)
+# - `customData.argocd` follows the hierarchy of the ArgoCD event
+# - `environment.id` comes from `.metadata.environment_id` with fallback to app.spec.destination.server
+#
+
+id = "0"
+context = {
+    "version": "0.4.1",
+    "id": "0", # "0" to let collector generate an id
+    "source": "/argocd",
+    # "timestamp": "", # empty or undef to let collector generate if not set later
+}
+
+output = []
+
+# Extract common fields from ArgoCD webhook payload using safe null coalescing
+app_name = .body.app.metadata.name
+app_namespace = .body.app.metadata.namespace || "default"
+app_server = .body.app.spec.destination.server || ""
+app_dest_namespace = .body.app.spec.destination.namespace || ""
+
+# Detect current operation state and health
+operation_phase = .body.app.status.operationState.phase
+health_status = .body.app.status.health.status
+sync_status = .body.app.status.sync.status
+deletion_timestamp = .body.app.metadata.deletionTimestamp
+
+# Build base customData (will be extended per event type)
+base_custom_data = {
+  "argocd": {
+    "application": {
+      "name": app_name,
+      "namespace": app_namespace,
+    },
+    "destination": {
+      "server": app_server,
+      "namespace": app_dest_namespace,
+    }
+  }
+}
+
+# Extract source information for artifactId (for service.deployed events)
+# Try to get from syncResult first (for completed operations), then fall back to spec
+sync_result = .body.app.status.operationState.syncResult
+sources = sync_result.sources || []
+source = sync_result.source || .body.app.spec.source || {}
+revisions = sync_result.revisions || []
+revision = sync_result.revision || source.targetRevision || ""
+
+# Build artifactId based on source type
+artifact_id = ""
+if is_array(sources) && length!(sources) > 0 {
+  # Multi-source app - use first source
+  first_source = sources[0]
+  chart = first_source.chart || ""
+  repo_url = first_source.repoURL || ""
+  version = revisions[0] || ""
+
+  if chart != "" {
+    # Helm chart source
+    purl_obj = {
+      "type": "helm",
+      "name": chart,
+      "version": version,
+      "qualifiers": {"repository_url": repo_url}
+    }
+    artifact_id = purl_to_string(purl_obj) ?? ""
+  } else {
+    # Git source
+    purl_obj = {
+      "type": "git",
+      "name": app_name,
+      "version": version,
+      "qualifiers": {"repository_url": repo_url}
+    }
+    artifact_id = purl_to_string(purl_obj) ?? ""
+  }
+} else if !is_null(source.repoURL) {
+  # Single source app
+  chart = source.chart || ""
+  repo_url = source.repoURL || ""
+
+  if chart != "" {
+    # Helm chart source
+    purl_obj = {
+      "type": "helm",
+      "name": chart,
+      "version": revision,
+      "qualifiers": {"repository_url": repo_url}
+    }
+    artifact_id = purl_to_string(purl_obj) ?? ""
+  } else {
+    # Git source
+    purl_obj = {
+      "type": "git",
+      "name": app_name,
+      "version": revision,
+      "qualifiers": {"repository_url": repo_url}
+    }
+    artifact_id = purl_to_string(purl_obj) ?? ""
+  }
+}
+
+# Determine event type and build appropriate CDEvent
+# Priority order matters: deletion > operation > health
+
+if !is_null(deletion_timestamp) {
+  # Application being deleted → service.removed
+  ts = parse_timestamp!(deletion_timestamp, "%+")
+  ts = format_timestamp!(ts, format: "%+")
+  context.timestamp = ts
+  context.type = "dev.cdevents.service.removed.0.2.0"
+  custom_data = base_custom_data
+
+  output = push(output, {
+    "metadata": .metadata,
+    "headers": .headers,
+    "body": {
+      "context": context,
+      "subject": {
+        "id": "{{ app_namespace }}/{{ app_name }}" ?? app_name,
+        "type": "service",
+        "content": {
+          "environment": {
+            "id": .metadata.environment_id || .body.app.spec.destination.server || "",
+          }
+        }
+      },
+      "customData": custom_data
+    }
+  })
+
+  # START: Emit one event per container for service.removed
+  images = array!(.body.app.status.summary.images || [])
+  container_events = map_values(images) -> |image_str| {
+    purl_obj = purl_from_oci_image!(image_str)
+    image_name = purl_obj.name
+    container_subject_id = "{{ app_namespace }}/{{ app_name }}/{{ image_name }}" ?? image_name
+
+    {
+      "metadata": .metadata,
+      "headers": .headers,
+      "body": {
+        "context": context,
+        "subject": {
+            "id": container_subject_id,
+            "type": "service",
+            "content": {
+                "environment": {
+                    "id": .metadata.environment_id || .body.app.spec.destination.server || "",
+                }
+            }
+        },
+        "customData": custom_data
+      }
+    }
+  }
+  output = append(output, container_events)
+  # END: Emit one event per container for service.removed
+
+} else if !is_null(operation_phase) {
+  # Operation state exists - sync operation in progress or completed
+  operation = .body.app.status.operationState
+
+  # Determine timestamp from operation
+  ts = if !is_null(operation.finishedAt) {
+    parse_timestamp!(operation.finishedAt, "%+")
+  } else if !is_null(operation.startedAt) {
+    parse_timestamp!(operation.startedAt, "%+")
+  } else {
+    now()
+  }
+  ts = format_timestamp!(ts, format: "%+")
+  context.timestamp = ts
+
+  # Build custom_data with operation details
+  custom_data = base_custom_data
+  custom_data.argocd.operation = {
+    "phase": operation_phase,
+    "message": operation.message || "",
+    "revision": operation.operation.sync.revision || "",
+  }
+  if !is_null(health_status) {
+    custom_data.argocd.health = {
+      "status": health_status,
+    }
+  }
+  if !is_null(sync_status) {
+    custom_data.argocd.sync = {
+      "status": sync_status,
+    }
+  }
+
+  if operation_phase == "Succeeded" && health_status == "Healthy" {
+    # Successful deployment
+    context.type = "dev.cdevents.service.deployed.0.2.0"
+    output = push(output, {
+      "metadata": .metadata,
+      "headers": .headers,
+      "body": {
+        "context": context,
+        "subject": {
+          "id": "{{ app_namespace }}/{{ app_name }}" ?? app_name,
+          "type": "service",
+          "content": {
+            "artifactId": artifact_id,
+            "environment": {
+              "id": .metadata.environment_id,
+            }
+          }
+        },
+        "customData": custom_data
+      }
+    })
+
+    # START: Emit one event per container
+    images = array!(.body.app.status.summary.images || [])
+    container_events = map_values(images) -> |image_str| {
+      purl_obj = purl_from_oci_image!(image_str)
+      image_name = purl_obj.name
+      container_subject_id = "{{ app_namespace }}/{{ app_name }}/{{ image_name }}" ?? image_name
+      container_artifact_id = purl_to_string(purl_obj) ?? ""
+
+      subject_content = {
+        "environment": {
+            "id": .metadata.environment_id,
+        }
+      }
+      subject_content.artifactId = container_artifact_id
+
+      {
+        "metadata": .metadata,
+        "headers": .headers,
+        "body": {
+            "context": context,
+            "subject": {
+                "id": container_subject_id,
+                "type": "service",
+                "content": subject_content
+            },
+            "customData": custom_data
+        }
+      }
+    }
+    output = append(output, container_events)
+    # END: Emit one event per container
+
+  } else if operation_phase == "Failed" || operation_phase == "Error" {
+    # Sync operation failed → incident.detected
+    context.type = "dev.cdevents.incident.detected.0.1.0"
+    output = push(output, {
+      "metadata": .metadata,
+      "headers": .headers,
+      "body": {
+        "context": context,
+        "subject": {
+          "id": "{{ app_namespace }}/{{ app_name }}" ?? app_name,
+          "type": "incident",
+          "content": {
+            "description": operation.message || "Sync operation failed",
+            "environment": {
+              "id": .metadata.environment_id,
+            }
+          }
+        },
+        "customData": custom_data
+      }
+    })
+
+  } else if operation_phase == "Running" {
+    # Sync operation is running - we could emit pipelineRun.started
+    # For now, skip emitting an event (uncomment to enable)
+    # output = push(output, {...})
+    null
+  }
+
+} else if !is_null(health_status) {
+  # No operation state, but health status is available
+  ts = .body.timestamp
+  if is_null(ts) {
+    ts = now()
+    ts = format_timestamp!(ts, format: "%+")
+  }
+  context.timestamp = ts
+
+  custom_data = base_custom_data
+  custom_data.argocd.health = {
+    "status": health_status,
+    "message": .body.app.status.health.message || ""
+  }
+  if !is_null(sync_status) {
+    custom_data.argocd.sync = {
+      "status": sync_status,
+    }
+  }
+
+  if health_status == "Degraded" || health_status == "Missing" || health_status == "Unknown" {
+    # Health degraded → incident.detected
+    context.type = "dev.cdevents.incident.detected.0.1.0"
+    output = push(output, {
+      "metadata": .metadata,
+      "headers": .headers,
+      "body": {
+        "context": context,
+        "subject": {
+          "id": "{{ app_namespace }}/{{ app_name }}" ?? app_name,
+          "type": "incident",
+          "content": {
+            "description": .body.app.status.health.message || "Health status degraded",
+            "environment": {
+              "id": .metadata.environment_id,
+            }
+          }
+        },
+        "customData": custom_data
+      }
+    })
+
+  } else if health_status == "Healthy" {
+    # Health is healthy - could be incident.resolved or service.deployed
+    # For now, emit service.deployed
+    context.type = "dev.cdevents.service.deployed.0.2.0"
+    output = push(output, {
+      "metadata": .metadata,
+      "headers": .headers,
+      "body": {
+        "context": context,
+        "subject": {
+          "id": "{{ app_namespace }}/{{ app_name }}" ?? app_name,
+          "type": "service",
+          "content": {
+            "artifactId": artifact_id,
+            "environment": {
+              "id": .metadata.environment_id,
+            }
+          }
+        },
+        "customData": custom_data
+      }
+    })
+
+    # START: Emit one event per container
+    images = array!(.body.app.status.summary.images || [])
+    container_events = map_values(images) -> |image_str| {
+      purl_obj = purl_from_oci_image!(image_str)
+      image_name = purl_obj.name
+      container_subject_id = "{{ app_namespace }}/{{ app_name }}/{{ image_name }}" ?? image_name
+      container_artifact_id = purl_to_string(purl_obj) ?? ""
+
+      subject_content = {
+        "environment": {
+            "id": .metadata.environment_id,
+        }
+      }
+      subject_content.artifactId = container_artifact_id
+
+      {
+        "metadata": .metadata,
+        "headers": .headers,
+        "body": {
+            "context": context,
+            "subject": {
+                "id": container_subject_id,
+                "type": "service",
+                "content": subject_content
+            },
+            "customData": custom_data
+        }
+      }
+    }
+    output = append(output, container_events)
+    # END: Emit one event per container
+  }
+
+} else if !is_null(.body.app.metadata.creationTimestamp) {
+  # Fallback: application just created
+  ts = parse_timestamp!(.body.app.metadata.creationTimestamp, "%+")
+  ts = format_timestamp!(ts, format: "%+")
+  context.timestamp = ts
+  context.type = "dev.cdevents.service.deployed.0.2.0"
+  custom_data = base_custom_data
+
+  output = push(output, {
+    "metadata": .metadata,
+    "headers": .headers,
+    "body": {
+      "context": context,
+      "subject": {
+        "id": "{{ app_namespace }}/{{ app_name }}" ?? app_name,
+        "type": "service",
+        "content": {
+          "artifactId": artifact_id,
+          "environment": {
+            "id": .metadata.environment_id || .body.app.spec.destination.server || "",
+          }
+        }
+      },
+      "customData": custom_data
+    }
+  })
+
+  # START: Emit one event per container
+  images = array!(.body.app.status.summary.images || [])
+  container_events = map_values(images) -> |image_str| {
+    purl_obj = purl_from_oci_image!(image_str)
+    image_name = purl_obj.name
+    container_subject_id = "{{ app_namespace }}/{{ app_name }}/{{ image_name }}" ?? image_name
+    container_artifact_id = purl_to_string(purl_obj) ?? ""
+
+    subject_content = {
+        "environment": {
+            "id": .metadata.environment_id || .body.app.spec.destination.server || "",
+        }
+    }
+    subject_content.artifactId = container_artifact_id
+
+    {
+        "metadata": .metadata,
+        "headers": .headers,
+        "body": {
+            "context": context,
+            "subject": {
+                "id": container_subject_id,
+                "type": "service",
+                "content": subject_content
+            },
+            "customData": custom_data
+        }
+    }
+  }
+  output = append(output, container_events)
+  # END: Emit one event per container
+}
+
+output

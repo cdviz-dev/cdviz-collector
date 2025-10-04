@@ -1,0 +1,350 @@
+{
+  "timestamp": "2025-10-02T16:57:44.579388Z",
+  "context": {
+    "argocdUrl": "https://demo.cdviz.dev",
+    "notificationType": "cdviz"
+  },
+  "app": {
+    "apiVersion": "argoproj.io/v1alpha1",
+    "kind": "Application",
+    "metadata": {
+      "annotations": {
+        "argocd.argoproj.io/tracking-id": "aaaaaaaaa:aaaaaaaa.aa/Aaaaaaaaaaa:aaaaaa/aaaaaaa",
+        "notified.notifications.argoproj.io": "{\"\\u003cnil\\u003e:on-deployed:[0].Yv81TUs0gmPTEyk-v8Lb6ZKEo0g:cdviz:\":1759424005}"
+      },
+      "creationTimestamp": "2025-10-02T15:32:45Z",
+      "generation": 30,
+      "labels": {
+        "app.kubernetes.io/managed-by": "argocd",
+        "cdviz.dev/cluster": "demo-cluster"
+      },
+      "managedFields": [
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:metadata": {
+              "f:annotations": { "f:argocd.argoproj.io/tracking-id": {} },
+              "f:labels": {
+                "f:app.kubernetes.io/managed-by": {},
+                "f:cdviz.dev/cluster": {}
+              }
+            },
+            "f:spec": {
+              "f:destination": { "f:namespace": {}, "f:server": {} },
+              "f:project": {},
+              "f:revisionHistoryLimit": {},
+              "f:sources": {},
+              "f:syncPolicy": {
+                "f:automated": { "f:prune": {}, "f:selfHeal": {} },
+                "f:retry": {
+                  "f:backoff": {
+                    "f:duration": {},
+                    "f:factor": {},
+                    "f:maxDuration": {}
+                  },
+                  "f:limit": {}
+                },
+                "f:syncOptions": {}
+              }
+            }
+          },
+          "manager": "argocd-controller",
+          "operation": "Apply",
+          "time": "2025-10-02T16:57:41Z"
+        },
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:metadata": {
+              "f:annotations": { "f:notified.notifications.argoproj.io": {} }
+            }
+          },
+          "manager": "argocd-notifications-controller",
+          "operation": "Update",
+          "time": "2025-10-02T16:53:25Z"
+        },
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:operation": {
+              ".": {},
+              "f:initiatedBy": { ".": {}, "f:automated": {} },
+              "f:retry": {
+                ".": {},
+                "f:backoff": {
+                  ".": {},
+                  "f:duration": {},
+                  "f:factor": {},
+                  "f:maxDuration": {}
+                },
+                "f:limit": {}
+              },
+              "f:sync": {
+                ".": {},
+                "f:prune": {},
+                "f:revisions": {},
+                "f:syncOptions": {}
+              }
+            },
+            "f:status": {
+              ".": {},
+              "f:controllerNamespace": {},
+              "f:health": {
+                ".": {},
+                "f:lastTransitionTime": {},
+                "f:status": {}
+              },
+              "f:history": {},
+              "f:operationState": {
+                ".": {},
+                "f:operation": {
+                  ".": {},
+                  "f:initiatedBy": { ".": {}, "f:automated": {} },
+                  "f:retry": {
+                    ".": {},
+                    "f:backoff": {
+                      ".": {},
+                      "f:duration": {},
+                      "f:factor": {},
+                      "f:maxDuration": {}
+                    },
+                    "f:limit": {}
+                  },
+                  "f:sync": {
+                    ".": {},
+                    "f:prune": {},
+                    "f:revisions": {},
+                    "f:syncOptions": {}
+                  }
+                },
+                "f:phase": {},
+                "f:startedAt": {}
+              },
+              "f:reconciledAt": {},
+              "f:resourceHealthSource": {},
+              "f:resources": {},
+              "f:sourceHydrator": {},
+              "f:sourceTypes": {},
+              "f:summary": { ".": {}, "f:images": {} },
+              "f:sync": {
+                ".": {},
+                "f:comparedTo": {
+                  ".": {},
+                  "f:destination": {
+                    ".": {},
+                    "f:namespace": {},
+                    "f:server": {}
+                  },
+                  "f:source": { ".": {}, "f:repoURL": {} },
+                  "f:sources": {}
+                },
+                "f:revisions": {},
+                "f:status": {}
+              }
+            }
+          },
+          "manager": "argocd-application-controller",
+          "operation": "Update",
+          "time": "2025-10-02T16:57:44Z"
+        }
+      ],
+      "name": "aaaaaaa",
+      "namespace": "argocd",
+      "resourceVersion": "70746109",
+      "uid": "648b3973-e90b-4496-84c0-febef8536eec"
+    },
+    "operation": {
+      "initiatedBy": { "automated": true },
+      "retry": {
+        "backoff": { "duration": "5s", "factor": 2, "maxDuration": "3m" },
+        "limit": 5
+      },
+      "sync": {
+        "prune": true,
+        "revisions": ["6.9.2"],
+        "syncOptions": [
+          "CreateNamespace=true",
+          "ServerSideApply=true",
+          "ApplyOutOfSyncOnly=true"
+        ]
+      }
+    },
+    "spec": {
+      "destination": {
+        "namespace": "aaaaaaa",
+        "server": "https://kubernetes.default.svc"
+      },
+      "project": "demo-cluster",
+      "revisionHistoryLimit": 3,
+      "sources": [
+        {
+          "chart": "aaaaaaa",
+          "helm": {
+            "valuesObject": {
+              "PodSecurity \"restricted:latest\"": "allowPrivilegeEscalation != false (container \"aaaaaaa\" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container \"aaaaaaa\" must set securityContext.capabilities.drop=[\"ALL\"]), runAsNonRoot != true (pod or container \"aaaaaaa\" must set securityContext.runAsNonRoot=true), seccompProfile (pod or container \"aaaaaaa\" must set securityContext.seccompProfile.type to \"RuntimeDefault\" or \"Localhost\")",
+              "podSecurityContext": {
+                "runAsNonRoot": true,
+                "seccompProfile": { "type": "RuntimeDefault" }
+              },
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "capabilities": { "drop": ["ALL"] },
+                "readOnlyRootFilesystem": true,
+                "runAsGroup": 101,
+                "runAsUser": 100
+              }
+            }
+          },
+          "repoURL": "ghcr.io/stefanprodan/charts",
+          "targetRevision": "6.9.2"
+        }
+      ],
+      "syncPolicy": {
+        "automated": { "prune": true, "selfHeal": true },
+        "retry": {
+          "backoff": { "duration": "5s", "factor": 2, "maxDuration": "3m" },
+          "limit": 5
+        },
+        "syncOptions": [
+          "CreateNamespace=true",
+          "ServerSideApply=true",
+          "ApplyOutOfSyncOnly=true"
+        ]
+      }
+    },
+    "status": {
+      "controllerNamespace": "argocd",
+      "health": {
+        "lastTransitionTime": "2025-10-02T16:53:25Z",
+        "status": "Healthy"
+      },
+      "history": [
+        {
+          "deployStartedAt": "2025-10-02T16:21:00Z",
+          "deployedAt": "2025-10-02T16:21:03Z",
+          "id": 0,
+          "initiatedBy": { "automated": true },
+          "revisions": ["6.9.0"],
+          "source": { "repoURL": "" },
+          "sources": [
+            {
+              "chart": "aaaaaaa",
+              "repoURL": "ghcr.io/stefanprodan/charts",
+              "targetRevision": "6.9.0"
+            }
+          ]
+        },
+        {
+          "deployStartedAt": "2025-10-02T16:53:19Z",
+          "deployedAt": "2025-10-02T16:53:20Z",
+          "id": 1,
+          "initiatedBy": { "automated": true },
+          "revisions": ["6.9.0"],
+          "source": { "repoURL": "" },
+          "sources": [
+            {
+              "chart": "aaaaaaa",
+              "helm": {
+                "valuesObject": {
+                  "PodSecurity \"restricted:latest\"": "allowPrivilegeEscalation != false (container \"aaaaaaa\" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container \"aaaaaaa\" must set securityContext.capabilities.drop=[\"ALL\"]), runAsNonRoot != true (pod or container \"aaaaaaa\" must set securityContext.runAsNonRoot=true), seccompProfile (pod or container \"aaaaaaa\" must set securityContext.seccompProfile.type to \"RuntimeDefault\" or \"Localhost\")",
+                  "podSecurityContext": {
+                    "runAsNonRoot": true,
+                    "seccompProfile": { "type": "RuntimeDefault" }
+                  },
+                  "securityContext": {
+                    "allowPrivilegeEscalation": false,
+                    "capabilities": { "drop": ["ALL"] },
+                    "readOnlyRootFilesystem": true,
+                    "runAsGroup": 101,
+                    "runAsUser": 100
+                  }
+                }
+              },
+              "repoURL": "ghcr.io/stefanprodan/charts",
+              "targetRevision": "6.9.0"
+            }
+          ]
+        }
+      ],
+      "operationState": {
+        "operation": {
+          "initiatedBy": { "automated": true },
+          "retry": {
+            "backoff": { "duration": "5s", "factor": 2, "maxDuration": "3m" },
+            "limit": 5
+          },
+          "sync": {
+            "prune": true,
+            "revisions": ["6.9.2"],
+            "syncOptions": [
+              "CreateNamespace=true",
+              "ServerSideApply=true",
+              "ApplyOutOfSyncOnly=true"
+            ]
+          }
+        },
+        "phase": "Running",
+        "startedAt": "2025-10-02T16:57:44Z"
+      },
+      "reconciledAt": "2025-10-02T16:57:44Z",
+      "resourceHealthSource": "appTree",
+      "resources": [
+        {
+          "kind": "Service",
+          "name": "aaaaaaa",
+          "namespace": "aaaaaaa",
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "apps",
+          "kind": "Deployment",
+          "name": "aaaaaaa",
+          "namespace": "aaaaaaa",
+          "status": "OutOfSync",
+          "version": "v1"
+        }
+      ],
+      "sourceHydrator": {},
+      "sourceTypes": ["Helm"],
+      "summary": { "images": ["ghcr.io/stefanprodan/aaaaaaa:6.9.0"] },
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "aaaaaaa",
+            "server": "https://kubernetes.default.svc"
+          },
+          "source": { "repoURL": "" },
+          "sources": [
+            {
+              "chart": "aaaaaaa",
+              "helm": {
+                "valuesObject": {
+                  "PodSecurity \"restricted:latest\"": "allowPrivilegeEscalation != false (container \"aaaaaaa\" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container \"aaaaaaa\" must set securityContext.capabilities.drop=[\"ALL\"]), runAsNonRoot != true (pod or container \"aaaaaaa\" must set securityContext.runAsNonRoot=true), seccompProfile (pod or container \"aaaaaaa\" must set securityContext.seccompProfile.type to \"RuntimeDefault\" or \"Localhost\")",
+                  "podSecurityContext": {
+                    "runAsNonRoot": true,
+                    "seccompProfile": { "type": "RuntimeDefault" }
+                  },
+                  "securityContext": {
+                    "allowPrivilegeEscalation": false,
+                    "capabilities": { "drop": ["ALL"] },
+                    "readOnlyRootFilesystem": true,
+                    "runAsGroup": 101,
+                    "runAsUser": 100
+                  }
+                }
+              },
+              "repoURL": "ghcr.io/stefanprodan/charts",
+              "targetRevision": "6.9.2"
+            }
+          ]
+        },
+        "revisions": ["6.9.2"],
+        "status": "OutOfSync"
+      }
+    }
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "timestamp": "2025-10-02T18:13:13.201298+02:00",
+  "context": {
+    "argocdUrl": "https://demo.cdviz.dev",
+    "notificationType": "console"
+  },
+  "app": {
+    "apiVersion": "argoproj.io/v1alpha1",
+    "kind": "Application",
+    "metadata": {
+      "annotations": {
+        "argocd.argoproj.io/tracking-id": "aaaaaaaaa:aaaaaaaa.aa/Aaaaaaaaaaa:aaaaaa/aaaaaaa",
+        "notified.notifications.argoproj.io": "{\"on-sync-status-unknown:[0].6SzWb05EK-0v90hwjyytTbN7S6A:cdviz:\":1759421182}"
+      },
+      "creationTimestamp": "2025-10-02T15:32:45Z",
+      "generation": 2,
+      "labels": {
+        "app.kubernetes.io/managed-by": "argocd",
+        "cdviz.dev/cluster": "demo-cluster"
+      },
+      "managedFields": [
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:metadata": {
+              "f:annotations": { "f:argocd.argoproj.io/tracking-id": {} },
+              "f:labels": {
+                "f:app.kubernetes.io/managed-by": {},
+                "f:cdviz.dev/cluster": {}
+              }
+            },
+            "f:spec": {
+              "f:destination": { "f:namespace": {}, "f:server": {} },
+              "f:project": {},
+              "f:revisionHistoryLimit": {},
+              "f:sources": {},
+              "f:syncPolicy": {
+                "f:automated": { "f:prune": {}, "f:selfHeal": {} },
+                "f:retry": {
+                  "f:backoff": {
+                    "f:duration": {},
+                    "f:factor": {},
+                    "f:maxDuration": {}
+                  },
+                  "f:limit": {}
+                },
+                "f:syncOptions": {}
+              }
+            }
+          },
+          "manager": "argocd-controller",
+          "operation": "Apply",
+          "time": "2025-10-02T15:32:45Z"
+        },
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:status": {
+              ".": {},
+              "f:conditions": {},
+              "f:health": {
+                ".": {},
+                "f:lastTransitionTime": {},
+                "f:status": {}
+              },
+              "f:sync": { ".": {}, "f:status": {} }
+            }
+          },
+          "manager": "argocd-application-controller",
+          "operation": "Update",
+          "time": "2025-10-02T15:32:45Z"
+        },
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:metadata": {
+              "f:annotations": { "f:notified.notifications.argoproj.io": {} }
+            }
+          },
+          "manager": "argocd-notifications-controller",
+          "operation": "Update",
+          "time": "2025-10-02T16:06:22Z"
+        }
+      ],
+      "name": "aaaaaaa",
+      "namespace": "argocd",
+      "resourceVersion": "70734151",
+      "uid": "648b3973-e90b-4496-84c0-febef8536eec"
+    },
+    "spec": {
+      "destination": {
+        "namespace": "aaaaaaa",
+        "server": "https://kubernetes.default.svc"
+      },
+      "project": "demo-cluster",
+      "revisionHistoryLimit": 3,
+      "sources": [
+        {
+          "chart": "aaaaaaa",
+          "repoURL": "oci://ghcr.io/stefanprodan/charts/",
+          "targetRevision": "6.9.0"
+        }
+      ],
+      "syncPolicy": {
+        "automated": { "prune": true, "selfHeal": true },
+        "retry": {
+          "backoff": { "duration": "5s", "factor": 2, "maxDuration": "3m" },
+          "limit": 5
+        },
+        "syncOptions": [
+          "CreateNamespace=true",
+          "ServerSideApply=true",
+          "ApplyOutOfSyncOnly=true"
+        ]
+      }
+    },
+    "status": {
+      "conditions": [
+        {
+          "lastTransitionTime": "2025-10-02T15:32:45Z",
+          "message": "application repo oci://ghcr.io/stefanprodan/charts/ is not permitted in project 'demo-cluster'",
+          "type": "InvalidSpecError"
+        }
+      ],
+      "health": {
+        "lastTransitionTime": "2025-10-02T15:32:45Z",
+        "status": "Unknown"
+      },
+      "sync": { "status": "Unknown" }
+    }
+  }
+}

@@ -1,0 +1,508 @@
+{
+  "timestamp": "2025-10-02T16:06:22.298365Z",
+  "context": {
+    "argocdUrl": "https://demo.cdviz.dev",
+    "notificationType": "cdviz"
+  },
+  "app": {
+    "apiVersion": "argoproj.io/v1alpha1",
+    "kind": "Application",
+    "metadata": {
+      "annotations": {
+        "argocd.argoproj.io/sync-wave": "3",
+        "notified.notifications.argoproj.io": "{\"\\u003cnil\\u003e:on-deployed:[0].Yv81TUs0gmPTEyk-v8Lb6ZKEo0g:cdviz:\":1759421002,\"\\u003cnil\\u003e:on-deployed:[0].Yv81TUs0gmPTEyk-v8Lb6ZKEo0g:webhook:cdviz\":1759420702}"
+      },
+      "creationTimestamp": "2025-08-14T12:19:16Z",
+      "finalizers": ["resources-finalizer.argocd.argoproj.io"],
+      "generation": 54,
+      "labels": {
+        "app.kubernetes.io/name": "aaaaa-aaaaaaa",
+        "app.kubernetes.io/part-of": "cdviz"
+      },
+      "managedFields": [
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:metadata": {
+              "f:annotations": {
+                ".": {},
+                "f:argocd.argoproj.io/sync-wave": {}
+              },
+              "f:finalizers": {
+                ".": {},
+                "v:\"resources-finalizer.argocd.argoproj.io\"": {}
+              },
+              "f:labels": {
+                ".": {},
+                "f:app.kubernetes.io/name": {},
+                "f:app.kubernetes.io/part-of": {}
+              },
+              "f:ownerReferences": {
+                ".": {},
+                "k:{\"uid\":\"ddb4ddea-2d33-4a7b-aac0-2ddb66614179\"}": {}
+              }
+            },
+            "f:spec": {
+              ".": {},
+              "f:destination": { ".": {}, "f:namespace": {}, "f:server": {} },
+              "f:project": {},
+              "f:revisionHistoryLimit": {},
+              "f:sources": {},
+              "f:syncPolicy": {
+                ".": {},
+                "f:automated": { ".": {}, "f:prune": {}, "f:selfHeal": {} },
+                "f:retry": {
+                  ".": {},
+                  "f:backoff": {
+                    ".": {},
+                    "f:duration": {},
+                    "f:factor": {},
+                    "f:maxDuration": {}
+                  },
+                  "f:limit": {}
+                },
+                "f:syncOptions": {}
+              }
+            },
+            "f:status": {
+              ".": {},
+              "f:health": {},
+              "f:sourceHydrator": {},
+              "f:summary": {},
+              "f:sync": {
+                ".": {},
+                "f:comparedTo": {
+                  ".": {},
+                  "f:destination": {},
+                  "f:source": { ".": {}, "f:repoURL": {} }
+                }
+              }
+            }
+          },
+          "manager": "argocd-applicationset-controller",
+          "operation": "Update",
+          "time": "2025-09-30T12:30:07Z"
+        },
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:status": {
+              "f:conditions": {},
+              "f:controllerNamespace": {},
+              "f:health": { "f:lastTransitionTime": {}, "f:status": {} },
+              "f:history": {},
+              "f:operationState": {
+                ".": {},
+                "f:finishedAt": {},
+                "f:message": {},
+                "f:operation": {
+                  ".": {},
+                  "f:initiatedBy": { ".": {}, "f:automated": {} },
+                  "f:retry": {
+                    ".": {},
+                    "f:backoff": {
+                      ".": {},
+                      "f:duration": {},
+                      "f:factor": {},
+                      "f:maxDuration": {}
+                    },
+                    "f:limit": {}
+                  },
+                  "f:sync": {
+                    ".": {},
+                    "f:prune": {},
+                    "f:revisions": {},
+                    "f:syncOptions": {}
+                  }
+                },
+                "f:phase": {},
+                "f:startedAt": {},
+                "f:syncResult": {
+                  ".": {},
+                  "f:resources": {},
+                  "f:revision": {},
+                  "f:revisions": {},
+                  "f:source": { ".": {}, "f:repoURL": {} },
+                  "f:sources": {}
+                }
+              },
+              "f:reconciledAt": {},
+              "f:resourceHealthSource": {},
+              "f:resources": {},
+              "f:sourceTypes": {},
+              "f:sync": {
+                "f:comparedTo": {
+                  "f:destination": { "f:namespace": {}, "f:server": {} },
+                  "f:sources": {}
+                },
+                "f:revisions": {},
+                "f:status": {}
+              }
+            }
+          },
+          "manager": "argocd-application-controller",
+          "operation": "Update",
+          "time": "2025-10-02T15:34:47Z"
+        },
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "fieldsType": "FieldsV1",
+          "fieldsV1": {
+            "f:metadata": {
+              "f:annotations": { "f:notified.notifications.argoproj.io": {} }
+            }
+          },
+          "manager": "argocd-notifications-controller",
+          "operation": "Update",
+          "time": "2025-10-02T16:03:22Z"
+        }
+      ],
+      "name": "aaaaa-aaaaaaa",
+      "namespace": "argocd",
+      "ownerReferences": [
+        {
+          "apiVersion": "argoproj.io/v1alpha1",
+          "blockOwnerDeletion": true,
+          "controller": true,
+          "kind": "ApplicationSet",
+          "name": "cdviz",
+          "uid": "ddb4ddea-2d33-4a7b-aac0-2ddb66614179"
+        }
+      ],
+      "resourceVersion": "70733220",
+      "uid": "18b94477-f994-473a-b0f6-6af78a8b565b"
+    },
+    "spec": {
+      "destination": {
+        "namespace": "cdviz-dev",
+        "server": "https://kubernetes.default.svc"
+      },
+      "project": "demo-cluster",
+      "revisionHistoryLimit": 3,
+      "sources": [
+        {
+          "chart": "aaaaa-aaaaaaa",
+          "helm": {
+            "parameters": [
+              { "name": "nameOverride", "value": "aaaaa-aaaaaaa" }
+            ],
+            "valueFiles": [
+              "$values/4-k8s-gitops/values/cdviz/aaaaa-aaaaaaa.yaml"
+            ]
+          },
+          "repoURL": "ghcr.io/cdviz-dev/charts",
+          "targetRevision": "0.4.0-11-gd6f6e7b"
+        },
+        {
+          "ref": "values",
+          "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+          "targetRevision": "HEAD"
+        }
+      ],
+      "syncPolicy": {
+        "automated": { "prune": true, "selfHeal": true },
+        "retry": {
+          "backoff": { "duration": "5s", "factor": 2, "maxDuration": "3m" },
+          "limit": 5
+        },
+        "syncOptions": [
+          "CreateNamespace=true",
+          "ServerSideApply=true",
+          "ApplyOutOfSyncOnly=true"
+        ]
+      }
+    },
+    "status": {
+      "conditions": [
+        {
+          "lastTransitionTime": "2025-10-01T02:01:37Z",
+          "message": "Application has 32 orphaned resources",
+          "type": "OrphanedResourceWarning"
+        }
+      ],
+      "controllerNamespace": "argocd",
+      "health": {
+        "lastTransitionTime": "2025-08-14T12:19:17Z",
+        "status": "Healthy"
+      },
+      "history": [
+        {
+          "deployStartedAt": "2025-08-14T12:19:17Z",
+          "deployedAt": "2025-08-14T12:19:19Z",
+          "id": 0,
+          "initiatedBy": { "automated": true },
+          "revisions": [
+            "0.4.0-11-gd6f6e7b",
+            "251202611b4faf9105c06eb03df7a28d7a495c69"
+          ],
+          "source": { "repoURL": "" },
+          "sources": [
+            {
+              "chart": "aaaaa-aaaaaaa",
+              "helm": {
+                "parameters": [
+                  { "name": "nameOverride", "value": "aaaaa-aaaaaaa" }
+                ],
+                "valueFiles": [
+                  "$values/4-k8s-gitops/values/cdviz/aaaaa-aaaaaaa.yaml"
+                ]
+              },
+              "path": "aaaaa-aaaaaaa",
+              "repoURL": "ghcr.io/cdviz-dev/charts",
+              "targetRevision": "0.4.0-11-gd6f6e7b"
+            },
+            {
+              "ref": "values",
+              "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+              "targetRevision": "HEAD"
+            }
+          ]
+        }
+      ],
+      "operationState": {
+        "finishedAt": "2025-08-14T12:19:19Z",
+        "message": "successfully synced (all tasks run)",
+        "operation": {
+          "initiatedBy": { "automated": true },
+          "retry": {
+            "backoff": { "duration": "5s", "factor": 2, "maxDuration": "3m" },
+            "limit": 5
+          },
+          "sync": {
+            "prune": true,
+            "revisions": [
+              "0.4.0-11-gd6f6e7b",
+              "251202611b4faf9105c06eb03df7a28d7a495c69"
+            ],
+            "syncOptions": [
+              "CreateNamespace=true",
+              "ServerSideApply=true",
+              "ApplyOutOfSyncOnly=true"
+            ]
+          }
+        },
+        "phase": "Succeeded",
+        "startedAt": "2025-08-14T12:19:17Z",
+        "syncResult": {
+          "resources": [
+            {
+              "group": "",
+              "hookPhase": "Running",
+              "kind": "ConfigMap",
+              "message": "configmap/aaaaa-aaaaaaa-dashboards-testcaserun-executions serverside-applied",
+              "name": "aaaaa-aaaaaaa-dashboards-testcaserun-executions",
+              "namespace": "cdviz-dev",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1"
+            },
+            {
+              "group": "",
+              "hookPhase": "Running",
+              "kind": "ConfigMap",
+              "message": "configmap/aaaaa-aaaaaaa-dashboards-pipelinerun-executions serverside-applied",
+              "name": "aaaaa-aaaaaaa-dashboards-pipelinerun-executions",
+              "namespace": "cdviz-dev",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1"
+            },
+            {
+              "group": "",
+              "hookPhase": "Running",
+              "kind": "ConfigMap",
+              "message": "configmap/aaaaa-aaaaaaa-dashboards-testcasesuite-executions serverside-applied",
+              "name": "aaaaa-aaaaaaa-dashboards-testcasesuite-executions",
+              "namespace": "cdviz-dev",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1"
+            },
+            {
+              "group": "",
+              "hookPhase": "Running",
+              "kind": "ConfigMap",
+              "message": "configmap/aaaaa-aaaaaaa-dashboards-taskrun-executions serverside-applied",
+              "name": "aaaaa-aaaaaaa-dashboards-taskrun-executions",
+              "namespace": "cdviz-dev",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1"
+            },
+            {
+              "group": "",
+              "hookPhase": "Running",
+              "kind": "ConfigMap",
+              "message": "configmap/aaaaa-aaaaaaa-dashboards-artifact-timeline serverside-applied",
+              "name": "aaaaa-aaaaaaa-dashboards-artifact-timeline",
+              "namespace": "cdviz-dev",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1"
+            },
+            {
+              "group": "",
+              "hookPhase": "Running",
+              "kind": "ConfigMap",
+              "message": "configmap/aaaaa-aaaaaaa-dashboards-cdevents-activity serverside-applied",
+              "name": "aaaaa-aaaaaaa-dashboards-cdevents-activity",
+              "namespace": "cdviz-dev",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1"
+            },
+            {
+              "group": "",
+              "hookPhase": "Running",
+              "kind": "ConfigMap",
+              "message": "configmap/aaaaa-aaaaaaa-dashboards-demo-service-deployed serverside-applied",
+              "name": "aaaaa-aaaaaaa-dashboards-demo-service-deployed",
+              "namespace": "cdviz-dev",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1"
+            },
+            {
+              "group": "secrets.hashicorp.com",
+              "hookPhase": "Running",
+              "kind": "VaultStaticSecret",
+              "message": "vaultstaticsecret.secrets.hashicorp.com/aaaaa-aaaaaaa-datasources-vault serverside-applied",
+              "name": "aaaaa-aaaaaaa-datasources-vault",
+              "namespace": "cdviz-dev",
+              "status": "Synced",
+              "syncPhase": "Sync",
+              "version": "v1beta1"
+            }
+          ],
+          "revision": "",
+          "revisions": [
+            "0.4.0-11-gd6f6e7b",
+            "251202611b4faf9105c06eb03df7a28d7a495c69"
+          ],
+          "source": { "repoURL": "" },
+          "sources": [
+            {
+              "chart": "aaaaa-aaaaaaa",
+              "helm": {
+                "parameters": [
+                  { "name": "nameOverride", "value": "aaaaa-aaaaaaa" }
+                ],
+                "valueFiles": [
+                  "$values/4-k8s-gitops/values/cdviz/aaaaa-aaaaaaa.yaml"
+                ]
+              },
+              "path": "aaaaa-aaaaaaa",
+              "repoURL": "ghcr.io/cdviz-dev/charts",
+              "targetRevision": "0.4.0-11-gd6f6e7b"
+            },
+            {
+              "ref": "values",
+              "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+              "targetRevision": "HEAD"
+            }
+          ]
+        }
+      },
+      "reconciledAt": "2025-10-02T15:34:47Z",
+      "resourceHealthSource": "appTree",
+      "resources": [
+        {
+          "kind": "ConfigMap",
+          "name": "aaaaa-aaaaaaa-dashboards-artifact-timeline",
+          "namespace": "cdviz-dev",
+          "status": "Synced",
+          "version": "v1"
+        },
+        {
+          "kind": "ConfigMap",
+          "name": "aaaaa-aaaaaaa-dashboards-cdevents-activity",
+          "namespace": "cdviz-dev",
+          "status": "Synced",
+          "version": "v1"
+        },
+        {
+          "kind": "ConfigMap",
+          "name": "aaaaa-aaaaaaa-dashboards-demo-service-deployed",
+          "namespace": "cdviz-dev",
+          "status": "Synced",
+          "version": "v1"
+        },
+        {
+          "kind": "ConfigMap",
+          "name": "aaaaa-aaaaaaa-dashboards-pipelinerun-executions",
+          "namespace": "cdviz-dev",
+          "status": "Synced",
+          "version": "v1"
+        },
+        {
+          "kind": "ConfigMap",
+          "name": "aaaaa-aaaaaaa-dashboards-taskrun-executions",
+          "namespace": "cdviz-dev",
+          "status": "Synced",
+          "version": "v1"
+        },
+        {
+          "kind": "ConfigMap",
+          "name": "aaaaa-aaaaaaa-dashboards-testcaserun-executions",
+          "namespace": "cdviz-dev",
+          "status": "Synced",
+          "version": "v1"
+        },
+        {
+          "kind": "ConfigMap",
+          "name": "aaaaa-aaaaaaa-dashboards-testcasesuite-executions",
+          "namespace": "cdviz-dev",
+          "status": "Synced",
+          "version": "v1"
+        },
+        {
+          "group": "secrets.hashicorp.com",
+          "kind": "VaultStaticSecret",
+          "name": "aaaaa-aaaaaaa-datasources-vault",
+          "namespace": "cdviz-dev",
+          "status": "Synced",
+          "version": "v1beta1"
+        }
+      ],
+      "sourceHydrator": {},
+      "sourceTypes": ["Helm", ""],
+      "summary": {},
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "cdviz-dev",
+            "server": "https://kubernetes.default.svc"
+          },
+          "source": { "repoURL": "" },
+          "sources": [
+            {
+              "chart": "aaaaa-aaaaaaa",
+              "helm": {
+                "parameters": [
+                  { "name": "nameOverride", "value": "aaaaa-aaaaaaa" }
+                ],
+                "valueFiles": [
+                  "$values/4-k8s-gitops/values/cdviz/aaaaa-aaaaaaa.yaml"
+                ]
+              },
+              "repoURL": "ghcr.io/cdviz-dev/charts",
+              "targetRevision": "0.4.0-11-gd6f6e7b"
+            },
+            {
+              "ref": "values",
+              "repoURL": "https://github.com/cdviz-dev/demo-cluster",
+              "targetRevision": "HEAD"
+            }
+          ]
+        },
+        "revisions": [
+          "0.4.0-11-gd6f6e7b",
+          "744ef414bc4880d1ac71b8296dc01ebc35f4f97c"
+        ],
+        "status": "Synced"
+      }
+    }
+  }
+}
