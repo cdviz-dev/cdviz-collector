@@ -198,6 +198,7 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
         check_cdevent_failures_counter: Arc::clone(&check_cdevent_failures_counter),
         export_headers: args.export_headers,
         export_metadata: args.export_metadata,
+        seen_paths: HashMap::new(),
     });
     let mut tconfigs =
         transformers::resolve_transformer_refs(&args.transformer_refs, &config.transformers)?;
@@ -251,6 +252,9 @@ struct OutputToJsonFile {
     check_cdevent_failures_counter: Arc<AtomicU16>,
     export_headers: bool,
     export_metadata: bool,
+    /// Track how many outputs we've seen for each input file path.
+    /// Used to generate unique filenames when transformers produce multiple outputs (1:n).
+    seen_paths: HashMap<String, u16>,
 }
 
 impl Pipe for OutputToJsonFile {
@@ -263,10 +267,30 @@ impl Pipe for OutputToJsonFile {
             metadata.remove("root");
         }
 
-        let filename = input.metadata["path"]
+        let base_filename = input.metadata["path"]
             .as_str()
             .ok_or(miette!("could not extract 'name' field from metadata"))?
             .to_string();
+
+        // Track how many times we've seen this input file to generate unique output filenames
+        // For 1:n transformations (1 input → n outputs), we append an index to duplicates
+        let counter = self.seen_paths.entry(base_filename.clone()).or_insert(0);
+        let current_index = *counter;
+        *counter += 1;
+
+        // Generate unique filename: first occurrence uses original name, subsequent ones append index
+        // Example: 001.json → 001.json, 001.json (again) → 001.1.json, 001.json (again) → 001.2.json
+        let filename = if current_index == 0 {
+            base_filename.clone()
+        } else {
+            // Insert index before the .json extension
+            let path = Path::new(&base_filename);
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(&base_filename);
+            let parent = path.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+            let unique_name = format!("{stem}.{current_index}.json");
+            if parent.is_empty() { unique_name } else { format!("{parent}/{unique_name}") }
+        };
+
         let path = self.directory.join(&filename);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).into_diagnostic()?;
