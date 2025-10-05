@@ -1,14 +1,10 @@
 #[allow(dead_code)]
 use super::Pipe;
 use crate::errors::{Result, miette};
-use serde::{Deserialize, Serialize};
-use std::{
-    fmt::Debug,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
-#[derive(Debug, Deserialize, Serialize)]
-pub(crate) struct Config {}
+// #[derive(Debug, Deserialize, Serialize)]
+// pub(crate) struct Config {}
 
 type Buffer<I> = Arc<Mutex<Vec<I>>>;
 pub struct Processor<I> {
