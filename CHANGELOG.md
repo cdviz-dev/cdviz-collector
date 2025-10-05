@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.17.0...0.18.0) - 2025-10-05
+
+### Added
+
+- [**breaking**] use `/github` as default source for github transformer
+- add transformer for argocd event
+- *(transform)* support multiple output files per input
+- *(vrl)* add PURL helper functions for transformers
+
+### Fixed
+
+- *(deps)* update rust crate vrl to 0.27
+- disable the workaround about compilation issue between `time` & `domain`
+- *(deps)* update opentelemetry stack
+- computation of artifactId PURL for ArgoCD 's application source
+
+### Other
+
+- *(deps)* update dependency rust to v1.90.0
+- disable semver_check in release-plz and support for gitmoji
+
 ## [0.17.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.16.0...0.17.0) - 2025-09-15
 
 ### Other
