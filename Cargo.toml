@@ -182,7 +182,7 @@ test-strategy = "0.4"
 test-trace = "0.3"
 testcontainers = "0.25"
 testcontainers-redpanda-rs = "0.12"
-time = "=0.3.39"                                           # HACK explicit fix version (not used) to avoid compilation errors on domain #see https://github.com/NLnetLabs/domain/issues/502
+# time = "=0.3.39" # HACK explicit fix version (not used) to avoid compilation errors on domain #see https://github.com/NLnetLabs/domain/issues/502
 tower = { version = "0.5", features = ["util"] }
 uuid = "1"
 wiremock = "0.6"
