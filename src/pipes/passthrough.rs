@@ -1,11 +1,10 @@
 use super::Pipe;
 use crate::errors::Result;
-use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-#[derive(Debug, Deserialize, Serialize, Default)]
-pub(crate) struct Config {}
+// #[derive(Debug, Deserialize, Serialize, Default)]
+// pub(crate) struct Config {}
 
 pub(crate) struct Processor<I, N> {
     next: N,
