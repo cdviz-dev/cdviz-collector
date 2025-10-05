@@ -66,7 +66,7 @@ tool_transform = ["source_opendal", "tool_ui", "transformer_vrl"]
 
 [dependencies]
 axum = "0.8"
-axum-tracing-opentelemetry = "0.30"
+axum-tracing-opentelemetry = "0.32"
 base64 = "0.22"
 bytes = { version = "1", optional = true }
 cdevents-sdk = { version = "0.2", features = ["cloudevents"] }
@@ -92,7 +92,7 @@ futures = "0.3"
 globset = { version = "0.4", optional = true }
 hmac = "0.12"
 humantime-serde = "1"
-init-tracing-opentelemetry = { version = "0.30", features = [
+init-tracing-opentelemetry = { version = "0.32", features = [
   "otlp",
   "tracing_subscriber_ext",
   "logfmt",
@@ -107,7 +107,7 @@ opendal = { version = "0.54", default-features = false, features = [
   "services-s3",
   "services-sftp",
 ], optional = true }
-opentelemetry = "0.30"
+opentelemetry = "0.31"
 packageurl = "0.5"
 rdkafka = { version = "0.38", features = [
   "cmake-build",
@@ -150,8 +150,8 @@ tower-http = { version = "0.6", features = [
   "validate-request",
 ] }
 tracing = "0.1"
-tracing-opentelemetry = "0.31"
-tracing-opentelemetry-instrumentation-sdk = { version = "0.30" }
+tracing-opentelemetry = "0.32"
+tracing-opentelemetry-instrumentation-sdk = { version = "0.32" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 uuid = { version = "1", optional = true }
 vrl = { version = "0.26", optional = true, default-features = false, features = [
