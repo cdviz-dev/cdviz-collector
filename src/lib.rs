@@ -22,11 +22,9 @@ use std::{ffi::OsString, path::PathBuf, sync::LazyLock};
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
 use errors::{IntoDiagnostic, Result};
-use init_tracing_opentelemetry::otlp::OtelGuard;
+use init_tracing_opentelemetry::{Guard, TracingConfig};
 pub(crate) use message::{Message, Receiver, Sender};
 use tokio_util::sync::CancellationToken;
-use tracing::subscriber::DefaultGuard;
-use tracing_subscriber::layer::SubscriberExt;
 
 // Use Jemalloc only for musl-64 bits platforms
 // see [Default musl allocator considered harmful (to performance)](https://nickb.dev/blog/default-musl-allocator-considered-harmful-to-performance/)
@@ -102,36 +100,19 @@ enum Command {
     Transform(tools::transform::TransformArgs),
 }
 
-// wrapper for various possible guard
-// that should trigger drop on wrapped guard when enum is dropped
-#[allow(dead_code)]
-enum ObservabilityGuard {
-    DefaultGuard(DefaultGuard),
-    OtelGuard(OtelGuard),
-    Nothing,
-}
-
-fn init_log(verbose: Verbosity, disable_otel: bool) -> Result<ObservabilityGuard> {
-    use init_tracing_opentelemetry::tracing_subscriber_ext::{
-        build_level_filter_layer, build_logger_text, init_subscribers_and_loglevel,
-    };
-    let level = if verbose.is_present() {
-        verbose.log_level_filter().as_str().to_lowercase()
-    } else {
-        std::env::var("RUST_LOG")
-            .or_else(|_| std::env::var("OTEL_LOG_LEVEL"))
-            .unwrap_or_else(|_| "err".to_string())
-    };
-
-    if disable_otel {
-        let subscriber = tracing_subscriber::registry()
-            .with(build_level_filter_layer(&level).into_diagnostic()?)
-            .with(build_logger_text());
-        Ok(ObservabilityGuard::DefaultGuard(tracing::subscriber::set_default(subscriber)))
-    } else {
-        // Full OpenTelemetry setup for production use
-        init_subscribers_and_loglevel(&level).map(ObservabilityGuard::OtelGuard).into_diagnostic()
+fn init_log(verbosity: Verbosity, disable_otel: bool) -> Result<Guard> {
+    let mut config = TracingConfig::production();
+    if verbosity.is_present() {
+        config = config.with_log_directives(verbosity.log_level_filter().as_str().to_lowercase());
     }
+    let guard = config
+        .with_stderr()
+        .with_uptime_timer(true)
+        .with_logfmt_format()
+        .with_otel(!disable_otel)
+        .init_subscriber()
+        .into_diagnostic()?;
+    Ok(guard)
 }
 
 /// to call from main.rs.
@@ -170,13 +151,9 @@ where
     run(cli, with_init_log).await
 }
 
-#[allow(clippy::expect_used)]
+#[allow(clippy::expect_used, clippy::if_then_some_else_none)]
 pub(crate) async fn run(cli: Cli, with_init_log: bool) -> Result<bool> {
-    let _guard = if with_init_log {
-        init_log(cli.verbose, cli.disable_otel)?
-    } else {
-        ObservabilityGuard::Nothing
-    };
+    let _guard = if with_init_log { Some(init_log(cli.verbose, cli.disable_otel)?) } else { None };
     if let Some(dir) = &cli.directory {
         std::env::set_current_dir(dir).into_diagnostic()?;
     }
