@@ -327,13 +327,13 @@ mod tests {
                 "github": {
                     "type": "github",
                     "owner": "cdviz-dev",
-                    "repo": "cdviz-collector",
-                    "reference": "0.10.0"
+                    "repo": "transformers-community",
                 }
             },
             "transformers": {
                 "test_transformer": {
-                    "transformer_rfile": "github:///transformers/github_events/transformer.vrl"
+                    "type" : "vrl",
+                    "template_rfile": "github:///github_events/transformer.vrl"
                 }
             }
         });
@@ -358,11 +358,11 @@ mod tests {
         );
 
         // Check that the _rfile key was replaced with the actual content
-        check!(test_transformer_dict.contains_key("transformer"));
-        check!(!test_transformer_dict.contains_key("transformer_rfile"));
+        check!(test_transformer_dict.contains_key("template"));
+        check!(!test_transformer_dict.contains_key("template_rfile"));
 
         // Verify the content is a string and contains VRL-like content
-        let_assert!(Some(Value::String(_, content)) = test_transformer_dict.get("transformer"));
+        let_assert!(Some(Value::String(_, content)) = test_transformer_dict.get("template"));
 
         // The VRL file should contain transformation logic
         check!(
@@ -395,7 +395,8 @@ mod tests {
             },
             "transformers": {
                 "test_http_transformer": {
-                    "transformer_rfile": "raw_github:///cdviz-dev/cdviz-collector/refs/tags/0.10.0/transformers/github_events/transformer.vrl"
+                    "type" : "vrl",
+                    "template_rfile": "raw_github:///cdviz-dev/cdviz-collector/refs/tags/0.10.0/transformers/github_events/transformer.vrl"
                 }
             }
         });
@@ -421,11 +422,11 @@ mod tests {
         );
 
         // Check that the _rfile key was replaced with the actual content
-        check!(test_transformer_dict.contains_key("transformer"));
-        check!(!test_transformer_dict.contains_key("transformer_rfile"));
+        check!(test_transformer_dict.contains_key("template"));
+        check!(!test_transformer_dict.contains_key("template_rfile"));
 
         // Verify the content is a string and contains VRL-like content
-        let_assert!(Some(Value::String(_, content)) = test_transformer_dict.get("transformer"));
+        let_assert!(Some(Value::String(_, content)) = test_transformer_dict.get("template"));
 
         // The VRL file should contain transformation logic
         check!(
