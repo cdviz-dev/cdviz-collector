@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.18.0...0.18.1) - 2025-10-06
+
+### Other
+
+- re-enable transformers as git submodules
+- remove transformers
+- try to fixe the submodules setup on ci
+- Update release-after.yml
+- restore transformers as a git submodules (keep the test)
+
 ## [0.18.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.17.0...0.18.0) - 2025-10-05
 
 ### Added
