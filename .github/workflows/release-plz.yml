@@ -20,10 +20,11 @@ jobs:
         with:
           private-key: ${{ secrets.INTBOT_PRIVATE_KEY }}
           app-id: ${{ secrets.INTBOT_APP_ID }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           token: ${{ steps.get_token.outputs.token }}
           fetch-depth: 0
+          submodules: "recursive"
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Run release-plz
@@ -44,9 +45,10 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          submodules: "recursive"
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Run release-plz
