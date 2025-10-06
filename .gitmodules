@@ -1,3 +1,4 @@
 [submodule "transformers"]
 	path = transformers
 	url = https://github.com/cdviz-dev/transformers-community.git
+	branch = "main"
