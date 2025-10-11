@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.18.1...0.18.2) - 2025-10-11
+
+### Fixed
+
+- *(deps)* update rust crate regex to v1.12.1
+
+### Other
+
+- *(deps)* update renovatebot/github-action action to v43
+- *(deps)* update peter-evans/create-pull-request action to v7
+- *(deps)* update stefanzweifel/git-auto-commit-action action to v6
+- enable release on git tag
+- *(deps)* update oxsecurity/megalinter action to v9
+- *(deps)* update jdx/mise-action action to v3
+- *(deps)* update actions/create-github-app-token action to v2
+- *(deps)* update actions/checkout action to v5
+
 ## [0.18.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.18.0...0.18.1) - 2025-10-06
 
 ### Other
