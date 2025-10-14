@@ -25,11 +25,26 @@ pub(crate) struct Config {
 
     /// Listening port of http server
     pub(crate) port: u16,
+
+    /// Root URL of the service (used for generating URLs in responses, webhooks, etc.)
+    /// Must be a valid absolute URL. Will be validated at deserialization time.
+    #[serde(default = "default_root_url")]
+    pub(crate) root_url: url::Url,
+}
+
+#[allow(clippy::expect_used)]
+fn default_root_url() -> url::Url {
+    url::Url::parse("http://cdviz-collector.example.com")
+        .expect("default root_url should be a valid URL")
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { host: IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), port: 8080 }
+        Self {
+            host: IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+            port: 8080,
+            root_url: default_root_url(),
+        }
     }
 }
 
