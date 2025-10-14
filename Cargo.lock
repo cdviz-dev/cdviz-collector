@@ -789,6 +789,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-opentelemetry-instrumentation-sdk",
  "tracing-subscriber",
+ "url",
  "uuid",
  "vrl",
  "wiremock",

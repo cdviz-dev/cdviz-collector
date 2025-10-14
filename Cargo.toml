@@ -153,6 +153,7 @@ tracing = "0.1"
 tracing-opentelemetry = "0.32"
 tracing-opentelemetry-instrumentation-sdk = { version = "0.32" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+url = "2.5.7"
 uuid = { version = "1", optional = true }
 vrl = { version = "0.27", optional = true, default-features = false, features = [
   "compiler",
