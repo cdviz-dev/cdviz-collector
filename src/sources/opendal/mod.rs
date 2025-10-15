@@ -33,6 +33,10 @@ pub(crate) struct Config {
     pub(crate) parser: parsers::Config,
     #[serde(default)]
     pub(crate) try_read_headers_json: bool,
+    /// Base metadata to include in all `EventSource` instances created by this extractor.
+    /// The `context.source` field will be automatically populated if not set.
+    #[serde(default)]
+    pub(crate) metadata: serde_json::Value,
 }
 
 pub(crate) struct OpendalExtractor {
@@ -45,11 +49,15 @@ pub(crate) struct OpendalExtractor {
 }
 
 impl OpendalExtractor {
-    pub(crate) fn try_from(value: &Config, next: EventSourcePipe) -> Result<Self> {
+    pub(crate) fn try_from(
+        value: &Config,
+        base_metadata: serde_json::Value,
+        next: EventSourcePipe,
+    ) -> Result<Self> {
         let op: Operator =
             Operator::via_iter(value.kind, value.parameters.clone()).into_diagnostic()?;
         let filter = Filter::from_patterns(FilePatternMatcher::from(&value.path_patterns)?);
-        let parser = value.parser.make_parser(next)?;
+        let parser = value.parser.make_parser(base_metadata, next)?;
         let try_read_headers_json = value.try_read_headers_json;
         Ok(Self {
             op,

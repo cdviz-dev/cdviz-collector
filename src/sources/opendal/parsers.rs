@@ -26,12 +26,16 @@ pub(crate) enum Config {
 
 impl Config {
     #[allow(clippy::unnecessary_wraps)]
-    pub(crate) fn make_parser(&self, next: EventSourcePipe) -> Result<ParserEnum> {
+    pub(crate) fn make_parser(
+        &self,
+        base_metadata: serde_json::Value,
+        next: EventSourcePipe,
+    ) -> Result<ParserEnum> {
         let out = match self {
-            Config::CsvRow => CsvRowParser::new(next).into(),
-            Config::Json => JsonParser::new(next).into(),
-            Config::Jsonl => JsonlParser::new(next).into(),
-            Config::Metadata => MetadataParser::new(next).into(),
+            Config::CsvRow => CsvRowParser::new(base_metadata, next).into(),
+            Config::Json => JsonParser::new(base_metadata, next).into(),
+            Config::Jsonl => JsonlParser::new(base_metadata, next).into(),
+            Config::Metadata => MetadataParser::new(base_metadata, next).into(),
         };
         Ok(out)
     }
@@ -52,59 +56,93 @@ pub(crate) trait Parser {
 }
 
 pub(crate) struct MetadataParser {
+    base_metadata: serde_json::Value,
     next: EventSourcePipe,
 }
 
 impl MetadataParser {
-    fn new(next: EventSourcePipe) -> Self {
-        Self { next }
+    fn new(base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
+        Self { base_metadata, next }
     }
 }
 
 impl Parser for MetadataParser {
     async fn parse(&mut self, _op: &Operator, resource: &Resource) -> Result<()> {
-        let metadata = resource.as_json_metadata();
+        let resource_metadata = resource.as_json_metadata();
+        // Merge base_metadata with resource metadata
+        let mut metadata = self.base_metadata.clone();
+        if let (Some(base_obj), Some(resource_obj)) =
+            (metadata.as_object_mut(), resource_metadata.as_object())
+        {
+            for (key, value) in resource_obj {
+                base_obj.insert(key.clone(), value.clone());
+            }
+        }
         let event = EventSource { metadata, ..Default::default() };
         self.next.send(event)
     }
 }
 
 pub(crate) struct JsonParser {
+    base_metadata: serde_json::Value,
     next: EventSourcePipe,
 }
 
 impl JsonParser {
-    fn new(next: EventSourcePipe) -> Self {
-        Self { next }
+    fn new(base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
+        Self { base_metadata, next }
     }
 }
 
 impl Parser for JsonParser {
     async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
         let bytes = op.read(resource.path()).await.into_diagnostic()?;
-        let metadata = resource.as_json_metadata();
+        let resource_metadata = resource.as_json_metadata();
         let headers = resource.as_headers();
         let body: serde_json::Value = serde_json::from_reader(bytes.reader()).into_diagnostic()?;
+
+        // Merge base_metadata with resource metadata
+        let mut metadata = self.base_metadata.clone();
+        if let (Some(base_obj), Some(resource_obj)) =
+            (metadata.as_object_mut(), resource_metadata.as_object())
+        {
+            for (key, value) in resource_obj {
+                base_obj.insert(key.clone(), value.clone());
+            }
+        }
+
         let event = EventSource { metadata, headers, body };
         self.next.send(event)
     }
 }
 
 pub(crate) struct JsonlParser {
+    base_metadata: serde_json::Value,
     next: EventSourcePipe,
 }
 
 impl JsonlParser {
-    fn new(next: EventSourcePipe) -> Self {
-        Self { next }
+    fn new(base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
+        Self { base_metadata, next }
     }
 }
 
 impl Parser for JsonlParser {
     async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
         let bytes = op.read(resource.path()).await.into_diagnostic()?;
-        let metadata = resource.as_json_metadata();
+        let resource_metadata = resource.as_json_metadata();
         let headers = resource.as_headers();
+
+        // Merge base_metadata with resource metadata once for all lines
+        let mut metadata = self.base_metadata.clone();
+        if let (Some(base_obj), Some(resource_obj)) =
+            (metadata.as_object_mut(), resource_metadata.as_object())
+        {
+            for (key, value) in resource_obj {
+                base_obj.insert(key.clone(), value.clone());
+            }
+        }
+
         let mut reader = bytes.reader();
         let mut buf = String::new();
         while reader.read_line(&mut buf).into_diagnostic()? > 0 {
@@ -120,12 +158,13 @@ impl Parser for JsonlParser {
 }
 
 pub(crate) struct CsvRowParser {
+    base_metadata: serde_json::Value,
     next: EventSourcePipe,
 }
 
 impl CsvRowParser {
-    fn new(next: EventSourcePipe) -> Self {
-        Self { next }
+    fn new(base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
+        Self { base_metadata, next }
     }
 }
 
@@ -136,8 +175,19 @@ impl Parser for CsvRowParser {
         let bytes = op.read(resource.path()).await.into_diagnostic()?;
         let mut rdr = Reader::from_reader(bytes.reader());
         let csv_headers = rdr.headers().into_diagnostic()?.clone();
-        let metadata = resource.as_json_metadata();
+        let resource_metadata = resource.as_json_metadata();
         let headers = resource.as_headers();
+
+        // Merge base_metadata with resource metadata once for all rows
+        let mut metadata = self.base_metadata.clone();
+        if let (Some(base_obj), Some(resource_obj)) =
+            (metadata.as_object_mut(), resource_metadata.as_object())
+        {
+            for (key, value) in resource_obj {
+                base_obj.insert(key.clone(), value.clone());
+            }
+        }
+
         for record in rdr.records() {
             let record = record.into_diagnostic()?;
             let body =

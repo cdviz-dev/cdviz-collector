@@ -12,26 +12,39 @@ use tracing::instrument;
 pub(crate) struct Config {
     /// Data source specification - can be direct JSON, @filename, or @- for stdin
     pub data: Option<String>,
+    /// Base metadata to include in all `EventSource` instances created by this extractor.
+    /// The `context.source` field will be automatically populated if not set.
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 pub(crate) struct CliExtractor {
     reader: Box<dyn Read + Send>,
     next: EventSourcePipe,
+    base_metadata: serde_json::Value,
 }
 
 impl CliExtractor {
-    pub(crate) fn new(reader: Box<dyn Read + Send>, next: EventSourcePipe) -> Self {
-        Self { reader, next }
+    pub(crate) fn new(
+        reader: Box<dyn Read + Send>,
+        base_metadata: serde_json::Value,
+        next: EventSourcePipe,
+    ) -> Self {
+        Self { reader, next, base_metadata }
     }
 
-    pub(crate) fn from_config(config: &Config, next: EventSourcePipe) -> Result<Self> {
+    pub(crate) fn from_config(
+        config: &Config,
+        base_metadata: serde_json::Value,
+        next: EventSourcePipe,
+    ) -> Result<Self> {
         let data = config
             .data
             .as_ref()
             .ok_or_else(|| miette::miette!("CLI source requires 'data' configuration"))?;
 
         let reader = create_reader_from_data(data)?;
-        Ok(Self::new(reader, next))
+        Ok(Self::new(reader, base_metadata, next))
     }
 
     #[instrument(skip(self))]
@@ -52,9 +65,15 @@ impl CliExtractor {
             serde_json::Value::Array(events) => {
                 tracing::info!(count = events.len(), "processing array of events");
                 for (index, event) in events.into_iter().enumerate() {
+                    let mut metadata = self.base_metadata.clone();
+                    // Add index to metadata for array events
+                    if let Some(obj) = metadata.as_object_mut() {
+                        obj.insert("index".to_string(), serde_json::json!(index));
+                    }
+
                     let event_source = EventSource {
                         body: event,
-                        metadata: serde_json::json!({"source": "cli", "index": index}),
+                        metadata,
                         headers: std::collections::HashMap::new(),
                     };
 
@@ -67,7 +86,7 @@ impl CliExtractor {
                 tracing::info!("processing single event");
                 let event_source = EventSource {
                     body: single_event,
-                    metadata: serde_json::json!({"source": "cli"}),
+                    metadata: self.base_metadata.clone(),
                     headers: std::collections::HashMap::new(),
                 };
 
@@ -111,7 +130,9 @@ mod tests {
 
         let collector = Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
-        let extractor = CliExtractor::new(reader, pipe);
+        let base_metadata =
+            serde_json::json!({"context": {"source": "http://example.com?source=cli"}});
+        let extractor = CliExtractor::new(reader, base_metadata, pipe);
 
         // Run the extractor
         extractor.run().await.unwrap();
@@ -120,7 +141,7 @@ mod tests {
         let events: Vec<EventSource> = collector.try_into_iter().unwrap().collect();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].body["test"], "value");
-        assert_eq!(events[0].metadata["source"], "cli");
+        assert_eq!(events[0].metadata["context"]["source"], "http://example.com?source=cli");
     }
 
     #[tokio::test]
@@ -130,7 +151,9 @@ mod tests {
 
         let collector = Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
-        let extractor = CliExtractor::new(reader, pipe);
+        let base_metadata =
+            serde_json::json!({"context": {"source": "http://example.com?source=cli"}});
+        let extractor = CliExtractor::new(reader, base_metadata, pipe);
 
         // Run the extractor
         extractor.run().await.unwrap();
@@ -151,7 +174,8 @@ mod tests {
 
         let collector = Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
-        let extractor = CliExtractor::new(reader, pipe);
+        let base_metadata = serde_json::json!({});
+        let extractor = CliExtractor::new(reader, base_metadata, pipe);
 
         // Should not fail with empty data
         extractor.run().await.unwrap();
@@ -167,7 +191,8 @@ mod tests {
 
         let collector = Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
-        let extractor = CliExtractor::new(reader, pipe);
+        let base_metadata = serde_json::json!({});
+        let extractor = CliExtractor::new(reader, base_metadata, pipe);
 
         // Should fail with invalid JSON
         assert!(extractor.run().await.is_err());
