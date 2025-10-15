@@ -35,6 +35,10 @@ pub(crate) struct Config {
     /// Whether to commit offsets automatically (default: true)
     #[serde(default = "default_auto_commit")]
     pub(crate) auto_commit: bool,
+    /// Base metadata to include in all `EventSource` instances created by this extractor.
+    /// The `context.source` field will be automatically populated if not set.
+    #[serde(default)]
+    pub(crate) metadata: serde_json::Value,
 }
 
 pub(super) fn default_poll_timeout() -> Duration {

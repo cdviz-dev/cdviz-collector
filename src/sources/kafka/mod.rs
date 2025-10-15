@@ -55,6 +55,7 @@ use tokio_util::sync::CancellationToken;
 pub(crate) struct KafkaExtractor {
     consumer: StreamConsumer,
     next: EventSourcePipe,
+    base_metadata: serde_json::Value,
     headers_to_keep: Vec<String>,
     header_rules: Vec<crate::security::rule::HeaderRuleConfig>,
     poll_timeout: Duration,
@@ -62,7 +63,11 @@ pub(crate) struct KafkaExtractor {
 
 impl KafkaExtractor {
     /// must be called from the context of a Tokio 1.x runtime
-    pub(crate) fn try_from(config: &Config, next: EventSourcePipe) -> Result<Self> {
+    pub(crate) fn try_from(
+        config: &Config,
+        base_metadata: serde_json::Value,
+        next: EventSourcePipe,
+    ) -> Result<Self> {
         let mut client_config = ClientConfig::new();
         client_config.set("bootstrap.servers", &config.brokers);
         client_config.set("group.id", &config.group_id);
@@ -95,6 +100,7 @@ impl KafkaExtractor {
         Ok(KafkaExtractor {
             consumer,
             next,
+            base_metadata,
             headers_to_keep: config.headers_to_keep.clone(),
             header_rules,
             poll_timeout: config.poll_timeout,
@@ -205,16 +211,19 @@ impl KafkaExtractor {
         }
 
         // Create EventSource and send to pipeline
-        let event = EventSource {
-            metadata: serde_json::json!({
-                "kafka_topic": message.topic(),
-                "kafka_partition": message.partition(),
-                "kafka_offset": message.offset(),
-                "kafka_timestamp": message.timestamp().to_millis()
-            }),
-            headers,
-            body,
-        };
+        // Merge base_metadata with kafka-specific metadata
+        let mut metadata = self.base_metadata.clone();
+        if let Some(obj) = metadata.as_object_mut() {
+            obj.insert("kafka_topic".to_string(), serde_json::json!(message.topic()));
+            obj.insert("kafka_partition".to_string(), serde_json::json!(message.partition()));
+            obj.insert("kafka_offset".to_string(), serde_json::json!(message.offset()));
+            obj.insert(
+                "kafka_timestamp".to_string(),
+                serde_json::json!(message.timestamp().to_millis()),
+            );
+        }
+
+        let event = EventSource { metadata, headers, body };
 
         if let Err(e) = self.next.send(event) {
             tracing::warn!(
@@ -254,6 +263,7 @@ mod tests {
             headers_to_keep: vec!["content-type".to_string()],
             poll_timeout: Duration::from_secs(1),
             auto_commit: true,
+            metadata: serde_json::json!({}),
         };
 
         let collector = collect_to_vec::Collector::<EventSource>::new();
@@ -261,7 +271,7 @@ mod tests {
 
         // Should not panic during creation (actual connection happens at run time)
         // must be called from the context of a Tokio 1.x runtime
-        assert!(KafkaExtractor::try_from(&config, pipe).is_ok());
+        assert!(KafkaExtractor::try_from(&config, serde_json::json!({}), pipe).is_ok());
     }
 
     #[tokio::test]
@@ -279,13 +289,14 @@ mod tests {
             headers_to_keep: vec!["X-Event-Type".to_string(), "Authorization".to_string()],
             poll_timeout: Duration::from_secs(5),
             auto_commit: false,
+            metadata: serde_json::json!({}),
         };
 
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
 
         // must be called from the context of a Tokio 1.x runtime
-        assert!(KafkaExtractor::try_from(&config, pipe).is_ok());
+        assert!(KafkaExtractor::try_from(&config, serde_json::json!({}), pipe).is_ok());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -338,10 +349,11 @@ mod tests {
             headers_to_keep: vec!["content-type".to_string()],
             poll_timeout: Duration::from_secs(1),
             auto_commit: true,
+            metadata: serde_json::json!({}),
         };
 
-        let extractor =
-            KafkaExtractor::try_from(&config, pipe).expect("Failed to create extractor");
+        let extractor = KafkaExtractor::try_from(&config, serde_json::json!({}), pipe)
+            .expect("Failed to create extractor");
 
         // Run extractor for a short time
         let cancel_token = CancellationToken::new();

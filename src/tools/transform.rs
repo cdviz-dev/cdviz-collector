@@ -219,9 +219,16 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
         ],
         parser: source_opendal::parsers::Config::Json,
         try_read_headers_json: true,
+        metadata: serde_json::json!({
+            "context": {
+                "source": "http://cdviz-collector.example.com?source=cli-transform"
+            }
+        }),
     };
     let processed =
-        source_opendal::OpendalExtractor::try_from(&config_extractor, pipe)?.run_once().await?;
+        source_opendal::OpendalExtractor::try_from(&config_extractor, serde_json::json!({}), pipe)?
+            .run_once()
+            .await?;
     cliclack::log::info(format!("Processed {processed} input files.")).into_diagnostic()?;
     // TODO process .json.new vs .json using the self.mode strategy
     let output_files = list_output_files(&args.output).await?;

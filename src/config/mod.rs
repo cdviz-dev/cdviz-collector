@@ -135,6 +135,12 @@ impl ConfigBuilder {
             source_config.resolve_transformers(&config.transformers)
         })?;
 
+        // inject context.source into each source's metadata
+        let root_url = &config.http.root_url;
+        config.sources.iter_mut().for_each(|(name, source_config)| {
+            source_config.inject_context_source(name, root_url);
+        });
+
         Ok(config)
     }
 }

@@ -18,6 +18,11 @@ pub struct Config {
     /// Whether the SSE source is enabled
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+
+    /// Base metadata to include in all `EventSource` instances created by this extractor.
+    /// The `context.source` field will be automatically populated if not set.
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 impl Config {
@@ -38,6 +43,7 @@ impl Default for Config {
             headers: OutgoingHeaderMap::new(),
             max_retries: Some(10),
             enabled: true,
+            metadata: serde_json::Value::default(),
         }
     }
 }
@@ -71,6 +77,7 @@ mod tests {
             },
             max_retries: Some(5),
             enabled: true,
+            metadata: serde_json::json!({}),
         };
 
         let serialized = toml::to_string(&config).unwrap();
