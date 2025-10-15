@@ -184,7 +184,7 @@ mod tests {
     }
 
     #[rstest]
-    fn read_config_from_examples(#[files("./**/cdviz-collector.toml")] path: PathBuf) {
+    fn read_config_from_examples(#[files("./examples/**/cdviz-collector.toml")] path: PathBuf) {
         Jail::expect_with(|_jail| {
             assert!(path.exists());
             //HACK change the current dir to the parent of the config file, not thread safe/ test isolation

@@ -22,7 +22,6 @@ rust = { version = "1.90.0", profile = "minimal", components = "rustfmt,clippy,l
 "cargo:cargo-deny" = "latest"
 "cargo:cargo-nextest" = "latest"
 "dprint" = "latest"
-"ubi:davidB/json-simple-obfuscator" = "latest"
 
 [tasks."install:sqlx-cli"]
 hide = true
@@ -44,20 +43,11 @@ run = "cargo --locked build"
 
 [tasks."format"]
 alias = "fmt"
-depends = ["obfuscate"]
 description = "Format the code and sort dependencies"
 run = [
   "cargo --locked fmt",
   "cargo --locked sort --grouped",
   "dprint fmt",
-]
-
-[tasks.obfuscate]
-description = "obfuscate some data into the samples"
-run = [
-  "json-simple-obfuscator transformers/argocd_notifications/inputs/*/*.json",
-  "json-simple-obfuscator transformers/github_events/inputs/*/*.json",
-  "json-simple-obfuscator transformers/kubewatch_cloudevents/inputs/*/*.json",
 ]
 
 [tasks."deny"]
@@ -94,10 +84,7 @@ run = [
 ]
 
 [tasks."test"]
-# using `depends_post = ["test:transform:*"]` trigger an error
-# > Infinitive loop detected, all tasks are finished but the graph isn't empty test:...
-# So as workaround a wait_for is added to every task test:transform:...
-depends = ["test:unit", "test:transform:*"]
+depends = ["test:unit"]
 wait_for = ["lint", "lint:*"]
 
 [tasks."test:unit"]
@@ -217,62 +204,6 @@ run = [
 description = "build a cli, mainly for local development and test"
 hide = true
 run = "cargo --locked build --profile test"
-
-[tasks."test:transform:passthrough"]
-description = "run the transformation example passthrough (use `--mode review` to review and update)"
-wait_for = ["test:unit"]
-depends = ["build:cli"]
-run = """./target/debug/cdviz-collector \
-  transform \
-  --mode {{option(name="mode", default="check")}} \
-  --directory ./transformers/passthrough \
-  --config ./cdviz-collector.toml \
-  -t passthrough \
-  --input ./inputs \
-  --output ./outputs
-"""
-
-[tasks."test:transform:github_events"]
-description = "run the transformation example github_events (use `--mode review` to review and update)"
-wait_for = ["test:unit"]
-depends = ["build:cli"]
-run = """./target/debug/cdviz-collector \
-  transform \
-  --mode {{option(name="mode", default="check")}} \
-  --directory ./transformers/github_events \
-  --config ./cdviz-collector.toml \
-  -t github_events \
-  --input ./inputs \
-  --output ./outputs
-"""
-
-[tasks."test:transform:kubewatch_cloudevents"]
-description = "run the transformation example kubewatch_cloudevents (cloudevents) (use `--mode review` to review and update)"
-wait_for = ["test:unit"]
-depends = ["build:cli"]
-run = """./target/debug/cdviz-collector \
-  transform \
-  --mode {{option(name="mode", default="check")}} \
-  --directory ./transformers/kubewatch_cloudevents \
-  --config ./cdviz-collector.toml \
-  -t kubewatch_metadata,kubewatch_cloudevents \
-  --input ./inputs \
-  --output ./outputs
-"""
-
-[tasks."test:transform:argocd_notifications"]
-description = "run the transformation example argocd_notifications (use `--mode review` to review and update)"
-wait_for = ["test:unit"]
-depends = ["build:cli"]
-run = """./target/debug/cdviz-collector \
-  transform \
-  --mode {{option(name="mode", default="check")}} \
-  --directory ./transformers/argocd_notifications \
-  --config ./cdviz-collector.toml \
-  -t argocd_metadata,argocd_notifications \
-  --input ./inputs \
-  --output ./outputs
-"""
 
 [tasks."examples:httpyac"]
 description = "run the httpyac on `examples/assets` (default to `**/*.http`, eg. `mise run examples:httpyac '**/*.http'`)"
