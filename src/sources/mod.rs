@@ -151,7 +151,7 @@ fn set_id_zero_or_missing_to_cid(body: &mut serde_json::Value) -> Result<()> {
         body["context"].as_object_mut().map(|obj| obj.remove("id"));
         hasher.update(serde_json::to_string(&body).into_diagnostic()?.as_bytes());
         let hash = hasher.finalize();
-        let mhash = Multihash::<64>::wrap(SHA2_256, hash.as_slice()).into_diagnostic()?;
+        let mhash = Multihash::<64>::wrap(SHA2_256, &hash).into_diagnostic()?;
         let cid = Cid::new_v1(RAW, mhash);
         body["context"]["id"] = json!(cid.to_string());
     }
