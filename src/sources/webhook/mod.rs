@@ -44,11 +44,7 @@ struct WebhookState {
     base_metadata: serde_json::Value,
 }
 
-pub(crate) fn make_route(
-    config: &Config,
-    base_metadata: serde_json::Value,
-    next: EventSourcePipe,
-) -> Router {
+pub(crate) fn make_route(config: &Config, next: EventSourcePipe) -> Router {
     let mut headers = header_rule_map_to_configs(&config.headers);
     #[allow(deprecated)]
     if let Some(signature) = config.signature.as_ref() {
@@ -62,7 +58,7 @@ pub(crate) fn make_route(
             .filter_map(|name| HeaderName::from_str(name.as_str()).ok())
             .collect(),
         headers,
-        base_metadata,
+        base_metadata: config.metadata.clone(),
     };
     Router::new().route(&format!("/webhook/{}", config.id), post(webhook)).with_state(state)
 }
@@ -138,8 +134,7 @@ mod tests_handler {
             ..Default::default()
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let base_metadata = serde_json::json!({});
-        let router = make_route(&config, base_metadata, Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let payload = json!({"key": "value"});
         let request = Request::builder()
@@ -160,7 +155,7 @@ mod tests_handler {
     async fn test_webhook_invalid_path() {
         let config = Config { id: "test".to_string(), ..Default::default() };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let request = Request::builder()
             .uri("/webhook/invalid")
@@ -178,7 +173,7 @@ mod tests_handler {
     async fn test_webhook_invalid_method() {
         let config = Config { id: "test".to_string(), ..Default::default() };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let request = Request::builder()
             .uri("/webhook/test")
@@ -299,7 +294,7 @@ mod security_tests {
             }),
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let payload = json!({"action": "test", "data": "secure"});
         let payload_str = payload.to_string();
@@ -343,7 +338,7 @@ mod security_tests {
             }),
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let payload = json!({"action": "test", "data": "secure"});
         let request = Request::builder()
@@ -376,7 +371,7 @@ mod security_tests {
             }),
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let payload = json!({"action": "test"});
         let request = Request::builder()
@@ -402,7 +397,7 @@ mod security_tests {
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let malformed_json = r#"{"key": "value", invalid}"#;
         let request = Request::builder()
@@ -428,7 +423,7 @@ mod security_tests {
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         // Create a large but valid JSON payload
         let large_data = "x".repeat(1024 * 1024); // 1MB of data
@@ -456,7 +451,7 @@ mod security_tests {
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let payload = json!({"test": "data"});
         let request = Request::builder()
@@ -481,7 +476,7 @@ mod security_tests {
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let payload = json!({"test": "data"});
         let mut authorization = HeaderValue::from_static("Bearer secret-token");
@@ -521,7 +516,7 @@ mod security_tests {
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let payload = json!({"test": "data"});
         let request = Request::builder()
@@ -555,7 +550,7 @@ mod security_tests {
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let payload = json!({"test": "data"});
         let request = Request::builder()
@@ -585,7 +580,7 @@ mod security_tests {
             signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let payload = json!({"test": "data"});
         let request = Request::builder()
@@ -625,7 +620,7 @@ mod security_tests {
             }),
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let payload = json!({"secure": "data"});
         let payload_str = payload.to_string();
@@ -676,7 +671,7 @@ mod security_tests {
             signature: None, // Using header rules instead of signature field
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, serde_json::json!({}), Box::new(collector.create_pipe()));
+        let router = make_route(&config, Box::new(collector.create_pipe()));
 
         let payload = json!({"signature": "test"});
         let payload_str = payload.to_string();
