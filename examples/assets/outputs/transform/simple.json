@@ -1,0 +1,19 @@
+{
+  "context": {
+    "id": "0",
+    "source": "http://cdviz-collector.example.com?source=cli-transform",
+    "timestamp": "2024-03-20T14:27:05.315384Z",
+    "type": "dev.cdevents.service.deployed.0.1.1",
+    "version": "0.4.1"
+  },
+  "subject": {
+    "content": {
+      "artifactId": "pkg:oci/myapp@sha256:b31b1c02ff458ad9b7b81cbdf8f028bd54699fa151f221d1e8de6817db93427",
+      "environment": {
+        "id": "/cluster-dev"
+      }
+    },
+    "id": "/my-namespace/my-app/my-container",
+    "type": "service"
+  }
+}
