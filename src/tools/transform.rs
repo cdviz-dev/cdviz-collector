@@ -226,9 +226,7 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
         }),
     };
     let processed =
-        source_opendal::OpendalExtractor::try_from(&config_extractor, serde_json::json!({}), pipe)?
-            .run_once()
-            .await?;
+        source_opendal::OpendalExtractor::try_from(&config_extractor, pipe)?.run_once().await?;
     cliclack::log::info(format!("Processed {processed} input files.")).into_diagnostic()?;
     // TODO process .json.new vs .json using the self.mode strategy
     let output_files = list_output_files(&args.output).await?;

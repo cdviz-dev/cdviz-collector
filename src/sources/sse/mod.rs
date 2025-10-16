@@ -15,24 +15,19 @@ use tracing::{debug, error, info, warn};
 // SSE extractor that follows the same pattern as `OpendalExtractor`
 pub(crate) struct SseExtractor {
     config: Config,
-    base_metadata: serde_json::Value,
     next: EventSourcePipe,
 }
 
 impl SseExtractor {
     /// Create a new SSE extractor from configuration
-    pub(crate) fn from(
-        config: &Config,
-        base_metadata: serde_json::Value,
-        next: EventSourcePipe,
-    ) -> Self {
-        Self { config: config.clone(), base_metadata, next }
+    pub(crate) fn from(config: &Config, next: EventSourcePipe) -> Self {
+        Self { config: config.clone(), next }
     }
 
     /// Run the SSE extractor, handling the SSE connection and event forwarding
     #[allow(clippy::ignored_unit_patterns)]
     pub(crate) async fn run(self, cancel_token: CancellationToken) -> Result<()> {
-        let sse_task = create_sse_source(self.config, self.base_metadata, self.next);
+        let sse_task = create_sse_source(self.config, self.next);
 
         tokio::select! {
             _ = cancel_token.cancelled() => {
@@ -51,13 +46,12 @@ impl SseExtractor {
 
 pub struct SseSourceState {
     pub config: Config,
-    pub base_metadata: serde_json::Value,
     pub next: EventSourcePipe,
 }
 
 impl SseSourceState {
-    pub fn new(config: Config, base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
-        Self { config, base_metadata, next }
+    pub fn new(config: Config, next: EventSourcePipe) -> Self {
+        Self { config, next }
     }
 
     pub async fn run(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -131,7 +125,7 @@ impl SseSourceState {
                     };
 
                     // Merge base_metadata with SSE-specific metadata
-                    let mut metadata = self.base_metadata.clone();
+                    let mut metadata = self.config.metadata.clone();
                     if let Some(obj) = metadata.as_object_mut() {
                         let message_id = if message.id.is_empty() {
                             uuid::Uuid::new_v4().to_string()
@@ -175,10 +169,9 @@ impl SseSourceState {
 
 pub fn create_sse_source(
     config: Config,
-    base_metadata: serde_json::Value,
     next: EventSourcePipe,
 ) -> tokio::task::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
-    let state = SseSourceState::new(config, base_metadata, next);
+    let state = SseSourceState::new(config, next);
     tokio::spawn(async move { state.run().await })
 }
 
@@ -231,7 +224,7 @@ mod tests {
         let collector = Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
 
-        let state = SseSourceState::new(config.clone(), serde_json::json!({}), pipe);
+        let state = SseSourceState::new(config.clone(), pipe);
         assert_eq!(state.config.url, config.url);
         assert_eq!(state.config.max_retries, config.max_retries);
     }
@@ -249,7 +242,7 @@ mod tests {
 
         let collector = Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
-        let state = SseSourceState::new(config, serde_json::json!({}), pipe);
+        let state = SseSourceState::new(config, pipe);
 
         // The connection should fail quickly and the task should complete
         let handle = tokio::spawn(async move { state.run().await });
@@ -320,7 +313,7 @@ mod integration_tests {
         // Setup SSE source
         let collector = Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
-        let source_handle = create_sse_source(source_config, serde_json::json!({}), pipe);
+        let source_handle = create_sse_source(source_config, pipe);
 
         // Test basic connection - source should connect to sink successfully
         // Give it time to establish connection
@@ -346,7 +339,7 @@ mod integration_tests {
 
         let collector = Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
-        let source_handle = create_sse_source(source_config, serde_json::json!({}), pipe);
+        let source_handle = create_sse_source(source_config, pipe);
 
         // Should complete quickly with connection error
         let result = timeout(Duration::from_secs(5), source_handle).await;
@@ -574,7 +567,7 @@ mod unit_tests {
         let pipe = Box::new(collector.create_pipe());
         let cancel_token = CancellationToken::new();
 
-        let extractor = SseExtractor::from(&config, serde_json::json!({}), pipe);
+        let extractor = SseExtractor::from(&config, pipe);
 
         // Cancel immediately to test cancellation works
         cancel_token.cancel();

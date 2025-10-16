@@ -63,11 +63,7 @@ pub(crate) struct KafkaExtractor {
 
 impl KafkaExtractor {
     /// must be called from the context of a Tokio 1.x runtime
-    pub(crate) fn try_from(
-        config: &Config,
-        base_metadata: serde_json::Value,
-        next: EventSourcePipe,
-    ) -> Result<Self> {
+    pub(crate) fn try_from(config: &Config, next: EventSourcePipe) -> Result<Self> {
         let mut client_config = ClientConfig::new();
         client_config.set("bootstrap.servers", &config.brokers);
         client_config.set("group.id", &config.group_id);
@@ -100,7 +96,7 @@ impl KafkaExtractor {
         Ok(KafkaExtractor {
             consumer,
             next,
-            base_metadata,
+            base_metadata: config.metadata.clone(),
             headers_to_keep: config.headers_to_keep.clone(),
             header_rules,
             poll_timeout: config.poll_timeout,
@@ -271,7 +267,7 @@ mod tests {
 
         // Should not panic during creation (actual connection happens at run time)
         // must be called from the context of a Tokio 1.x runtime
-        assert!(KafkaExtractor::try_from(&config, serde_json::json!({}), pipe).is_ok());
+        assert!(KafkaExtractor::try_from(&config, pipe).is_ok());
     }
 
     #[tokio::test]
@@ -296,7 +292,7 @@ mod tests {
         let pipe = Box::new(collector.create_pipe());
 
         // must be called from the context of a Tokio 1.x runtime
-        assert!(KafkaExtractor::try_from(&config, serde_json::json!({}), pipe).is_ok());
+        assert!(KafkaExtractor::try_from(&config, pipe).is_ok());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -352,8 +348,8 @@ mod tests {
             metadata: serde_json::json!({}),
         };
 
-        let extractor = KafkaExtractor::try_from(&config, serde_json::json!({}), pipe)
-            .expect("Failed to create extractor");
+        let extractor =
+            KafkaExtractor::try_from(&config, pipe).expect("Failed to create extractor");
 
         // Run extractor for a short time
         let cancel_token = CancellationToken::new();

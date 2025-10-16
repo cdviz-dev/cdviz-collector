@@ -52,21 +52,17 @@ impl Config {
                 Ok(())
             })),
             Config::Cli(config) => {
-                let extractor =
-                    cli::CliExtractor::from_config(config, config.metadata.clone(), next)?;
+                let extractor = cli::CliExtractor::from_config(config, next)?;
                 Extractor::Task(tokio::spawn(async move {
                     extractor.run().await?;
                     tracing::info!(name, kind = "source", "exiting");
                     Ok(())
                 }))
             }
-            Config::Webhook(config) => {
-                Extractor::Webhook(webhook::make_route(config, config.metadata.clone(), next))
-            }
+            Config::Webhook(config) => Extractor::Webhook(webhook::make_route(config, next)),
             #[cfg(feature = "source_kafka")]
             Config::Kafka(config) => {
-                let extractor =
-                    kafka::KafkaExtractor::try_from(config, config.metadata.clone(), next)?;
+                let extractor = kafka::KafkaExtractor::try_from(config, next)?;
                 Extractor::Task(tokio::spawn(async move {
                     extractor.run(cancel_token).await?;
                     tracing::info!(name, kind = "source", "exiting");
@@ -75,8 +71,7 @@ impl Config {
             }
             #[cfg(feature = "source_opendal")]
             Config::Opendal(config) => {
-                let mut extractor =
-                    opendal::OpendalExtractor::try_from(config, config.metadata.clone(), next)?;
+                let mut extractor = opendal::OpendalExtractor::try_from(config, next)?;
                 Extractor::Task(tokio::spawn(async move {
                     extractor.run(cancel_token).await?;
                     tracing::info!(name, kind = "source", "exiting");
@@ -86,7 +81,7 @@ impl Config {
             }
             #[cfg(feature = "source_sse")]
             Config::Sse(config) => {
-                let extractor = sse::SseExtractor::from(config, config.metadata.clone(), next);
+                let extractor = sse::SseExtractor::from(config, next);
                 Extractor::Task(tokio::spawn(async move {
                     extractor.run(cancel_token).await?;
                     tracing::info!(name, kind = "source", "exiting");

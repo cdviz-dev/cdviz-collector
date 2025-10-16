@@ -49,20 +49,16 @@ pub(crate) struct OpendalExtractor {
 }
 
 impl OpendalExtractor {
-    pub(crate) fn try_from(
-        value: &Config,
-        base_metadata: serde_json::Value,
-        next: EventSourcePipe,
-    ) -> Result<Self> {
+    pub(crate) fn try_from(config: &Config, next: EventSourcePipe) -> Result<Self> {
         let op: Operator =
-            Operator::via_iter(value.kind, value.parameters.clone()).into_diagnostic()?;
-        let filter = Filter::from_patterns(FilePatternMatcher::from(&value.path_patterns)?);
-        let parser = value.parser.make_parser(base_metadata, next)?;
-        let try_read_headers_json = value.try_read_headers_json;
+            Operator::via_iter(config.kind, config.parameters.clone()).into_diagnostic()?;
+        let filter = Filter::from_patterns(FilePatternMatcher::from(&config.path_patterns)?);
+        let parser = config.parser.make_parser(config.metadata.clone(), next)?;
+        let try_read_headers_json = config.try_read_headers_json;
         Ok(Self {
             op,
-            polling_interval: value.polling_interval,
-            recursive: value.recursive,
+            polling_interval: config.polling_interval,
+            recursive: config.recursive,
             filter,
             parser,
             try_read_headers_json,

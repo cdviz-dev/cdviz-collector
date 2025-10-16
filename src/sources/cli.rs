@@ -33,18 +33,14 @@ impl CliExtractor {
         Self { reader, next, base_metadata }
     }
 
-    pub(crate) fn from_config(
-        config: &Config,
-        base_metadata: serde_json::Value,
-        next: EventSourcePipe,
-    ) -> Result<Self> {
+    pub(crate) fn from_config(config: &Config, next: EventSourcePipe) -> Result<Self> {
         let data = config
             .data
             .as_ref()
             .ok_or_else(|| miette::miette!("CLI source requires 'data' configuration"))?;
 
         let reader = create_reader_from_data(data)?;
-        Ok(Self::new(reader, base_metadata, next))
+        Ok(Self::new(reader, config.metadata.clone(), next))
     }
 
     #[instrument(skip(self))]
