@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.0...0.19.1) - 2025-10-16
+
+### Fixed
+
+- use `metadata` from config to initialize extractors
+
+### Other
+
+- add a example for `transform`
+
 ## [0.19.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.18.1...0.19.0) - 2025-10-15
 
 ### Added
