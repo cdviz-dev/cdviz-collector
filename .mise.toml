@@ -84,7 +84,7 @@ run = [
 ]
 
 [tasks."test"]
-depends = ["test:unit"]
+depends = ["test:unit", "test:transform"]
 wait_for = ["lint", "lint:*"]
 
 [tasks."test:unit"]
@@ -106,6 +106,20 @@ run = [
   "grcov ./target/test-coverage/data -s . --ignore 'target/*' --binary-path ./target/debug/ -t html --branch --ignore-not-existing -o ./target/test-coverage/html/",
   "cat ./target/test-coverage/html/coverage.json",
 ]
+
+[tasks."test:transform"]
+depends = ["build:cli"]
+description = "run the transformation on examples/assets  (use `--mode review` to review and update)"
+run = """target/debug/cdviz-collector \
+  transform \
+  --disable-otel \
+  --directory examples/assets \
+  --mode {{option(name="mode", default="check")}} \
+  --config ./cdviz-collector.toml \
+  -t service_deployed \
+  --input ./inputs/transform \
+  --output ./outputs/transform
+"""
 
 # # release *arguments: install:cargo-release install:git-cliff
 # #   cargo release --workspace --execute {{ arguments }}

@@ -36,6 +36,7 @@ parameters = { root = "./inputs" }
 recursive = false
 path_patterns = ["cdevents.csv"]
 parser = "csv_row"
+metadata = { environment_id = "/cluster-d"}
 
 [sources.cdevents_webhook]
 enabled = true
@@ -49,19 +50,18 @@ template = """
     "headers": .headers,
     "body": {
         "context": {
-            "version": "0.4.0-draft",
+            "version": "0.4.1",
             "id": "0",
-            "source": "/event/source/123",
+            "source": .metadata.context.source,
             "type": "dev.cdevents.service.deployed.0.1.1",
             "timestamp": .body.timestamp,
         },
         "subject": {
             "id": .body.id,
-            "source": "/event/source/123",
             "type": "service",
             "content": {
                 "environment": {
-                    "id": .body.env,
+                    "id": .body.env || .metadata.environment_id,
                 },
                 "artifactId": .body.artifact_id,
             }
