@@ -1,7 +1,7 @@
 use std::{collections::HashMap, io::BufRead};
 
 use crate::{
-    errors::{IntoDiagnostic, Result},
+    errors::{Error, IntoDiagnostic, Result},
     sources::{EventSource, EventSourcePipe},
 };
 use bytes::Buf;
@@ -96,10 +96,14 @@ impl JsonParser {
 
 impl Parser for JsonParser {
     async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
+        use std::io::Read;
         let bytes = op.read(resource.path()).await.into_diagnostic()?;
         let resource_metadata = resource.as_json_metadata();
         let headers = resource.as_headers();
-        let body: serde_json::Value = serde_json::from_reader(bytes.reader()).into_diagnostic()?;
+        let mut buf = String::new();
+        bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
+        let body: serde_json::Value =
+            serde_json::from_str(&buf).map_err(|cause| Error::from_serde_error(&buf, cause))?;
 
         // Merge base_metadata with resource metadata
         let mut metadata = self.base_metadata.clone();
@@ -149,7 +153,8 @@ impl Parser for JsonlParser {
             if buf.is_empty() {
                 continue;
             }
-            let body: serde_json::Value = serde_json::from_str(&buf).into_diagnostic()?;
+            let body: serde_json::Value =
+                serde_json::from_str(&buf).map_err(|cause| Error::from_serde_error(&buf, cause))?;
             let event = EventSource { metadata: metadata.clone(), headers: headers.clone(), body };
             self.next.send(event)?;
         }
@@ -198,3 +203,22 @@ impl Parser for CsvRowParser {
         Ok(())
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use crate::errors::Error;
+//     //use miette::IntoDiagnostic;
+
+//     #[test]
+//     fn test_parse_json_with_null() {
+//         let input = r#"
+//         {
+//           "a_null": null
+//         }
+//         "#;
+//         let _body: serde_json::Value = serde_json::from_str(&input)
+//             .map_err(|cause| Error::from_serde_error(input, cause))
+//             //.into_diagnostic()
+//             .unwrap();
+//     }
+// }

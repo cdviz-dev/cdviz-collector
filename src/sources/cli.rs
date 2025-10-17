@@ -1,5 +1,5 @@
 use super::{EventSource, EventSourcePipe};
-use crate::errors::{IntoDiagnostic, Result};
+use crate::errors::{Error, IntoDiagnostic, Result};
 use crate::pipes::Pipe;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -55,7 +55,8 @@ impl CliExtractor {
         }
 
         // Parse JSON - could be single object or array
-        let json_value: serde_json::Value = serde_json::from_str(&data).into_diagnostic()?;
+        let json_value: serde_json::Value =
+            serde_json::from_str(&data).map_err(|cause| Error::from_serde_error(&data, cause))?;
 
         match json_value {
             serde_json::Value::Array(events) => {
