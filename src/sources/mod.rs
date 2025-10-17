@@ -150,7 +150,7 @@ fn set_id_zero_or_missing_to_cid(body: &mut serde_json::Value) -> Result<()> {
     let compute_id = body
         .get("context")
         .and_then(|context| context.get("id"))
-        .is_none_or(|v| v.as_str() == Some("0"));
+        .is_none_or(|v| v.is_null() || (v.as_str() == Some("0")));
     if compute_id {
         // Do not use multihash-codetable because one of it's transitive dependency raise
         // an alert "unmaintained advisory detected" about `proc-macro-error`
@@ -170,8 +170,9 @@ fn set_id_zero_or_missing_to_cid(body: &mut serde_json::Value) -> Result<()> {
 
 fn set_timestamp_if_missing(body: &mut serde_json::Value) {
     use serde_json::json;
-    let compute_timestamp =
-        body.get("context").is_none_or(|context| context.get("timestamp").is_none());
+    let compute_timestamp = body
+        .get("context")
+        .is_none_or(|context| context.get("timestamp").is_none_or(serde_json::Value::is_null));
     if compute_timestamp {
         let timestamp = chrono::Utc::now().to_rfc3339();
         body["context"]["timestamp"] = json!(timestamp);
