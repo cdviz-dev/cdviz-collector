@@ -11,7 +11,7 @@ pub(crate) mod transformers;
 pub(crate) mod webhook;
 
 use crate::cdevent_utils::sanitize_id;
-use crate::errors::{IntoDiagnostic, Result};
+use crate::errors::{Error, IntoDiagnostic, Result};
 use crate::pipes::Pipe;
 use crate::{Message, Sender};
 use axum::Router;
@@ -120,7 +120,17 @@ impl TryFrom<EventSource> for CDEvent {
         set_timestamp_if_missing(&mut body);
         set_id_zero_or_missing_to_cid(&mut body)?;
         // TODO if source is empty, set a default value based on configuration TBD
-        let mut cdevent: CDEvent = serde_json::from_value(body).into_diagnostic()?;
+        let mut cdevent: CDEvent = serde_json::from_value(body.clone()).map_err(|cause0| {
+            // to provide located / contextualized error, body is converted into string, to be then parsed with error
+            // TODO find an alternatives that avoid string conversion and reparse
+            if let Ok(body_str) = serde_json::to_string_pretty(&body)
+                && let Err(cause) = serde_json::from_str::<CDEvent>(&body_str)
+            {
+                Error::from_serde_error(&body_str, cause)
+            } else {
+                Error::from_serde_error("", cause0)
+            }
+        })?;
         let sanitized_id = sanitize_id(cdevent.id())?;
         cdevent = cdevent.with_id(sanitized_id);
         Ok(cdevent)

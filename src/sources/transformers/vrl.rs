@@ -1,10 +1,10 @@
 use crate::errors::{IntoDiagnostic, Result};
 use crate::pipes::Pipe;
 use crate::sources::{EventSource, EventSourcePipe};
-use miette::MietteDiagnostic;
+use miette::{LabeledSpan, MietteDiagnostic};
 use vrl::compiler::{Program, TargetValue};
 use vrl::core::Value;
-use vrl::diagnostic::Formatter;
+use vrl::diagnostic::{Diagnostic, Formatter};
 use vrl::prelude::state::RuntimeState;
 use vrl::prelude::{Context, TimeZone};
 use vrl::value::Secrets;
@@ -66,7 +66,28 @@ impl Pipe for Processor {
         let mut ctx = Context::new(&mut target, &mut state, &timezone);
 
         // This executes the VRL program, making any modifications to the target, and returning a result.
-        let res = self.renderer.resolve(&mut ctx).into_diagnostic()?;
+        let res = self.renderer.resolve(&mut ctx).map_err(|cause| {
+            let vrl_diag = Diagnostic::from(cause);
+            //tracing::error!(diagnostics = %formatter, "VRL compilation error");
+            MietteDiagnostic::new(vrl_diag.message)
+                .with_severity(match vrl_diag.severity {
+                    vrl::diagnostic::Severity::Error => miette::Severity::Error,
+                    vrl::diagnostic::Severity::Warning | vrl::diagnostic::Severity::Bug => {
+                        miette::Severity::Warning
+                    }
+                    vrl::diagnostic::Severity::Note => miette::Severity::Advice,
+                })
+                .with_labels(vrl_diag.labels.iter().map(|label| {
+                    LabeledSpan::new(
+                        Some(label.message.clone()),
+                        label.span.start(),
+                        label.span.end() - label.span.start(),
+                    )
+                }))
+                .with_help(
+                    vrl_diag.notes.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n"),
+                )
+        })?;
 
         //TODO serde from Value to EventSource without json serialization/deserialization
         let output: Option<Vec<EventSource>> =
