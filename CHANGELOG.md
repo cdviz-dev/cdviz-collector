@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.1...0.19.2) - 2025-10-17
+
+### Fixed
+
+- generate id & timestamp when defined as `null`
+- provide more information on error when parsing json
+
 ## [0.19.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.0...0.19.1) - 2025-10-16
 
 ### Fixed
