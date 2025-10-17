@@ -1,6 +1,6 @@
 [package]
 name = "cdviz-collector"
-version = "0.19.1"
+version = "0.19.2"
 authors = ["David Bernard"]
 categories = []
 edition = "2024"
