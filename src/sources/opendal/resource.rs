@@ -44,7 +44,7 @@ impl Resource {
         {
             x_headers.extend(headers);
         }
-        Self { entry, root: op.info().root().to_string(), last_modified, content_length, x_headers }
+        Self { entry, root: op.info().root().clone(), last_modified, content_length, x_headers }
     }
 
     pub(crate) fn name(&self) -> &str {

@@ -86,7 +86,7 @@ pub(crate) fn build_signature(
         SignatureOn::Body => None,
         SignatureOn::HeadersThenBody { separator, headers } => {
             let mut payload_prefix = BytesMut::new();
-            let separator = separator.to_string().into_bytes();
+            let separator = separator.clone().into_bytes();
             for header in headers {
                 if let Some(value) = http_headers.get(header) {
                     payload_prefix.extend_from_slice(value.as_bytes());
@@ -241,7 +241,7 @@ mod tests {
         let request = Request::builder()
             .uri("/webhook/test")
             .method("POST")
-            .header("x-signature", signature.to_string())
+            .header("x-signature", signature.clone())
             .body(Body::from(body_str))
             .unwrap();
 

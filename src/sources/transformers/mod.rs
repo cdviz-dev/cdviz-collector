@@ -49,7 +49,7 @@ pub fn resolve_transformer_refs(
             configs
                 .get(name)
                 .cloned()
-                .ok_or_else(|| Error::ConfigTransformerNotFound(name.to_string()))
+                .ok_or_else(|| Error::ConfigTransformerNotFound(name.clone()))
                 .into_diagnostic()
         })
         .collect::<Result<Vec<_>>>()?;
