@@ -6544,9 +6544,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vrl"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "374906b686967832d85e5ce8f43581924e8382787e538c61c1e2158e09fc6518"
+checksum = "a00427df1a5af971424054933850c6aa6ed13c6e1c6fc35e9f373d3ab5d071f8"
 dependencies = [
  "aes",
  "aes-siv",
@@ -6563,7 +6563,6 @@ dependencies = [
  "chrono-tz",
  "ciborium",
  "cidr",
- "clap",
  "codespan-reporting",
  "community-id",
  "convert_case",
