@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.2...0.19.3) - 2025-11-05
+
+### Fixed
+
+- *(deps)* update rust crate vrl to 0.28 ([#200](https://github.com/cdviz-dev/cdviz-collector/pull/200))
+- *(deps)* update rust crate init-tracing-opentelemetry to 0.33 ([#199](https://github.com/cdviz-dev/cdviz-collector/pull/199))
+- *(deps)* update rust to 1.91 & dependencies
+
+### Other
+
+- *(deps)* update actions/upload-artifact action to v5
+
 ## [0.19.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.1...0.19.2) - 2025-10-17
 
 ### Fixed
