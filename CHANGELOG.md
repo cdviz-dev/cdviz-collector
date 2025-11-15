@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.4](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.3...0.19.4) - 2025-11-15
+
+### Other
+
+- *(deps)* update rust crate bytes to v1.11.0 ([#204](https://github.com/cdviz-dev/cdviz-collector/pull/204))
+- *(deps)* update rust crate serde_with to v3.16.0 ([#205](https://github.com/cdviz-dev/cdviz-collector/pull/205))
+- *(deps)* update renovatebot/github-action action to v44 ([#202](https://github.com/cdviz-dev/cdviz-collector/pull/202))
+
 ## [0.19.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.2...0.19.3) - 2025-11-05
 
 ### Fixed
