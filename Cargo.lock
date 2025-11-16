@@ -1412,7 +1412,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d162beedaa69905488a8da94f5ac3edb4dd4788b732fadb7bd120b2625c1976"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.108",
 ]
 
 [[package]]
@@ -2649,9 +2649,9 @@ dependencies = [
 
 [[package]]
 name = "init-tracing-opentelemetry"
-version = "0.33.0"
+version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c887848a40ed9a4cbba1f187f4d7352c2d0a32d8397fc49c4bd42f2028c0283c"
+checksum = "317b92661b729d90cce708de8a43cc7963fafe0710399f84299f9198a114fd4a"
 dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
