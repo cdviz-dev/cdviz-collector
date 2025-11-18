@@ -107,7 +107,7 @@ fn init_log(verbosity: Verbosity, disable_otel: bool) -> Result<Guard> {
     }
     let guard = config
         .with_stderr()
-        .with_uptime_timer(true)
+        .with_timer(init_tracing_opentelemetry::LogTimer::Uptime)
         .with_logfmt_format()
         .with_otel(!disable_otel)
         .init_subscriber()
