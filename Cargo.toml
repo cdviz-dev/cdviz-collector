@@ -99,7 +99,7 @@ init-tracing-opentelemetry = { version = "0.33", features = [
 ] }
 miette = { version = "7", features = ["fancy"] }
 multihash = "0.19"
-opendal = { version = "0.54", default-features = false, features = [
+opendal = { version = "0.55", default-features = false, features = [
   "services-fs",     # "services-ftp",
   "services-gcs",
   "services-github",
