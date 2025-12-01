@@ -316,6 +316,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "can failed due rate limit on github"]
     async fn test_github_remote_file_integration() {
         use assert2::{check, let_assert};
         use figment::providers::Serialized;

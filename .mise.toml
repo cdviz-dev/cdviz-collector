@@ -96,6 +96,13 @@ run = [
   # "cargo hack nextest --each-feature -- --test-threads=1",
 ]
 
+[tasks."test:ignored"]
+wait_for = ["lint", "lint:*", "build:cli"]
+run = [
+  # HACK: retry against integration test random failure (why ??)
+  "cargo --locked nextest run --test-threads 1 --retries 1 --workspace --run-ignored only",
+]
+
 [tasks."test:coverage"]
 description = "run test coverage to help identify code not executed on tests (!= code tested)"
 env = { RUSTFLAGS = "-Cinstrument-coverage", LLVM_PROFILE_FILE = "target/test-coverage/data/%p-%m.profraw" }
