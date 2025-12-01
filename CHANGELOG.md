@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.4](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.3...0.19.4) - 2025-12-01
+
+### Fixed
+
+- *(deps)* update rust crate reqwest-retry to 0.8
+- *(deps)* update rust crate opendal to 0.55
+- *(deps)* update dependencies and related code
+- *(deps)* update rust crate cloudevents-sdk to 0.9
+- adapt code after deps update
+- *(deps)* update rust crate init-tracing-opentelemetry to 0.34
+
+### Other
+
+- by default ignore flakky and too long test
+- *(deps)* update actions/checkout action to v6 ([#208](https://github.com/cdviz-dev/cdviz-collector/pull/208))
+- *(deps)* update rust crate bytes to v1.11.0 ([#204](https://github.com/cdviz-dev/cdviz-collector/pull/204))
+- *(deps)* update rust crate serde_with to v3.16.0 ([#205](https://github.com/cdviz-dev/cdviz-collector/pull/205))
+- *(deps)* update renovatebot/github-action action to v44 ([#202](https://github.com/cdviz-dev/cdviz-collector/pull/202))
+
 ## [0.19.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.2...0.19.3) - 2025-11-05
 
 ### Fixed
