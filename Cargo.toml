@@ -75,7 +75,7 @@ cid = "0.11"
 clap = { version = "4", features = ["derive", "env"] }
 clap-verbosity-flag = "3"
 cliclack = { version = "0.3", optional = true }
-cloudevents-sdk = { version = "0.8", features = ["http-binding"] }
+cloudevents-sdk = { version = "0.9", features = ["http-binding"] }
 console = { version = "0.15", optional = true } # same version as cliclack
 csv = { version = "1", optional = true }
 derive_more = { version = "2", features = [
