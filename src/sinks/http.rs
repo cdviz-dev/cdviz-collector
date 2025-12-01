@@ -58,7 +58,7 @@ impl HttpSink {
     ) -> Self {
         // Retry up to 3 times with increasing intervals between attempts.
         let retry_policy = ExponentialBackoff::builder()
-            .build_with_total_retry_duration_and_max_retries(total_duration_of_retries);
+            .build_with_total_retry_duration_and_limit_retries(total_duration_of_retries);
         let client = ClientBuilder::new(reqwest::Client::new())
             // Trace HTTP requests. See the tracing crate to make use of these traces.
             .with(TracingMiddleware::default())
