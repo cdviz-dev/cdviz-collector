@@ -99,7 +99,7 @@ fn app(routes: Vec<Router>) -> Router {
             CompressionLayer::new(),
             // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
             // requests don't hang forever.
-            TimeoutLayer::new(Duration::from_secs(3)),
+            TimeoutLayer::with_status_code(http::StatusCode::REQUEST_TIMEOUT, Duration::from_secs(3)),
             // Replace the default of 2MB with 1MB.
             DefaultBodyLimit::max(1024*1024),
         ))
