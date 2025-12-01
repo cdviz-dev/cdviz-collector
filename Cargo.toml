@@ -70,7 +70,6 @@ axum-tracing-opentelemetry = "0.32"
 base64 = "0.22"
 bytes = { version = "1", optional = true }
 cdevents-sdk = { version = "0.2", features = ["cloudevents"] }
-chrono = { version = "0.4", features = ["serde"] }
 cid = "0.11"
 clap = { version = "4", features = ["derive", "env"] }
 clap-verbosity-flag = "3"
@@ -97,9 +96,10 @@ init-tracing-opentelemetry = { version = "0.34", features = [
   "tracing_subscriber_ext",
   "logfmt",
 ] }
+jiff = { version = "0.2", features = ["serde"] }
 miette = { version = "7", features = ["fancy"] }
 multihash = "0.19"
-opendal = { version = "0.54", default-features = false, features = [
+opendal = { version = "0.55", default-features = false, features = [
   "services-fs",     # "services-ftp",
   "services-gcs",
   "services-github",

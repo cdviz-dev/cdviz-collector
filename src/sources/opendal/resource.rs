@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use opendal::{Entry, EntryMode, Metadata, Operator};
 
 /// Information about the Resource
@@ -12,7 +12,7 @@ use opendal::{Entry, EntryMode, Metadata, Operator};
 pub(crate) struct Resource {
     entry: Entry,
     root: String,
-    last_modified: Option<DateTime<Utc>>,
+    last_modified: Option<Timestamp>,
     content_length: u64,
     x_headers: HashMap<String, String>,
 }
@@ -34,6 +34,7 @@ impl Resource {
             }
             last_modified = stats.as_ref().and_then(Metadata::last_modified);
         }
+        let last_modified = last_modified.map(opendal::raw::Timestamp::into_inner);
         if content_length == 0 {
             if stats.is_none() {
                 stats = op.stat(entry.path()).await.ok();
@@ -55,7 +56,7 @@ impl Resource {
         self.entry.path()
     }
 
-    pub(crate) fn last_modified(&self) -> Option<DateTime<Utc>> {
+    pub(crate) fn last_modified(&self) -> Option<Timestamp> {
         self.last_modified
     }
 
@@ -74,7 +75,7 @@ impl Resource {
             "root": self.root,
         });
         if let Some(last_modified) = self.last_modified() {
-            value["last_modified"] = serde_json::Value::String(last_modified.to_rfc3339());
+            value["last_modified"] = serde_json::Value::String(last_modified.to_string()); //rfc3339
         }
         value
     }
@@ -136,7 +137,7 @@ mod tests {
         let_assert!(Some(abs_root) = result["root"].as_str());
         check!(abs_root.ends_with("examples/assets/inputs"));
         let_assert!(
-            Ok(_) = result["last_modified"].as_str().unwrap_or_default().parse::<DateTime<Utc>>()
+            Ok(_) = result["last_modified"].as_str().unwrap_or_default().parse::<Timestamp>()
         );
     }
 

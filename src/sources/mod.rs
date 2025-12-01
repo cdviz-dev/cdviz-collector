@@ -174,7 +174,7 @@ fn set_timestamp_if_missing(body: &mut serde_json::Value) {
         .get("context")
         .is_none_or(|context| context.get("timestamp").is_none_or(serde_json::Value::is_null));
     if compute_timestamp {
-        let timestamp = chrono::Utc::now().to_rfc3339();
+        let timestamp = jiff::Timestamp::now().to_string(); //rfc3339
         body["context"]["timestamp"] = json!(timestamp);
     }
 }
@@ -206,7 +206,6 @@ pub(crate) fn create_sources_and_routes(
 mod tests {
     use super::*;
     use assert2::{assert, let_assert};
-    use chrono::{DateTime, Utc};
     use serde_json::json;
 
     #[test]
@@ -418,6 +417,6 @@ mod tests {
         assert!(!body["context"]["timestamp"].is_string());
         set_timestamp_if_missing(&mut body);
         let_assert!(Some(datetime) = body["context"]["timestamp"].as_str());
-        let_assert!(Ok(_) = datetime.parse::<DateTime<Utc>>());
+        let_assert!(Ok(_) = datetime.parse::<jiff::Timestamp>());
     }
 }
