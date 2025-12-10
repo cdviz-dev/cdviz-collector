@@ -1,19 +1,49 @@
-# cdviz-collector
+<div align="center">
+  <img src="https://cdviz.dev/favicon.svg" alt="CDviz Logo" width="128" height="128">
+  <h1>cdviz-collector</h1>
+  <p>
+    <a href="https://github.com/cdviz-dev/cdviz-collector/actions/workflows/ci.yml"><img src="https://github.com/cdviz-dev/cdviz-collector/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
+    <a href="https://crates.io/crates/cdviz-collector"><img src="https://img.shields.io/crates/v/cdviz-collector.svg" alt="Crates.io"></a>
+  </p>
+  <p><strong>keywords:</strong> <code>cdevents</code>, <code>sdlc</code>, <code>cicd</code></p>
+  <p>A service & CLI to collect SDLC/CI/CD events and dispatch as <a href="https://cdevents.dev/">CDEvents</a>.</p>
+  <p>
+    <strong><a href="https://cdviz.dev/docs/cdviz-collector/">Documentation</a></strong> |
+    <a href="https://cdviz.dev/docs/cdviz-collector/quick-start">Quick Start</a> |
+    <a href="https://cdviz.dev/docs/cdviz-collector/install">Installation</a>
+  </p>
+</div>
 
-keywords: `cdevents`, `sdlc`, `cicd`
+---
 
-A service & cli to collect SDLC/CI/CD events and to dispatch as [cdevents].
+## Features
 
-## Goals
+- Multiple event sources (`HTTP` webhooks, File system, `S3`, `Kafka`, `SSE`)
+- Multiple destinations (`PostgreSQL`, `HTTP`, File system, `Kafka`, `SSE`)
+- Event transformation via `VRL` (Vector Remap Language)
+- Three operation modes: server, one-shot sending, batch transformation
 
-- to create cdevents by polling some sources (folder on fs, S3, AWS ECR, ...)
-- to receive cdevents from http, kafka, nats
-- to send (broadcast) cdevents to various destination database, http, kafka, nats
-- to expose some metrics (TBD)
+For comprehensive feature documentation, see [cdviz.dev/docs/cdviz-collector](https://cdviz.dev/docs/cdviz-collector/).
 
-cdviz-collector is configured via a config file + override by environment variables.
+## Installation
 
-see [documentation](https://cdviz.dev/docs/cdviz-collector/)
+cdviz-collector is distributed as:
+
+- **Pre-built binaries** for Linux and macOS ([GitHub Releases](https://github.com/cdviz-dev/cdviz-collector/releases))
+- **Docker image** at `ghcr.io/cdviz-dev/cdviz-collector`
+- **Helm chart** for Kubernetes deployments
+- **Cargo package** on [crates.io](https://crates.io/crates/cdviz-collector)
+
+See the [Installation Guide](https://cdviz.dev/docs/cdviz-collector/install) for detailed instructions.
+
+## Getting Started
+
+See the [Quick Start Guide](https://cdviz.dev/docs/cdviz-collector/quick-start) for a 5-minute walkthrough.
+
+## Architecture
+
+cdviz-collector uses a pipeline architecture: events flow from **sources** through an in-memory queue to multiple **sinks**.
 
 ```mermaid
 ---
@@ -78,202 +108,75 @@ flowchart LR
   q --> sink_nats
 ```
 
+For detailed architecture information, see [CLAUDE.md](CLAUDE.md).
+
+## Configuration
+
+Configure cdviz-collector via TOML files with environment variable overrides:
+
+- **Example config:** [examples/assets/cdviz-collector.toml](examples/assets/cdviz-collector.toml)
+- **Base config:** [src/assets/cdviz-collector.base.toml](src/assets/cdviz-collector.base.toml)
+- **Environment variables:** `CDVIZ_COLLECTOR__SECTION__KEY__VALUE`
+
+See the [Configuration Guide](https://cdviz.dev/docs/cdviz-collector/configuration) and [Use Cases & Examples](https://cdviz.dev/docs/cdviz-collector/use-cases) for detailed information.
+
 ## Usage
 
-<details>
-<summary>cdviz-collector connect <code>[OPTIONS]</code></summary>
+cdviz-collector provides three commands:
 
-```txt
-Launch collector as a server to connect sources to sinks.
+### `connect` - Run as a Service
 
-Runs the collector in server mode, enabling configured sources to collect events and dispatch them to configured sinks through the pipeline. The server provides HTTP endpoints for webhook sources and SSE sinks.
+Launch collector as a long-running server to connect sources to sinks.
 
-Usage: cdviz-collector connect [OPTIONS]
-
-Options:
-      --config <CONFIG>
-          Configuration file path for sources, sinks, and transformers.
-
-          Specifies the TOML configuration file that defines the pipeline behavior. If not provided, the collector will use the base configuration with default settings. The configuration can also be specified via the `CDVIZ_COLLECTOR_CONFIG` environment variable.
-
-          Example: `--config cdviz-collector.toml`
-
-          [env: CDVIZ_COLLECTOR_CONFIG=]
-
-  -v, --verbose...
-          Increase logging verbosity
-
-  -q, --quiet...
-          Decrease logging verbosity
-
-      --disable-otel
-          Disable OpenTelemetry initialization and use minimal tracing setup.
-
-          This is useful for testing environments or when you want to avoid OpenTelemetry overhead. When disabled, only basic console logging will be available without distributed tracing capabilities.
-
-  -C, --directory <DIRECTORY>
-          Change working directory before executing the command.
-
-          This affects relative paths in configuration files and data files. Useful when running the collector from a different location than where your configuration and data files are located.
-
-  -h, --help
-          Print help (see a summary with '-h')
+```bash
+cdviz-collector connect --config cdviz-collector.toml
 ```
 
-</details>
+See the [connect documentation](https://cdviz.dev/docs/cdviz-collector/connect) for detailed options.
 
-<details>
-<summary>cdviz-collector send <code>[OPTIONS]</code> --data <code>&lt;DATA&gt;</code></summary>
+### `send` - Send Events Directly
 
-```txt
 Send JSON data directly to a sink for testing and scripting.
 
-This command allows sending JSON data directly to configured sinks without running a full server. Useful for testing transformations, debugging sink configurations, or scripting event dispatch.
-
-Usage: cdviz-collector send [OPTIONS] --data <DATA>
-
-Options:
-  -d, --data <DATA>
-          JSON data to send to the sink.
-
-          Can be specified as: - Direct JSON string: '{"test": "value"}' - File path: @data.json - Stdin: @-
-
-          The JSON data will be processed through the configured pipeline and sent to the specified sink.
-
-  -v, --verbose...
-          Increase logging verbosity
-
-  -q, --quiet...
-          Decrease logging verbosity
-
-  -u, --url <URL>
-          HTTP URL to send the data to.
-
-          When specified, automatically enables the HTTP sink and disables the debug sink. The data will be sent as CloudEvents format to the specified endpoint.
-
-          Example: `--url https://api.example.com/webhook`
-
-      --config <CONFIG>
-          Configuration file for advanced sink settings.
-
-          Optional TOML configuration file for advanced sink configuration such as authentication, headers generation, or custom sink types. Command line arguments will override configuration file settings.
-
-          [env: CDVIZ_COLLECTOR_CONFIG=]
-
-      --disable-otel
-          Disable OpenTelemetry initialization and use minimal tracing setup.
-
-          This is useful for testing environments or when you want to avoid OpenTelemetry overhead. When disabled, only basic console logging will be available without distributed tracing capabilities.
-
-  -C, --directory <DIRECTORY>
-          Working directory for relative paths.
-
-          Changes the working directory before processing. This affects relative paths in configuration files and data file references.
-
-  -H, --header <HEADERS>
-          Additional HTTP headers for the request.
-
-          Specify custom headers for HTTP sink requests. Can be used multiple times to add several headers. Format: "Header-Name: value"
-
-          Example: `--header "X-API-Key: secret" --header "Content-Type: application/json"`
-
-  -h, --help
-          Print help (see a summary with '-h')
+```bash
+cdviz-collector send --url https://api.example.com/webhook --data '{"test": "value"}'
 ```
 
-</details>
+See the [send documentation](https://cdviz.dev/docs/cdviz-collector/send) for detailed options.
 
-<details>
-    <summary>cdviz-collector transform <code>[OPTIONS]</code> --input <code>&lt;INPUT&gt;</code> --output <code>&lt;OUTPUT&gt;</code></summary>
+### `transform` - Batch File Transformation
 
-```txt
 Transform local JSON files using configured transformers.
 
-Processes JSON files from an input directory through configured transformers and writes results to an output directory. Supports validation against CDEvents specification and provides interactive review, overwrite, or check modes for managing output files.
-
-Usage: cdviz-collector transform [OPTIONS] --input <INPUT> --output <OUTPUT>
-
-Options:
-      --config <CONFIG>
-          Configuration file defining transformers and their settings.
-
-          TOML configuration file that defines available transformers. The file should contain transformer definitions that can be referenced by name using the --transformer-refs option.
-
-          [env: CDVIZ_COLLECTOR_CONFIG=]
-
-  -v, --verbose...
-          Increase logging verbosity
-
-  -q, --quiet...
-          Decrease logging verbosity
-
-  -t, --transformer-refs <TRANSFORMER_REFS>...
-          Names of transformers to chain together.
-
-          Comma-separated list or multiple arguments specifying which transformers to apply in sequence. Transformers are applied in the order specified.
-
-          Example: `--transformer-refs github_events,add_metadata`
-          Example: `-t github_events -t add_metadata`
-
-          [default: passthrough]
-
-      --disable-otel
-          Disable OpenTelemetry initialization and use minimal tracing setup.
-
-          This is useful for testing environments or when you want to avoid OpenTelemetry overhead. When disabled, only basic console logging will be available without distributed tracing capabilities.
-
-  -i, --input <INPUT>
-          Input directory containing JSON files to transform.
-
-          Directory path containing the JSON files to be processed. The tool will recursively search for *.json files, excluding *.headers.json, *.metadata.json, and *.json.new files.
-
-  -C, --directory <DIRECTORY>
-          Change working directory before executing the command.
-
-          This affects relative paths in configuration files and data files. Useful when running the collector from a different location than where your configuration and data files are located.
-
-  -o, --output <OUTPUT>
-          Output directory for transformed JSON files.
-
-          Directory where transformed files will be written. The directory structure from the input will be preserved. Files will initially be created with .json.new extension before being processed according to the selected mode.
-
-  -m, --mode <MODE>
-          How to handle conflicts between new and existing output files.
-
-          Controls the behavior when output files already exist: - review: Interactive review of differences (default) - overwrite: Replace existing files without prompting - check: Fail if differences are found
-
-          Possible values:
-          - review:    Interactive review of differences between new and existing output files
-          - overwrite: Overwrite existing output files without prompting
-          - check:     Check for differences and fail if any are found
-
-          [default: review]
-
-      --no-check-cdevent
-          Skip validation that output body is a valid CDEvent.
-
-          By default, the tool validates that transformation results produce valid CDEvent objects. Use this flag to disable validation if you're working with non-CDEvent JSON data.
-
-      --export-headers
-          Export headers to separate .headers.json files.
-
-          When enabled, HTTP headers from the original request will be exported to .headers.json files alongside the main JSON output files.
-
-      --export-metadata
-          Export metadata to separate .metadata.json files.
-
-          When enabled, event metadata (timestamps, source info, etc.) will be exported to .metadata.json files alongside the main JSON output files.
-
-      --keep-new-files
-          Keep temporary .json.new files after processing.
-
-          Normally, temporary .json.new files created during transformation are cleaned up after processing. Use this flag to preserve them for debugging.
-
-  -h, --help
-          Print help (see a summary with '-h')
+```bash
+cdviz-collector transform --input ./input --output ./output --transformer-refs github_events
 ```
 
-</details>
+See the [transform documentation](https://cdviz.dev/docs/cdviz-collector/transform) for detailed options.
+
+---
+
+For all available options, use `--help` with any command or see the [usage documentation](https://cdviz.dev/docs/cdviz-collector/usage).
+
+### GitHub Action
+
+Send `CDEvents` from GitHub Actions workflows using [cdviz-dev/send-cdevents](https://github.com/cdviz-dev/send-cdevents).
+
+## Development
+
+This project uses [mise](https://mise.jdx.dev/) for task management:
+
+```bash
+mise install          # Setup environment
+mise run build        # Build project
+mise run test         # Run tests
+mise run lint         # Run linting
+mise run ci           # Full CI pipeline
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development guidelines.
+
+For AI assistance context, see [CLAUDE.md](CLAUDE.md).
 
 ## License
 
