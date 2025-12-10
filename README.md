@@ -298,3 +298,9 @@ By contributing to this project, you agree to the [Contributor License Agreement
 Note: This project has been developed with assistance from Claude Code. All AI-generated code has been carefully reviewed, tested, and validated to ensure quality, security, and adherence to Rust best practices.
 
 [cdevents]: https://cdevents.dev/
+
+## Downloads
+
+![Download History - Last 60 Days (Daily)](https://download-history.cdviz.dev/api/chart/github.com/cdviz-dev/cdviz-collector/60d.svg?granularity=daily)
+
+![Download History - All Time (Weekly)](https://download-history.cdviz.dev/api/chart/github.com/cdviz-dev/cdviz-collector/all.svg?granularity=weekly)
