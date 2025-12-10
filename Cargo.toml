@@ -75,7 +75,7 @@ clap = { version = "4", features = ["derive", "env"] }
 clap-verbosity-flag = "3"
 cliclack = { version = "0.3", optional = true }
 cloudevents-sdk = { version = "0.9", features = ["http-binding"] }
-console = { version = "0.15", optional = true } # same version as cliclack
+console = { version = "0.16", optional = true } # compatible version with cliclack
 csv = { version = "1", optional = true }
 derive_more = { version = "2", features = [
   "debug",
@@ -181,7 +181,7 @@ rstest = "0.26"
 tempfile = "3"
 test-strategy = "0.4"
 test-trace = "0.3"
-testcontainers = "0.25"
+testcontainers = "0.25"                                    # version linked to testcontainers-*
 testcontainers-redpanda-rs = "0.12"
 # time = "=0.3.39" # HACK explicit fix version (not used) to avoid compilation errors on domain #see https://github.com/NLnetLabs/domain/issues/502
 tower = { version = "0.5", features = ["util"] }

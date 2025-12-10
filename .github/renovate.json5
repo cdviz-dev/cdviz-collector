@@ -44,5 +44,9 @@
       matchPackageNames: ["kube", "k8s-openapi"],
       groupName: "kube-rs",
     },
+    {
+      matchPackageNames: ["/testcontainers/"],
+      groupName: "testcontainers",
+    },
   ],
 }
