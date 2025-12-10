@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.6](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.5...0.19.6) - 2025-12-10
+
+### Other
+
+- *(README)* Update and reword (with AI assistance) ([#219](https://github.com/cdviz-dev/cdviz-collector/pull/219))
+
 ## [0.19.5](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.4...0.19.5) - 2025-12-10
 
 ### Fixed
