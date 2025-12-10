@@ -179,8 +179,9 @@ mod tests {
         (dbsink, pg_container)
     }
 
-    // servers() is called once per test, so db could only started several times.
-    // We could not used `static` (or the once on fixtures) because statis are not dropped at end of the test
+    // testcontext() is called once per test, so db could be started several times.
+    // We could not used `static` (or the once on fixtures) because static are not dropped at end of the test
+    // if needed look at testkit::shared_async_resource
     #[fixture]
     async fn testcontext(
         #[future] async_pg: (DbSink, ContainerAsync<GenericImage>),
