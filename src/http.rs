@@ -1,4 +1,5 @@
 use crate::errors::{Error, IntoDiagnostic, ReportWrapper, Result};
+use axum::Extension;
 use axum::{Json, Router, extract::DefaultBodyLimit, http, response::IntoResponse, routing::get};
 use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
 use serde::{Deserialize, Serialize};
@@ -51,25 +52,27 @@ impl Default for Config {
 pub(crate) fn launch(
     config: &Config,
     routes: Vec<Router>,
-    cancel_token: &'static CancellationToken,
+    shutdown_token: CancellationToken,
 ) -> JoinHandle<Result<()>> {
     let addr = SocketAddr::new(config.host, config.port);
     tokio::spawn(async move {
-        let app = app(routes);
+        let app = app(routes, shutdown_token.clone());
         // run it
         tracing::warn!("listening on {}", addr);
         let listener = tokio::net::TcpListener::bind(addr).await.into_diagnostic()?;
         axum::serve(listener, app.into_make_service())
             // see [axum/examples/graceful-shutdown/src/main.rs at main · tokio-rs/axum](https://github.com/tokio-rs/axum/blob/main/examples/graceful-shutdown/src/main.rs)
-            // TODO check graceful shutdown with spawned task & integration with main
-            .with_graceful_shutdown(cancel_token.cancelled())
+            .with_graceful_shutdown(async move {
+                shutdown_token.cancelled().await;
+                tracing::info!("request graceful shutdown");
+            })
             .await.into_diagnostic()?;
         tracing::info!(kind = "source", "exiting: http server");
         Ok(())
     })
 }
 
-fn app(routes: Vec<Router>) -> Router {
+fn app(routes: Vec<Router>, shutdown_token: CancellationToken) -> Router {
     // build our application with a route
     let mut app = Router::new();
     for route in routes {
@@ -91,6 +94,7 @@ fn app(routes: Vec<Router>) -> Router {
         // request processed without span / trace
         .route("/healthz", get(health))
         .route("/readyz", get(ready))
+        .layer(Extension(shutdown_token))
         .layer((
             cors,
             SetSensitiveRequestHeadersLayer::new(std::iter::once(http::header::AUTHORIZATION)),
@@ -105,8 +109,8 @@ fn app(routes: Vec<Router>) -> Router {
         ))
 }
 
-async fn ready() -> impl IntoResponse {
-    if crate::SHUTDOWN_TOKEN.is_cancelled() {
+async fn ready(shutdown_token: Extension<CancellationToken>) -> impl IntoResponse {
+    if shutdown_token.is_cancelled() {
         http::StatusCode::PRECONDITION_FAILED
     } else {
         http::StatusCode::OK
@@ -167,20 +171,28 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     // test health endpoint
     async fn test_readyz() {
-        let app = app(vec![]);
+        let shutdown_token = CancellationToken::new();
+        let app = app(vec![], shutdown_token.clone());
         let response = app
+            .clone()
             .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers().get(http::header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(), "*",);
+        shutdown_token.cancel();
+        let response = app
+            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
     }
 
     #[rstest]
     #[tokio::test(flavor = "multi_thread")]
     // test health endpoint
     async fn test_call_option_for_cors() {
-        let app = app(vec![]);
+        let app = app(vec![], CancellationToken::new());
         let response = app
             .oneshot(
                 Request::builder()
@@ -209,7 +221,7 @@ mod tests {
     #[rstest]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_post_webhook_not_found() {
-        let app = app(vec![]);
+        let app = app(vec![], CancellationToken::new());
 
         let response = app
             .oneshot(

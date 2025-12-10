@@ -182,7 +182,7 @@ fn set_timestamp_if_missing(body: &mut serde_json::Value) {
 pub(crate) fn create_sources_and_routes(
     source_configs: impl IntoIterator<Item = (String, Config)>,
     tx: &tokio::sync::broadcast::Sender<Message>,
-    cancel_token: &'static CancellationToken,
+    cancel_token: &CancellationToken,
 ) -> Result<SourceHandlesAndRoutes> {
     let sources = source_configs
         .into_iter()

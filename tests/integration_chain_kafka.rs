@@ -12,7 +12,7 @@ use testkit::{generate_random_cdevents, test_connector_chain};
 use crate::testkit::connector_chain::ConnectorSetup;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = ">30s to run (why??)"]
+// #[ignore = ">30s to run (why??)"] // faster since the  upgrade of testcontainer & fix on shutdown_token
 async fn test_chain_simple() {
     let topic = "event";
     let kafka_container = launch_redpanda(&[topic]).await;

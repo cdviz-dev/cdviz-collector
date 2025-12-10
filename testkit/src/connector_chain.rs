@@ -9,7 +9,9 @@ use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
+use tokio::task::JoinHandle;
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 
 #[derive(Default)]
 pub struct ConnectorSetup<'a> {
@@ -37,32 +39,36 @@ pub async fn test_connector_chain<'a>(
     // Setup temporary environment
     let env = setup_temp_environment(input_events)?;
 
-    // Generate connector configurations
-    let connector_a_config_path =
-        generate_connector_a_config(&env, connector_a.http_port, connector_a.config)?;
-    let connector_b_config_path =
-        generate_connector_b_config(&env, connector_b.http_port, connector_b.config)?;
-
     // Launch both connectors
     // multiple log/tracing configuration can generate confusion and random error
     // like `tried to drop a ref to Id(...), but no such span exists!`
-    let connector_a_task = launch_connector(&connector_a_config_path, true);
-    let connector_b_task = launch_connector(&connector_b_config_path, false);
+    let (connector_a_task, connector_a_shutdown_signal) = {
+        let config_path =
+            generate_connector_a_config(&env, connector_a.http_port, connector_a.config)?;
+        launch_connector(&config_path, true)
+    };
+    let (connector_b_task, connector_b_shutdown_signal) = {
+        let config_path =
+            generate_connector_b_config(&env, connector_b.http_port, connector_b.config)?;
+        launch_connector(&config_path, false)
+    };
 
     // Wait for startup
     sleep(Duration::from_millis(200)).await;
 
     if connector_a_task.is_finished() {
+        connector_b_shutdown_signal.cancel();
         connector_b_task.abort();
         return Err(miette!("connector a early stop"));
     }
     if connector_b_task.is_finished() {
+        connector_a_shutdown_signal.cancel();
         connector_a_task.abort();
         return Err(miette!("connector b early stop"));
     }
 
     // Wait for processing
-    let wait_duration = Duration::from_millis(500);
+    let wait_duration = Duration::from_millis(200);
     let t0 = Instant::now();
     let expected_count = count_files_in_directory(&env.input_dir)?;
     while t0.elapsed() < timeout_duration
@@ -72,7 +78,10 @@ pub async fn test_connector_chain<'a>(
     }
 
     // Shutdown connectors
+    connector_a_shutdown_signal.cancel();
     connector_a_task.abort();
+
+    connector_b_shutdown_signal.cancel();
     connector_b_task.abort();
 
     // Give time for graceful shutdown
@@ -212,16 +221,25 @@ fn generate_connector_b_config(
 /// Launches a connector process using the cdviz-collector library
 #[allow(clippy::print_stderr)]
 #[allow(clippy::disallowed_macros)]
-fn launch_connector(config_path: &Path, with_init_log: bool) -> tokio::task::JoinHandle<bool> {
+fn launch_connector(
+    config_path: &Path,
+    with_init_log: bool,
+) -> (JoinHandle<bool>, CancellationToken) {
     let config_path = config_path.to_string_lossy().to_string();
-    tokio::spawn(async move {
-        let result =
-            run_with_args_and_log(vec!["connect", "-vvv", "--config", &config_path], with_init_log)
-                .await;
+    let shutdown_cancel = CancellationToken::new();
+    let shutdown_cancel_signal = shutdown_cancel.clone();
+    let handle = tokio::spawn(async move {
+        let result = run_with_args_and_log(
+            vec!["connect", "-vvv", "--config", &config_path],
+            with_init_log,
+            shutdown_cancel,
+        )
+        .await;
         // tracing::warn!("connector stopped with {:?}", result);
         eprintln!(">>> connector stopped with {result:?}");
         result.unwrap_or(false)
-    })
+    });
+    (handle, shutdown_cancel_signal)
 }
 
 /// Validates that output files match input files by comparing `CDEvents` directly

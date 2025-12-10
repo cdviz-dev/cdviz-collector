@@ -69,6 +69,7 @@ use crate::{
 use clap::Args;
 use reqwest::Url;
 use std::path::PathBuf;
+use tokio_util::sync::CancellationToken;
 
 /// Arguments for send command
 #[derive(Debug, Clone, Args)]
@@ -145,14 +146,14 @@ enabled = true
 type = "cli"
 "#;
 
-pub(crate) async fn send(args: SendArgs) -> Result<bool> {
+pub(crate) async fn send(args: SendArgs, shutdown_token: CancellationToken) -> Result<bool> {
     // Load configuration with CLI overrides using ConfigBuilder
     let config = load_config(&args)?;
 
     // Create and run pipeline
     let pipeline = PipelineBuilder::new(config);
 
-    pipeline.run(false).await
+    pipeline.run(false, shutdown_token).await
 }
 
 /// Load configuration with CLI argument overrides (used by send command).

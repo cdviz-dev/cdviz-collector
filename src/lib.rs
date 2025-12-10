@@ -17,7 +17,7 @@ mod utils;
 // re-export
 pub mod cdevent_utils;
 
-use std::{ffi::OsString, path::PathBuf, sync::LazyLock};
+use std::{ffi::OsString, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
@@ -31,9 +31,6 @@ use tokio_util::sync::CancellationToken;
 #[cfg(all(target_env = "musl", target_pointer_width = "64"))]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
-
-// Static variable used as central hook to shutdown
-static SHUTDOWN_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 
 // TODO add options (or subcommand) to `check-configuration` (regardless of enabled), `configuration-dump` (after consolidation (with filter or not enabled) and exit or not),
 // TODO add options to overide config from cli arguments (like from env)
@@ -121,7 +118,7 @@ fn init_log(verbosity: Verbosity, disable_otel: bool) -> Result<Guard> {
 #[allow(clippy::missing_errors_doc)]
 pub async fn run_with_sys_args() -> Result<()> {
     let cli = Cli::parse();
-    let ok = run(cli, true).await?;
+    let ok = run(cli, true, CancellationToken::new()).await?;
     if !ok {
         std::process::exit(1);
     }
@@ -135,11 +132,15 @@ where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
 {
-    run_with_args_and_log(args, true).await
+    run_with_args_and_log(args, true, CancellationToken::new()).await
 }
 
 #[allow(clippy::missing_errors_doc)]
-pub async fn run_with_args_and_log<I, T>(args: I, with_init_log: bool) -> Result<bool>
+pub async fn run_with_args_and_log<I, T>(
+    args: I,
+    with_init_log: bool,
+    shutdown_token: CancellationToken,
+) -> Result<bool>
 where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
@@ -148,18 +149,22 @@ where
     let mut cmdline = vec![OsString::from("cdviz-collector-lib")];
     cmdline.extend(args.into_iter().map(Into::into));
     let cli = Cli::try_parse_from(cmdline).into_diagnostic()?;
-    run(cli, with_init_log).await
+    run(cli, with_init_log, shutdown_token).await
 }
 
 #[allow(clippy::expect_used, clippy::if_then_some_else_none)]
-pub(crate) async fn run(cli: Cli, with_init_log: bool) -> Result<bool> {
+pub(crate) async fn run(
+    cli: Cli,
+    with_init_log: bool,
+    shutdown_token: CancellationToken,
+) -> Result<bool> {
     let _guard = if with_init_log { Some(init_log(cli.verbose, cli.disable_otel)?) } else { None };
     if let Some(dir) = &cli.directory {
         std::env::set_current_dir(dir).into_diagnostic()?;
     }
     match cli.command {
-        Command::Connect(args) => tools::connect::connect(args).await,
-        Command::Send(args) => tools::send::send(args).await,
+        Command::Connect(args) => tools::connect::connect(args, shutdown_token).await,
+        Command::Send(args) => tools::send::send(args, shutdown_token).await,
         #[cfg(feature = "tool_transform")]
         Command::Transform(args) => tools::transform::transform(args).await,
     }

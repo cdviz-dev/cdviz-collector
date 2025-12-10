@@ -5,7 +5,9 @@ use serde_json::json;
 use std::time::Duration;
 use tempfile::TempDir;
 use tokio::net::TcpListener;
+use tokio::task::JoinHandle;
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 use wiremock::matchers::{header, header_exists, header_regex, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -14,7 +16,7 @@ async fn lauch_collector(
     collector_port: u16,
     sink_url: &str,
     //) -> tokio::process::Child {
-) -> tokio::task::JoinHandle<Result<bool>> {
+) -> (JoinHandle<Result<bool>>, CancellationToken) {
     let config_path = temp_dir.path().join("test-config.toml");
 
     // Configuration for cdviz-collector with webhook source and HTTP sink
@@ -61,13 +63,19 @@ destination = "{sink_url}/events"
     //     .expect("Failed to start cdviz-collector");
 
     // launch collector as library to avoid (re) building it
+    let shutdown_cancel = CancellationToken::new();
+    let shutdown_cancel_signal = shutdown_cancel.clone();
     let task = tokio::spawn(async move {
-        cdviz_collector::run_with_args(vec!["connect", "--config", &config_path.to_string_lossy()])
-            .await
+        cdviz_collector::run_with_args_and_log(
+            vec!["connect", "--config", &config_path.to_string_lossy()],
+            true,
+            shutdown_cancel,
+        )
+        .await
     });
 
     // Wait for collector to start (server takes time to initialize)
-    sleep(Duration::from_secs(3)).await;
+    sleep(Duration::from_secs(1)).await;
 
     // // Verify the process is still running
     // match cmd.try_wait() {
@@ -100,6 +108,7 @@ destination = "{sink_url}/events"
     }
 
     // cmd
+    (task, shutdown_cancel_signal)
     task
 }
 
@@ -135,7 +144,7 @@ async fn test_webhook_to_http_sink_with_trace_propagation() {
     // Create temporary directory for config
     let temp_dir = TempDir::new().unwrap();
 
-    let cmd = lauch_collector(&temp_dir, collector_port, &sink_url).await;
+    let (_cmd, signal) = lauch_collector(&temp_dir, collector_port, &sink_url).await;
 
     // Send test CDEvent to webhook with trace context
     let test_event = create_test_cdevent();
@@ -149,16 +158,12 @@ async fn test_webhook_to_http_sink_with_trace_propagation() {
         .send()
         .await
         .expect("Failed to send webhook request");
-
     assert_eq!(webhook_response.status(), 201);
-
     // Give time for processing
-    sleep(Duration::from_millis(1000)).await;
-
+    sleep(Duration::from_millis(200)).await;
     // Clean up
     // cmd.kill().await.ok();
-    cmd.abort();
-
+    signal.cancel();
     // Verify mock expectations were met
     mock_server.verify().await;
 }
@@ -186,7 +191,7 @@ async fn test_webhook_to_http_sink_without_trace_context() {
     // Create temporary directory for config
     let temp_dir = TempDir::new().unwrap();
 
-    let cmd = lauch_collector(&temp_dir, collector_port, &sink_url).await;
+    let (_cmd, signal) = lauch_collector(&temp_dir, collector_port, &sink_url).await;
 
     // Send test CDEvent to webhook WITHOUT trace context
     let test_event = create_test_cdevent();
@@ -203,11 +208,11 @@ async fn test_webhook_to_http_sink_without_trace_context() {
     assert_eq!(webhook_response.status(), 201);
 
     // Give time for processing
-    sleep(Duration::from_millis(1000)).await;
+    sleep(Duration::from_millis(200)).await;
 
     // Clean up
     // cmd.kill().await.ok();
-    cmd.abort();
+    signal.cancel();
 
     // Verify mock expectations were met
     mock_server.verify().await;

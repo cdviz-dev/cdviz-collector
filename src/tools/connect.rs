@@ -16,6 +16,7 @@
 use crate::{config::Config, errors::Result, pipeline::PipelineBuilder};
 use clap::Args;
 use std::path::PathBuf;
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone, Args)]
 #[command(args_conflicts_with_subcommands = true, flatten_help = true)]
@@ -36,8 +37,8 @@ pub(crate) struct ConnectArgs {
 //TODO integrations with cloudevents (sources & sink)
 //TODO integrations with kafka / redpanda, nats,
 /// Returns true if the connection service ran successfully
-pub(crate) async fn connect(args: ConnectArgs) -> Result<bool> {
+pub(crate) async fn connect(args: ConnectArgs, shutdown_token: CancellationToken) -> Result<bool> {
     let config = Config::from_file(args.config)?;
     let pipeline = PipelineBuilder::new(config);
-    pipeline.run(true).await
+    pipeline.run(true, shutdown_token).await
 }

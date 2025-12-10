@@ -24,6 +24,7 @@ testcontainers = "0.26"
 # time = "=0.3.39"                                           # HACK explicit fix version (not used) to avoid compilation errors on domain #see https://github.com/NLnetLabs/domain/issues/502
 # tower = { version = "0.5", features = ["util"] }
 tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
 tracing = "0.1"
 # uuid = "1"
 # wiremock = "0.6"

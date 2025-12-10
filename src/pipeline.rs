@@ -92,8 +92,8 @@ impl PipelineBuilder {
     #[allow(clippy::type_complexity)]
     pub fn create_sources(
         &self,
-        shutdown_token: &'static CancellationToken,
         enable_http_server: bool,
+        shutdown_token: &CancellationToken,
     ) -> Result<(Vec<JoinHandle<Result<()>>>, Vec<Router>)> {
         let (source_handles, source_routes) = sources::create_sources_and_routes(
             self.config.sources.clone(),
@@ -114,16 +114,21 @@ impl PipelineBuilder {
     /// This unified method handles both server mode (with HTTP server) and oneshot mode.
     /// The pipeline runs until all sources complete and disconnect from the channel,
     /// which then causes sinks to stop naturally.
-    pub async fn run(self, enable_http_server: bool) -> Result<bool> {
+    pub async fn run(
+        self,
+        enable_http_server: bool,
+        shutdown_token: CancellationToken,
+    ) -> Result<bool> {
         // Setup the handler to (try to) shutdown gracefully
-        tokio::spawn(handle_shutdown_signal());
+        let shutdown_token_signal = shutdown_token.clone();
+        tokio::spawn(async move { handle_shutdown_signal(shutdown_token_signal).await });
 
         // Create sinks with routes
         let (sink_handles, sink_routes) = self.create_sinks(enable_http_server)?;
 
         // Create sources using standard pattern
         let (source_handles, source_routes) =
-            self.create_sources(&crate::SHUTDOWN_TOKEN, enable_http_server)?;
+            self.create_sources(enable_http_server, &shutdown_token)?;
 
         let operation = if enable_http_server { "server" } else { "send" };
         tracing::info!("Starting {} operation", operation);
@@ -140,8 +145,7 @@ impl PipelineBuilder {
             routes.extend(source_routes);
             routes.extend(sink_routes);
 
-            let server_handle =
-                crate::http::launch(&self.config.http, routes, &crate::SHUTDOWN_TOKEN);
+            let server_handle = crate::http::launch(&self.config.http, routes, shutdown_token);
             all_handles.push(server_handle);
         }
 
@@ -160,7 +164,7 @@ impl PipelineBuilder {
 }
 
 #[allow(clippy::expect_used)]
-async fn handle_shutdown_signal() {
+async fn handle_shutdown_signal(shutdown_token: CancellationToken) {
     use tokio::signal;
     let ctrl_c = async {
         signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
@@ -181,5 +185,5 @@ async fn handle_shutdown_signal() {
         () = ctrl_c => {},
         () = terminate => {},
     }
-    crate::SHUTDOWN_TOKEN.cancel();
+    shutdown_token.cancel();
 }
