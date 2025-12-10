@@ -9,7 +9,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// Integration test for send command -> HTTP sink pipeline
 /// Tests direct `CDEvent` sending via CLI with HTTP sink
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_send_command_to_http_sink() {
     // Setup mock HTTP sink server
     let mock_server = MockServer::start().await;
@@ -56,7 +56,7 @@ async fn test_send_command_to_http_sink() {
 }
 
 /// Integration test for send command with custom headers
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_send_command_with_custom_headers() {
     // Setup mock HTTP sink server
     let mock_server = MockServer::start().await;
@@ -106,7 +106,7 @@ async fn test_send_command_with_custom_headers() {
 }
 
 /// Integration test for send command with file input
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_send_command_with_file_input() {
     use std::fs;
     use tempfile::NamedTempFile;
@@ -155,7 +155,7 @@ async fn test_send_command_with_file_input() {
 }
 
 /// Integration test for send command with array of events
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_send_command_with_array_of_events() {
     // Setup mock HTTP sink server
     let mock_server = MockServer::start().await;
@@ -201,7 +201,7 @@ async fn test_send_command_with_array_of_events() {
 }
 
 /// Integration test for send command error handling
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_send_command_http_error_handling() {
     // Setup mock HTTP sink server that returns errors
     let mock_server = MockServer::start().await;
@@ -247,7 +247,7 @@ async fn test_send_command_http_error_handling() {
 }
 
 /// Integration test using indoc for inline JSON
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_send_command_with_inline_json() {
     // Setup mock HTTP sink server
     let mock_server = MockServer::start().await;
@@ -359,7 +359,7 @@ fn create_test_cdevent_with_id(id: &str) -> serde_json::Value {
 }
 
 /// Integration test for send command with HMAC signature validation
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_send_command_with_signature_validation() {
     // Setup mock HTTP sink server
     let mock_server = MockServer::start().await;

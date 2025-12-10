@@ -109,12 +109,11 @@ destination = "{sink_url}/events"
 
     // cmd
     (task, shutdown_cancel_signal)
-    task
 }
 
 /// Integration test for webhook source -> HTTP sink pipeline
 /// Tests `CDEvent` passthrough and `trace_id` propagation behavior
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_webhook_to_http_sink_with_trace_propagation() {
     // Setup mock HTTP sink server
     let mock_server = MockServer::start().await;
@@ -169,7 +168,7 @@ async fn test_webhook_to_http_sink_with_trace_propagation() {
 }
 
 /// Test `CDEvent` passthrough without incoming `trace_id` context
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_webhook_to_http_sink_without_trace_context() {
     // Setup mock HTTP sink server
     let mock_server = MockServer::start().await;
