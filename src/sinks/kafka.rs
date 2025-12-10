@@ -292,6 +292,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_kafka_sink_sends_message_to_topic() {
         use crate::Message;
+        use cdviz_collector_testkit::testcontainers_redpanda::Redpanda;
         use proptest::prelude::*;
         use proptest::test_runner::TestRunner;
         use rdkafka::Message as KafkaMessage;
@@ -299,7 +300,6 @@ mod tests {
         use rdkafka::consumer::{Consumer, StreamConsumer};
         use testcontainers::core::ContainerAsync;
         use testcontainers::runners::AsyncRunner;
-        use testcontainers_redpanda_rs::Redpanda;
 
         // Start Redpanda container
         let kafka_container: ContainerAsync<Redpanda> =

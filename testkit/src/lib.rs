@@ -1,5 +1,6 @@
 pub mod cdevent_utils;
 pub mod connector_chain;
+pub mod testcontainers_redpanda;
 
 pub use cdevent_utils::generate_random_cdevents;
 pub use connector_chain::test_connector_chain;

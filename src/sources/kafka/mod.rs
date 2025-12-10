@@ -297,11 +297,11 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_kafka_source_receives_message_from_topic() {
+        use cdviz_collector_testkit::testcontainers_redpanda::Redpanda;
         use rdkafka::config::ClientConfig;
         use rdkafka::producer::{FutureProducer, FutureRecord};
         use testcontainers::core::ContainerAsync;
         use testcontainers::runners::AsyncRunner;
-        use testcontainers_redpanda_rs::Redpanda;
         use tokio_util::sync::CancellationToken;
 
         // Start Redpanda container

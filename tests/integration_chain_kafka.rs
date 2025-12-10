@@ -6,7 +6,7 @@ use cdviz_collector_testkit as testkit;
 use indoc::formatdoc;
 use std::time::Duration;
 use testcontainers::{core::ContainerAsync, runners::AsyncRunner};
-use testcontainers_redpanda_rs::*;
+use testkit::testcontainers_redpanda::*;
 use testkit::{generate_random_cdevents, test_connector_chain};
 
 use crate::testkit::connector_chain::ConnectorSetup;
