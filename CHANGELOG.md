@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.5](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.4...0.19.5) - 2025-12-10
+
+### Fixed
+
+- speed up e2e test by using `tokio::test(flavor = "multi_thread")`
+- use a non static CancelToken to request/notify shutdown
+
+### Other
+
+- *(testkit)* add `testkit::shared_async_resource` macro
+- *(deps)* vendor testcontainers-redpanda and upgrade testcontainers version
+- *(deps)* upgrade
+- *(README)* append download-history charts
+- *(deps)* update rust crate derive_more to v2.1.0 ([#216](https://github.com/cdviz-dev/cdviz-collector/pull/216))
+- *(deps)* update peter-evans/create-pull-request action to v8 ([#217](https://github.com/cdviz-dev/cdviz-collector/pull/217))
+
 ## [0.19.4](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.3...0.19.4) - 2025-12-01
 
 ### Fixed
