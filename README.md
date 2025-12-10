@@ -204,6 +204,7 @@ Note: This project has been developed with assistance from Claude Code. All AI-g
 
 ## Downloads
 
-![Download History - Last 60 Days (Daily)](https://download-history.cdviz.dev/api/chart/github.com/cdviz-dev/cdviz-collector/60d.svg?granularity=daily)
-
-![Download History - All Time (Weekly)](https://download-history.cdviz.dev/api/chart/github.com/cdviz-dev/cdviz-collector/all.svg?granularity=weekly)
+<div align="center">
+    <a href="https://download-history.cdviz.dev/?repo=cdviz-dev%2Fcdviz-collector"><img src="https://download-history.cdviz.dev/api/chart/github.com/cdviz-dev/cdviz-collector/60d.svg?granularity=daily" alt="Download History - Last 60 Days (Daily)" width="400"></a>
+    <a href="https://download-history.cdviz.dev/?repo=cdviz-dev%2Fcdviz-collector"><img src="https://download-history.cdviz.dev/api/chart/github.com/cdviz-dev/cdviz-collector/all.svg?granularity=weekly" alt="Download History - All Time (Weekly)" width="400"></a>
+</div>
