@@ -1,3 +1,4 @@
+#![allow(unused_assignments)] // fields are used by miette
 pub(crate) use miette::{IntoDiagnostic, Report, Result, SourceOffset, miette};
 
 // Nightly requires enabling this feature:
@@ -19,10 +20,10 @@ pub(crate) enum Error {
     NoSink,
     #[display("malformed json provided")]
     Serde {
-        cause: serde_json::Error,
+        source: serde_json::Error,
         #[source_code]
         input: String,
-        #[label("{cause}")]
+        #[label("{source}")]
         location: SourceOffset,
     },
 }
@@ -39,6 +40,6 @@ impl Error {
     pub fn from_serde_error(input: impl Into<String>, cause: serde_json::Error) -> Self {
         let input = input.into();
         let location = SourceOffset::from_location(&input, cause.line(), cause.column());
-        Self::Serde { cause, input, location }
+        Self::Serde { source: cause, input, location }
     }
 }
