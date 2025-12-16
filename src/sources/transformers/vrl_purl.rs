@@ -302,15 +302,15 @@ fn purl_object_to_string(purl_obj: &Value) -> Result<String, ExpressionError> {
         PackageUrl::new(pkg_type, name).map_err(|e| format!("Invalid PURL type or name: {e}"))?;
 
     if let Some(ref ns) = namespace {
-        purl.with_namespace(ns.as_str());
+        purl.with_namespace(ns.as_str()).map_err(|e| format!("Invalid namespace '{ns}': {e}"))?;
     }
 
     if let Some(ref ver) = version {
-        purl.with_version(ver.as_str());
+        purl.with_version(ver.as_str()).map_err(|e| format!("Invalid version '{ver}': {e}"))?;
     }
 
     if let Some(ref sp) = subpath {
-        purl.with_subpath(sp.as_str()).map_err(|e| format!("Invalid subpath: {e}"))?;
+        purl.with_subpath(sp.as_str()).map_err(|e| format!("Invalid subpath '{sp}': {e}"))?;
     }
 
     for (key, value) in qualifiers {
@@ -738,7 +738,7 @@ mod tests {
 
         let mut purl_obj = BTreeMap::new();
         purl_obj.insert(KeyString::from("type"), Value::from("oci"));
-        purl_obj.insert(KeyString::from("namespace"), Value::from("library"));
+        //purl_obj.insert(KeyString::from("namespace"), Value::from("library"));
         purl_obj.insert(KeyString::from("name"), Value::from("nginx"));
         purl_obj.insert(KeyString::from("version"), Value::from("@sha256:abc"));
         purl_obj.insert(KeyString::from("qualifiers"), Value::from(qualifiers));
@@ -747,7 +747,7 @@ mod tests {
         let result = purl_object_to_string(&Value::from(purl_obj)).unwrap();
 
         // PackageUrl sorts qualifiers alphabetically and encodes @ in version
-        assert!(result.starts_with("pkg:oci/library/nginx@%40sha256:abc?"));
+        assert!(result.starts_with("pkg:oci/nginx@%40sha256:abc?"));
         assert!(result.contains("repository_url=docker.io/library"));
         assert!(result.contains("tag=1.21"));
     }
