@@ -338,34 +338,34 @@ impl Function for PurlFromOciImage {
 
     fn examples(&self) -> &'static [Example] {
         &[
-            Example {
+            example!(
                 title: "parse short image name",
                 source: r#"purl_from_oci_image("nginx")"#,
                 result: Ok(
                     r#"{"type": "oci", "namespace": "library", "name": "nginx", "version": null, "qualifiers": {"repository_url": "docker.io/library", "tag": "latest"}, "subpath": null}"#,
                 ),
-            },
-            Example {
+            ),
+            example!(
                 title: "parse image with tag",
                 source: r#"purl_from_oci_image("nginx:1.21")"#,
                 result: Ok(
                     r#"{"type": "oci", "namespace": "library", "name": "nginx", "version": null, "qualifiers": {"repository_url": "docker.io/library", "tag": "1.21"}, "subpath": null}"#,
                 ),
-            },
-            Example {
+            ),
+            example!(
                 title: "parse image with digest",
                 source: r#"purl_from_oci_image("nginx@sha256:abc123")"#,
                 result: Ok(
                     r#"{"type": "oci", "namespace": "library", "name": "nginx", "version": "@sha256:abc123", "qualifiers": {"repository_url": "docker.io/library"}, "subpath": null}"#,
                 ),
-            },
-            Example {
+            ),
+            example!(
                 title: "parse fully qualified image",
                 source: r#"purl_from_oci_image("ghcr.io/owner/image:v1.0@sha256:abc123")"#,
                 result: Ok(
                     r#"{"type": "oci", "namespace": "owner", "name": "image", "version": "@sha256:abc123", "qualifiers": {"repository_url": "ghcr.io/owner", "tag": "v1.0"}, "subpath": null}"#,
                 ),
-            },
+            ),
         ]
     }
 
@@ -417,18 +417,18 @@ impl Function for PurlToString {
 
     fn examples(&self) -> &'static [Example] {
         &[
-            Example {
+            example!(
                 title: "convert OCI PURL object to string",
                 source: r#"purl_to_string({"type": "oci", "name": "nginx", "version": "@sha256:abc", "qualifiers": {"repository_url": "docker.io/library", "tag": "1.21"}})"#,
                 result: Ok(r"pkg:oci/nginx@sha256:abc?repository_url=docker.io%2Flibrary&tag=1.21"),
-            },
-            Example {
+            ),
+            example!(
                 title: "convert Helm PURL object to string",
                 source: r#"purl_to_string({"type": "helm", "name": "wordpress", "version": "15.2.35", "qualifiers": {"repository_url": "https://charts.bitnami.com/bitnami"}})"#,
                 result: Ok(
                     r"pkg:helm/wordpress@15.2.35?repository_url=https%3A%2F%2Fcharts.bitnami.com%2Fbitnami",
                 ),
-            },
+            ),
         ]
     }
 
@@ -484,20 +484,20 @@ impl Function for PurlFromArgoCdHelm {
 
     fn examples(&self) -> &'static [Example] {
         &[
-            Example {
+            example!(
                 title: "parse OCI Helm chart",
                 source: r#"purl_from_argocd_helm("ghcr.io/owner", "nginx", "1.0.0")"#,
                 result: Ok(
                     r#"{"type": "oci", "name": "nginx", "version": "1.0.0", "qualifiers": {"repository_url": "ghcr.io/owner"}, "subpath": null}"#,
                 ),
-            },
-            Example {
+            ),
+            example!(
                 title: "parse HTTP Helm repository",
                 source: r#"purl_from_argocd_helm("https://charts.bitnami.com/bitnami", "wordpress", "15.2.35")"#,
                 result: Ok(
                     r#"{"type": "generic", "name": "wordpress", "version": "15.2.35", "qualifiers": {"download_url": "https://charts.bitnami.com/bitnami", "type": "helm"}, "subpath": null}"#,
                 ),
-            },
+            ),
         ]
     }
 
@@ -567,27 +567,27 @@ impl Function for PurlFromArgoCdGitSource {
 
     fn examples(&self) -> &'static [Example] {
         &[
-            Example {
+            example!(
                 title: "parse GitHub source",
                 source: r#"purl_from_argocd_git_source("https://github.com/kubernetes-sigs/kustomize", "examples/helloWorld", "v5.0.0")"#,
                 result: Ok(
                     r#"{"type": "github", "namespace": "kubernetes-sigs", "name": "kustomize", "version": "v5.0.0", "qualifiers": {"path": "examples/helloWorld"}, "subpath": null}"#,
                 ),
-            },
-            Example {
+            ),
+            example!(
                 title: "parse Bitbucket source",
                 source: r#"purl_from_argocd_git_source("https://bitbucket.org/myteam/myapp", "manifests", "main")"#,
                 result: Ok(
                     r#"{"type": "bitbucket", "namespace": "myteam", "name": "myapp", "version": "main", "qualifiers": {"path": "manifests"}, "subpath": null}"#,
                 ),
-            },
-            Example {
+            ),
+            example!(
                 title: "parse generic Git source",
                 source: r#"purl_from_argocd_git_source("https://gitlab.com/group/project", "k8s", "v1.2.3")"#,
                 result: Ok(
                     r#"{"type": "generic", "name": "project", "version": "v1.2.3", "qualifiers": {"path": "k8s", "type": "git", "vcs_url": "https://gitlab.com/group/project"}, "subpath": null}"#,
                 ),
-            },
+            ),
         ]
     }
 
