@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.7](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.6...0.19.7) - 2025-12-16
+
+### Fixed
+
+- *(deps)* update rust crate packageurl to 0.6
+- *(deps)* update rust crate vrl to 0.29
+
+### Other
+
+- *(cargo)* reformat (with LSP) and remove deprecated `package.authors`
+- *(deps)* update dependency rust to v1.92
+- *(deps)* update actions/upload-artifact action to v6 ([#225](https://github.com/cdviz-dev/cdviz-collector/pull/225))
+- *(deps)* update renovatebot/github-action action to v44.1.0 ([#224](https://github.com/cdviz-dev/cdviz-collector/pull/224))
+
 ## [0.19.6](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.5...0.19.6) - 2025-12-10
 
 ### Other
