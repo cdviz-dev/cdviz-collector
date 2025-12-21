@@ -122,6 +122,7 @@ opendal = { version = "0.55", default-features = false, features = [
 opentelemetry = "0.31"
 packageurl = "0.6"
 pin-project-lite = { version = "0.2", optional = true }
+quick-xml-to-json = "0.1"
 rdkafka = { version = "0.39", default-features = false, features = [
   "cmake-build",
   "curl-static",

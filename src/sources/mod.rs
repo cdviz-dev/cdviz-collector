@@ -1,5 +1,6 @@
 pub(crate) mod cli;
 pub(crate) mod extractors;
+pub(crate) mod format_converters;
 #[cfg(feature = "source_kafka")]
 pub(crate) mod kafka;
 #[cfg(feature = "source_opendal")]

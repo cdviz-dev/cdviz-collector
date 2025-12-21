@@ -22,6 +22,8 @@ pub(crate) enum Config {
     Jsonl,
     #[serde(alias = "metadata")]
     Metadata,
+    #[serde(alias = "xml")]
+    Xml,
 }
 
 impl Config {
@@ -36,6 +38,7 @@ impl Config {
             Config::Json => JsonParser::new(base_metadata, next).into(),
             Config::Jsonl => JsonlParser::new(base_metadata, next).into(),
             Config::Metadata => MetadataParser::new(base_metadata, next).into(),
+            Config::Xml => XmlParser::new(base_metadata, next).into(),
         };
         Ok(out)
     }
@@ -48,6 +51,7 @@ pub(crate) enum ParserEnum {
     JsonParser,
     JsonlParser,
     MetadataParser,
+    XmlParser,
 }
 
 #[enum_dispatch(ParserEnum)]
@@ -201,6 +205,48 @@ impl Parser for CsvRowParser {
             self.next.send(event)?;
         }
         Ok(())
+    }
+}
+
+pub(crate) struct XmlParser {
+    base_metadata: serde_json::Value,
+    next: EventSourcePipe,
+}
+
+impl XmlParser {
+    fn new(base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
+        Self { base_metadata, next }
+    }
+}
+
+impl Parser for XmlParser {
+    async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
+        use std::io::Read;
+
+        // Read file bytes
+        let bytes = op.read(resource.path()).await.into_diagnostic()?;
+        let resource_metadata = resource.as_json_metadata();
+        let headers = resource.as_headers();
+
+        // Read to string
+        let mut buf = String::new();
+        bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
+
+        // Convert XML to JSON using shared format converter
+        let body = super::super::format_converters::parse_xml(&buf)?;
+
+        // Merge base_metadata with resource metadata
+        let mut metadata = self.base_metadata.clone();
+        if let (Some(base_obj), Some(resource_obj)) =
+            (metadata.as_object_mut(), resource_metadata.as_object())
+        {
+            for (key, value) in resource_obj {
+                base_obj.insert(key.clone(), value.clone());
+            }
+        }
+
+        let event = EventSource { metadata, headers, body };
+        self.next.send(event)
     }
 }
 
