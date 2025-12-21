@@ -105,6 +105,7 @@ opendal = { version = "0.55", default-features = false, features = [
 ], optional = true }
 opentelemetry = "0.31"
 packageurl = "0.6"
+quick-xml-to-json = "0.1"
 rdkafka = { version = "0.38", default-features = false, features = [
   "cmake-build",
   "libz-static",
