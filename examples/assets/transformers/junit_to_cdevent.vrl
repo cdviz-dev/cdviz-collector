@@ -1,0 +1,59 @@
+# Transform JUnit XML (converted to JSON) into CDEvents testsuiterun.finished event
+# This transformer takes the JSON structure produced by quick-xml-to-json
+# and converts it to a CDEvents compliant event.
+
+# The testsuite data is nested under the "testsuite" key
+.testsuite_data = .body.testsuite
+
+# Calculate stats
+.total_tests = to_int!(.testsuite_data.tests)
+.failures = to_int!(.testsuite_data.failures || 0)
+.errors = to_int!(.testsuite_data.errors || 0)
+.skipped = to_int!(.testsuite_data.skipped || 0)
+.passed = .total_tests - .failures - .errors - .skipped
+
+# Determine outcome
+.outcome = if .failures > 0 || .errors > 0 {
+    "fail"
+} else {
+    "pass"
+}
+
+# Build CDEvent
+.body = {
+    "context": {
+        "version": "0.4.1",
+        "id": "0",
+        "source": .metadata.context.source,
+        "type": "dev.cdevents.testsuiterun.finished.0.2.0",
+        "timestamp": now()
+    },
+    "subject": {
+        "id": .testsuite_data.name,
+        "type": "testsuiterun",
+        "content": {
+            "testSuite": {
+                "id": .testsuite_data.name,
+                "name": .testsuite_data.name
+            },
+            "outcome": .outcome,
+            "stats": {
+                "total": .total_tests,
+                "passed": .passed,
+                "failed": .failures + .errors,
+                "skipped": .skipped
+            }
+        }
+    }
+}
+
+# Clean up temporary fields
+del(.testsuite_data)
+del(.total_tests)
+del(.failures)
+del(.errors)
+del(.skipped)
+del(.passed)
+del(.outcome)
+
+[.]
