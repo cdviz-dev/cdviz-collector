@@ -113,7 +113,7 @@ rdkafka = { version = "0.38", default-features = false, features = [
   "tokio",
 ], optional = true }
 regex = "1"
-reqwest = { version = "0.12", default-features = false, optional = true }
+reqwest = { version = "0.13", default-features = false, optional = true }
 reqwest-eventsource = { version = "0.6", optional = true }
 reqwest-middleware = { version = "0.4", features = ["json"], optional = true }
 reqwest-retry = { version = "0.8", optional = true }
