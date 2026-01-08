@@ -48,5 +48,9 @@
       matchPackageNames: ["/testcontainers/"],
       groupName: "testcontainers",
     },
+    {
+      matchPackageNames: ["/reqwest/"],
+      groupName: "reqwest",
+    },
   ],
 }
