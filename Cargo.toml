@@ -62,7 +62,7 @@ transformer_vrl = ["dep:vrl"]
 
 [dependencies]
 axum = "0.8"
-axum-tracing-opentelemetry = "0.32"
+axum-tracing-opentelemetry = "0.33"
 base64 = "0.22"
 bytes = { version = "1", optional = true }
 cdevents-sdk = { version = "0.2", features = ["cloudevents"] }
@@ -87,7 +87,7 @@ futures = "0.3"
 globset = { version = "0.4", optional = true }
 hmac = "0.12"
 humantime-serde = "1"
-init-tracing-opentelemetry = { version = "0.34", features = [
+init-tracing-opentelemetry = { version = "0.36", features = [
   "logfmt",
   "otlp",
   "tracing_subscriber_ext",
