@@ -328,6 +328,10 @@ fn purl_object_to_string(purl_obj: &Value) -> Result<String, ExpressionError> {
 pub struct PurlFromOciImage;
 
 impl Function for PurlFromOciImage {
+    fn usage(&self) -> &'static str {
+        "Parse OCI/Docker image string to PURL object"
+    }
+
     fn identifier(&self) -> &'static str {
         "purl_from_oci_image"
     }
@@ -407,6 +411,10 @@ impl FunctionExpression for PurlFromOciImageFn {
 pub struct PurlToString;
 
 impl Function for PurlToString {
+    fn usage(&self) -> &'static str {
+        "Convert PURL object to spec-compliant string"
+    }
+
     fn identifier(&self) -> &'static str {
         "purl_to_string"
     }
@@ -470,6 +478,10 @@ impl FunctionExpression for PurlToStringFn {
 pub struct PurlFromArgoCdHelm;
 
 impl Function for PurlFromArgoCdHelm {
+    fn usage(&self) -> &'static str {
+        "Parse ArgoCD Helm chart string to PURL object"
+    }
+
     fn identifier(&self) -> &'static str {
         "purl_from_argocd_helm"
     }
@@ -553,6 +565,10 @@ impl FunctionExpression for PurlFromArgoCdHelmFn {
 pub struct PurlFromArgoCdGitSource;
 
 impl Function for PurlFromArgoCdGitSource {
+    fn usage(&self) -> &'static str {
+        "Parse ArgoCD git repo string to PURL object"
+    }
+
     fn identifier(&self) -> &'static str {
         "purl_from_argocd_git_source"
     }

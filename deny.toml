@@ -76,7 +76,7 @@ ignore = [
   # { crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },
   # { id = "RUSTSEC-2024-0436", reason = "no longer maintained but required by crate (vrl use paste)" }
   { id = "RUSTSEC-2023-0071", reason = "rsa 0.9.8 is used by opendal 0.54.0 -> azblob -> reqsign 0.16.5" },
-  { id = "RUSTSEC-2024-0388", reason = "derivative 2.2.0 is used by vrl 0.26 -> fancy-regex 0.15" },
+  # { id = "RUSTSEC-2024-0388", reason = "derivative 2.2.0 is used by vrl 0.26 -> fancy-regex 0.15" },
   { id = "RUSTSEC-2024-0384", reason = "instant 0.1.13 is used by reqwest-retry 0.7 -> parking_lot 0.11" },
   # { id = "RUSTSEC-2025-0119", reason = "number_prefix 0.4.0 is used by cliclack 0.3.6 -> indicatif 0.17" },
   { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile 2.2.0 is used by testcontainers 0.26 -> bollard 0.19" },
@@ -202,7 +202,7 @@ skip = [
   "console",
   "convert_case",
   # "core-foundation",
-  "fancy-regex",
+  # "fancy-regex",
   # "fluent-uri",
   "foldhash",
   "futures",
