@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.9](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.8...0.19.9) - 2026-01-26
+
+### Fixed
+
+- *(deps)* vendor a fork of `reqwest-eventsource`
+- *(deps)* update reqwest
+- *(deps)* update to rust 1.93
+- *(deps)* update rust crate vrl to 0.30
+- *(deps)* update rust crate rdkafka to 0.39
+- *(deps)* `cargo update`
+- *(deps)* update opentelemetry ([#239](https://github.com/cdviz-dev/cdviz-collector/pull/239))
+
+### Other
+
+- add `autofix` task
+
 ## [0.19.8](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.7...0.19.8) - 2025-12-20
 
 ### Other
