@@ -50,6 +50,10 @@ run = [
   "dprint fmt",
 ]
 
+[tasks.autofix]
+depends_post = ["format"]
+run = "cargo clippy --all-features --fix --allow-dirty"
+
 [tasks."deny"]
 run = [
   # "cargo --locked tree -i opentelemetry",
