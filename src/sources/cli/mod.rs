@@ -1,5 +1,7 @@
+pub(crate) mod parsers;
+
 use super::{EventSource, EventSourcePipe};
-use crate::errors::{Error, IntoDiagnostic, Result};
+use crate::errors::{IntoDiagnostic, Result};
 use crate::pipes::Pipe;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -12,6 +14,9 @@ use tracing::instrument;
 pub(crate) struct Config {
     /// Data source specification - can be direct JSON, @filename, or @- for stdin
     pub data: Option<String>,
+    /// Parser configuration - specifies how to parse the input data
+    #[serde(default)]
+    pub parser: parsers::Config,
     /// Base metadata to include in all `EventSource` instances created by this extractor.
     /// The `context.source` field will be automatically populated if not set.
     #[serde(default)]
@@ -22,15 +27,19 @@ pub(crate) struct CliExtractor {
     reader: Box<dyn Read + Send>,
     next: EventSourcePipe,
     base_metadata: serde_json::Value,
+    parser_config: parsers::Config,
+    data_source: Option<String>, // Filename for auto-detection
 }
 
 impl CliExtractor {
     pub(crate) fn new(
         reader: Box<dyn Read + Send>,
         base_metadata: serde_json::Value,
+        parser_config: parsers::Config,
+        data_source: Option<String>,
         next: EventSourcePipe,
     ) -> Self {
-        Self { reader, next, base_metadata }
+        Self { reader, next, base_metadata, parser_config, data_source }
     }
 
     pub(crate) fn from_config(config: &Config, next: EventSourcePipe) -> Result<Self> {
@@ -40,7 +49,11 @@ impl CliExtractor {
             .ok_or_else(|| miette::miette!("CLI source requires 'data' configuration"))?;
 
         let reader = create_reader_from_data(data)?;
-        Ok(Self::new(reader, config.metadata.clone(), next))
+
+        // Extract filename from data source for auto-detection
+        let filename = extract_filename(data);
+
+        Ok(Self::new(reader, config.metadata.clone(), config.parser.clone(), filename, next))
     }
 
     #[instrument(skip(self))]
@@ -54,9 +67,9 @@ impl CliExtractor {
             return Ok(());
         }
 
-        // Parse JSON - could be single object or array
+        // Parse using configured parser
         let json_value: serde_json::Value =
-            serde_json::from_str(&data).map_err(|cause| Error::from_serde_error(&data, cause))?;
+            parsers::parse_with_config(&data, &self.parser_config, self.data_source.as_deref())?;
 
         match json_value {
             serde_json::Value::Array(events) => {
@@ -114,6 +127,19 @@ fn create_reader_from_data(data: &str) -> Result<Box<dyn Read + Send>> {
     }
 }
 
+/// Extract filename from data specification for auto-detection.
+///
+/// Returns the filename if data is a file reference (@filename), None otherwise.
+fn extract_filename(data: &str) -> Option<String> {
+    data.strip_prefix('@').and_then(|path| {
+        if path == "-" {
+            None // stdin has no filename
+        } else {
+            Some(path.to_string())
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,7 +155,8 @@ mod tests {
         let pipe = Box::new(collector.create_pipe());
         let base_metadata =
             serde_json::json!({"context": {"source": "http://example.com?source=cli"}});
-        let extractor = CliExtractor::new(reader, base_metadata, pipe);
+        let parser_config = parsers::Config::default();
+        let extractor = CliExtractor::new(reader, base_metadata, parser_config, None, pipe);
 
         // Run the extractor
         extractor.run().await.unwrap();
@@ -150,7 +177,8 @@ mod tests {
         let pipe = Box::new(collector.create_pipe());
         let base_metadata =
             serde_json::json!({"context": {"source": "http://example.com?source=cli"}});
-        let extractor = CliExtractor::new(reader, base_metadata, pipe);
+        let parser_config = parsers::Config::default();
+        let extractor = CliExtractor::new(reader, base_metadata, parser_config, None, pipe);
 
         // Run the extractor
         extractor.run().await.unwrap();
@@ -172,7 +200,8 @@ mod tests {
         let collector = Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
         let base_metadata = serde_json::json!({});
-        let extractor = CliExtractor::new(reader, base_metadata, pipe);
+        let parser_config = parsers::Config::default();
+        let extractor = CliExtractor::new(reader, base_metadata, parser_config, None, pipe);
 
         // Should not fail with empty data
         extractor.run().await.unwrap();
@@ -189,7 +218,8 @@ mod tests {
         let collector = Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
         let base_metadata = serde_json::json!({});
-        let extractor = CliExtractor::new(reader, base_metadata, pipe);
+        let parser_config = parsers::Config::default();
+        let extractor = CliExtractor::new(reader, base_metadata, parser_config, None, pipe);
 
         // Should fail with invalid JSON
         assert!(extractor.run().await.is_err());
