@@ -8,6 +8,8 @@ mod http;
 mod message;
 mod pipeline;
 mod pipes;
+#[cfg(feature = "reqwest-eventsource")]
+mod reqwest_eventsource;
 mod security;
 mod sinks;
 mod sources;

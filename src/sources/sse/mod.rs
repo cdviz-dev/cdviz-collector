@@ -3,11 +3,11 @@ pub mod config;
 pub use config::Config;
 
 use crate::errors::Result;
+use crate::reqwest_eventsource::{Event, RequestBuilderExt};
 #[cfg(test)]
 use crate::security::rule::HeaderRuleMap;
 use crate::sources::{EventSource, EventSourcePipe};
 use futures::StreamExt;
-use reqwest_eventsource::{Event, RequestBuilderExt};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};

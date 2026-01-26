@@ -53,12 +53,23 @@ sink_sse = ["dep:tokio-stream"]
 source_all = ["source_kafka", "source_opendal", "source_sse"]
 source_kafka = ["dep:rdkafka"]
 source_opendal = ["dep:bytes", "dep:csv", "dep:globset", "dep:opendal"]
-source_sse = ["dep:reqwest-eventsource", "dep:uuid"]
+source_sse = ["reqwest-eventsource", "dep:uuid"]
 tool_transform = ["source_opendal", "tool_ui", "transformer_vrl"]
 #! ### Tools
 tool_ui = ["dep:cliclack", "dep:console", "dep:similar"]
 #! ### Transformers
 transformer_vrl = ["dep:vrl"]
+#! ### Internal fork/vendoring
+#! replace `reqwest-eventsource = { version = "0.6", optional = true }`
+reqwest-eventsource = [
+  "dep:eventsource-stream",
+  "dep:futures-core",
+  "dep:futures-timer",
+  "dep:mime",
+  "dep:nom",
+  "dep:pin-project-lite",
+  "reqwest/stream",
+]
 
 [dependencies]
 axum = "0.8"
@@ -80,10 +91,13 @@ derive_more = { version = "2", features = [
   "from",
 ] }
 enum_dispatch = "0.3"
+eventsource-stream = { version = "0.2", optional = true }
 faster-hex = "0.10"
 figment = { version = "0.10", features = ["env"] }
 figment_file_provider_adapter = "0.1"
 futures = "0.3"
+futures-core = { version = "0.3", optional = true }
+futures-timer = { version = "3", optional = true }
 globset = { version = "0.4", optional = true }
 hmac = "0.12"
 humantime-serde = "1"
@@ -94,7 +108,9 @@ init-tracing-opentelemetry = { version = "0.36", features = [
 ] }
 jiff = { version = "0.2", features = ["serde"] }
 miette = { version = "7", features = ["fancy"] }
+mime = { version = "0.3", optional = true }
 multihash = "0.19"
+nom = { version = "7.1.0", optional = true }
 opendal = { version = "0.55", default-features = false, features = [
   "services-fs",  # "services-ftp",
   "services-gcs",
@@ -105,6 +121,7 @@ opendal = { version = "0.55", default-features = false, features = [
 ], optional = true }
 opentelemetry = "0.31"
 packageurl = "0.6"
+pin-project-lite = { version = "0.2", optional = true }
 rdkafka = { version = "0.39", default-features = false, features = [
   "cmake-build",
   "curl-static",
@@ -115,7 +132,6 @@ rdkafka = { version = "0.39", default-features = false, features = [
 ], optional = true }
 regex = "1"
 reqwest = { version = "0.13", default-features = false, optional = true }
-reqwest-eventsource = { version = "0.6", optional = true }
 reqwest-middleware = { version = "0.5", features = ["json"], optional = true }
 reqwest-retry = { version = "0.9", optional = true }
 reqwest-tracing = { version = "0.6", optional = true }
@@ -173,7 +189,6 @@ figment = { version = "0.10", features = ["env", "test"] }
 indoc = "2"
 pretty_assertions = "1"
 proptest = "1"
-reqwest-eventsource = "0.6"
 rstest = "0.26"
 tempfile = "3"
 test-strategy = "0.4"
