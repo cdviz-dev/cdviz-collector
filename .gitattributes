@@ -1,0 +1,7 @@
+# Ensure all text files use LF line endings
+* text=auto eol=lf
+
+# Lock files (generated but should be diffed)
+Cargo.lock linguist-generated=false
+package-lock.json linguist-generated=false
+bun.lockb binary
