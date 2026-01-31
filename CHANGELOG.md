@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.10](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.9...0.19.10) - 2026-01-31
+
+### Other
+
+- *(deps)* update renovatebot/github-action action to v46 ([#246](https://github.com/cdviz-dev/cdviz-collector/pull/246))
+
 ## [0.19.9](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.8...0.19.9) - 2026-01-26
 
 ### Fixed
