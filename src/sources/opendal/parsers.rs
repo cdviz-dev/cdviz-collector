@@ -22,8 +22,15 @@ pub(crate) enum Config {
     Jsonl,
     #[serde(alias = "metadata")]
     Metadata,
+    #[cfg(feature = "parser_xml")]
     #[serde(alias = "xml")]
     Xml,
+    #[cfg(feature = "parser_yaml")]
+    #[serde(alias = "yaml")]
+    Yaml,
+    #[cfg(feature = "parser_tap")]
+    #[serde(alias = "tap")]
+    Tap,
 }
 
 impl Config {
@@ -38,7 +45,12 @@ impl Config {
             Config::Json => JsonParser::new(base_metadata, next).into(),
             Config::Jsonl => JsonlParser::new(base_metadata, next).into(),
             Config::Metadata => MetadataParser::new(base_metadata, next).into(),
+            #[cfg(feature = "parser_xml")]
             Config::Xml => XmlParser::new(base_metadata, next).into(),
+            #[cfg(feature = "parser_yaml")]
+            Config::Yaml => YamlParser::new(base_metadata, next).into(),
+            #[cfg(feature = "parser_tap")]
+            Config::Tap => TapParser::new(base_metadata, next).into(),
         };
         Ok(out)
     }
@@ -51,7 +63,12 @@ pub(crate) enum ParserEnum {
     JsonParser,
     JsonlParser,
     MetadataParser,
+    #[cfg(feature = "parser_xml")]
     XmlParser,
+    #[cfg(feature = "parser_yaml")]
+    YamlParser,
+    #[cfg(feature = "parser_tap")]
+    TapParser,
 }
 
 #[enum_dispatch(ParserEnum)]
@@ -208,17 +225,20 @@ impl Parser for CsvRowParser {
     }
 }
 
+#[cfg(feature = "parser_xml")]
 pub(crate) struct XmlParser {
     base_metadata: serde_json::Value,
     next: EventSourcePipe,
 }
 
+#[cfg(feature = "parser_xml")]
 impl XmlParser {
     fn new(base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
         Self { base_metadata, next }
     }
 }
 
+#[cfg(feature = "parser_xml")]
 impl Parser for XmlParser {
     async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
         use std::io::Read;
@@ -234,6 +254,96 @@ impl Parser for XmlParser {
 
         // Convert XML to JSON using shared format converter
         let body = super::super::format_converters::parse_xml(&buf)?;
+
+        // Merge base_metadata with resource metadata
+        let mut metadata = self.base_metadata.clone();
+        if let (Some(base_obj), Some(resource_obj)) =
+            (metadata.as_object_mut(), resource_metadata.as_object())
+        {
+            for (key, value) in resource_obj {
+                base_obj.insert(key.clone(), value.clone());
+            }
+        }
+
+        let event = EventSource { metadata, headers, body };
+        self.next.send(event)
+    }
+}
+
+#[cfg(feature = "parser_yaml")]
+pub(crate) struct YamlParser {
+    base_metadata: serde_json::Value,
+    next: EventSourcePipe,
+}
+
+#[cfg(feature = "parser_yaml")]
+impl YamlParser {
+    fn new(base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
+        Self { base_metadata, next }
+    }
+}
+
+#[cfg(feature = "parser_yaml")]
+impl Parser for YamlParser {
+    async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
+        use std::io::Read;
+
+        // Read file bytes
+        let bytes = op.read(resource.path()).await.into_diagnostic()?;
+        let resource_metadata = resource.as_json_metadata();
+        let headers = resource.as_headers();
+
+        // Read to string
+        let mut buf = String::new();
+        bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
+
+        // Convert YAML to JSON using shared format converter
+        let body = super::super::format_converters::parse_yaml(&buf)?;
+
+        // Merge base_metadata with resource metadata
+        let mut metadata = self.base_metadata.clone();
+        if let (Some(base_obj), Some(resource_obj)) =
+            (metadata.as_object_mut(), resource_metadata.as_object())
+        {
+            for (key, value) in resource_obj {
+                base_obj.insert(key.clone(), value.clone());
+            }
+        }
+
+        let event = EventSource { metadata, headers, body };
+        self.next.send(event)
+    }
+}
+
+#[cfg(feature = "parser_tap")]
+pub(crate) struct TapParser {
+    base_metadata: serde_json::Value,
+    next: EventSourcePipe,
+}
+
+#[cfg(feature = "parser_tap")]
+impl TapParser {
+    fn new(base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
+        Self { base_metadata, next }
+    }
+}
+
+#[cfg(feature = "parser_tap")]
+impl Parser for TapParser {
+    async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
+        use std::io::Read;
+
+        // Read file bytes
+        let bytes = op.read(resource.path()).await.into_diagnostic()?;
+        let resource_metadata = resource.as_json_metadata();
+        let headers = resource.as_headers();
+
+        // Read to string
+        let mut buf = String::new();
+        bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
+
+        // Convert TAP to JSON using shared format converter
+        let body = super::super::format_converters::parse_tap(&buf)?;
 
         // Merge base_metadata with resource metadata
         let mut metadata = self.base_metadata.clone();

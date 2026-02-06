@@ -1,0 +1,24 @@
+---
+source: src/sources/format_converters.rs
+expression: result
+---
+plan:
+  end: 3
+  start: 1
+tests:
+  - description: First test
+    directive: ~
+    number: 1
+    status: ok
+    yaml_diagnostics: ~
+  - description: Second test
+    directive: ~
+    number: 2
+    status: ok
+    yaml_diagnostics: ~
+  - description: Third test
+    directive: ~
+    number: 3
+    status: not_ok
+    yaml_diagnostics: ~
+version: 14

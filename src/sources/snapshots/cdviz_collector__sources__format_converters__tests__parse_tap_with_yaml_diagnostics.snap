@@ -1,0 +1,23 @@
+---
+source: src/sources/format_converters.rs
+expression: result
+---
+plan:
+  end: 2
+  start: 1
+tests:
+  - description: Passing test
+    directive: ~
+    number: 1
+    status: ok
+    yaml_diagnostics: ~
+  - description: Failing test
+    directive: ~
+    number: 2
+    status: not_ok
+    yaml_diagnostics:
+      actual: 0
+      expected: 42
+      message: Assertion failed
+      severity: fail
+version: 14

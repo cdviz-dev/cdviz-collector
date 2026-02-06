@@ -1,0 +1,28 @@
+---
+source: src/sources/format_converters.rs
+expression: result
+---
+plan:
+  end: 3
+  start: 1
+tests:
+  - description: Normal test
+    directive: ~
+    number: 1
+    status: ok
+    yaml_diagnostics: ~
+  - description: Skipped
+    directive:
+      kind: SKIP
+      reason: not implemented
+    number: 2
+    status: ok
+    yaml_diagnostics: ~
+  - description: Known issue
+    directive:
+      kind: TODO
+      reason: fix later
+    number: 3
+    status: not_ok
+    yaml_diagnostics: ~
+version: 14

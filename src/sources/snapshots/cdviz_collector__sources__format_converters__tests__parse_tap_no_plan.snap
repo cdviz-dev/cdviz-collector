@@ -1,0 +1,17 @@
+---
+source: src/sources/format_converters.rs
+expression: result
+---
+plan: ~
+tests:
+  - description: Test without plan
+    directive: ~
+    number: 1
+    status: ok
+    yaml_diagnostics: ~
+  - description: Another test
+    directive: ~
+    number: 2
+    status: ok
+    yaml_diagnostics: ~
+version: ~

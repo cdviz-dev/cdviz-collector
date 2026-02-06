@@ -1,0 +1,11 @@
+---
+source: src/sources/format_converters.rs
+expression: result
+---
+nested:
+  deep:
+    value: found
+stats:
+  failed: 1
+  passed: 3
+  total: 4

@@ -25,6 +25,7 @@ path = "src/main.rs"
 ## default is "full" feature set
 default = [
   "config_remote",
+  "parser_all",
   "sink_all",
   "source_all",
   "tool_transform",
@@ -32,6 +33,11 @@ default = [
 ]
 #! ### Configuration
 config_remote = ["dep:opendal"]
+#! ### Parsers
+parser_all = ["parser_tap", "parser_xml", "parser_yaml"]
+parser_xml = []
+parser_yaml = ["dep:serde_yaml"]
+parser_tap = ["parser_yaml"]  # TAP depends on YAML for diagnostics
 #! ### Sinks
 sink_all = ["sink_db", "sink_folder", "sink_http", "sink_kafka", "sink_sse"]
 sink_db = ["dep:sqlx"]
@@ -140,6 +146,7 @@ secrecy = { version = "0.10", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_with = "3"
+serde_yaml = { version = "0.9", optional = true }
 sha2 = "0.10"
 similar = { version = "2", features = ["inline", "unicode"], optional = true }
 sqlx = { version = "0.8", default-features = false, features = [
@@ -188,6 +195,7 @@ cdevents-sdk = { version = "0.2", features = ["testkit"] }
 cdviz-collector-testkit = { path = "testkit" }
 figment = { version = "0.10", features = ["env", "test"] }
 indoc = "2"
+insta = { version = "1", features = ["yaml"] }
 pretty_assertions = "1"
 proptest = "1"
 rstest = "0.26"

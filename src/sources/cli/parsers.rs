@@ -20,7 +20,14 @@ pub(crate) enum Config {
     /// Explicitly parse as JSON.
     Json,
     /// Explicitly parse as XML.
+    #[cfg(feature = "parser_xml")]
     Xml,
+    /// Explicitly parse as YAML.
+    #[cfg(feature = "parser_yaml")]
+    Yaml,
+    /// Explicitly parse as TAP (Test Anything Protocol).
+    #[cfg(feature = "parser_tap")]
+    Tap,
 }
 
 /// Parse data according to the specified parser configuration.
@@ -44,8 +51,13 @@ pub(crate) fn parse_with_config(
         Config::Auto => {
             // Auto-detect based on file extension
             match filename.and_then(|f| std::path::Path::new(f).extension()?.to_str()) {
+                #[cfg(feature = "parser_xml")]
                 Some("xml") => super::super::format_converters::parse_xml(data),
                 Some("json") => super::super::format_converters::parse_json(data),
+                #[cfg(feature = "parser_yaml")]
+                Some("yaml" | "yml") => super::super::format_converters::parse_yaml(data),
+                #[cfg(feature = "parser_tap")]
+                Some("tap") => super::super::format_converters::parse_tap(data),
                 _ => {
                     // Default fallback to JSON for unknown extensions
                     super::super::format_converters::parse_json(data)
@@ -53,7 +65,12 @@ pub(crate) fn parse_with_config(
             }
         }
         Config::Json => super::super::format_converters::parse_json(data),
+        #[cfg(feature = "parser_xml")]
         Config::Xml => super::super::format_converters::parse_xml(data),
+        #[cfg(feature = "parser_yaml")]
+        Config::Yaml => super::super::format_converters::parse_yaml(data),
+        #[cfg(feature = "parser_tap")]
+        Config::Tap => super::super::format_converters::parse_tap(data),
     }
 }
 
@@ -111,11 +128,29 @@ mod tests {
         let config: Config = serde_json::from_str(json).unwrap();
         assert!(matches!(config, Config::Json));
 
-        let json = r#""xml""#;
-        let config: Config = serde_json::from_str(json).unwrap();
-        assert!(matches!(config, Config::Xml));
+        #[cfg(feature = "parser_xml")]
+        {
+            let json = r#""xml""#;
+            let config: Config = serde_json::from_str(json).unwrap();
+            assert!(matches!(config, Config::Xml));
+        }
+
+        #[cfg(feature = "parser_yaml")]
+        {
+            let json = r#""yaml""#;
+            let config: Config = serde_json::from_str(json).unwrap();
+            assert!(matches!(config, Config::Yaml));
+        }
+
+        #[cfg(feature = "parser_tap")]
+        {
+            let json = r#""tap""#;
+            let config: Config = serde_json::from_str(json).unwrap();
+            assert!(matches!(config, Config::Tap));
+        }
     }
 
+    #[cfg(feature = "parser_xml")]
     #[test]
     fn test_parse_with_config_xml() {
         let data = "<root><item>value</item></root>";
@@ -124,6 +159,7 @@ mod tests {
         assert!(result.is_object());
     }
 
+    #[cfg(feature = "parser_xml")]
     #[test]
     fn test_parse_with_config_auto_xml_extension() {
         let data = "<root><item>value</item></root>";
@@ -132,6 +168,7 @@ mod tests {
         assert!(result.is_object());
     }
 
+    #[cfg(feature = "parser_xml")]
     #[test]
     fn test_parse_with_config_auto_mixed_extensions() {
         // Test JSON detection
@@ -144,5 +181,47 @@ mod tests {
         let xml_data = "<root><item>value</item></root>";
         let result = parse_with_config(xml_data, &config, Some("data.xml")).unwrap();
         assert!(result.is_object());
+    }
+
+    #[cfg(feature = "parser_yaml")]
+    #[test]
+    fn test_parse_with_config_yaml() {
+        let data = "key: value\ncount: 42";
+        let config = Config::Yaml;
+        let result = parse_with_config(data, &config, None).unwrap();
+        assert_eq!(result["key"], "value");
+        assert_eq!(result["count"], 42);
+    }
+
+    #[cfg(feature = "parser_yaml")]
+    #[test]
+    fn test_parse_with_config_auto_yaml_extension() {
+        let data = "key: value\ncount: 42";
+        let config = Config::Auto;
+        let result = parse_with_config(data, &config, Some("data.yaml")).unwrap();
+        assert_eq!(result["key"], "value");
+
+        let result = parse_with_config(data, &config, Some("data.yml")).unwrap();
+        assert_eq!(result["key"], "value");
+    }
+
+    #[cfg(feature = "parser_tap")]
+    #[test]
+    fn test_parse_with_config_tap() {
+        let data = "1..2\nok 1 - First test\nok 2 - Second test\n";
+        let config = Config::Tap;
+        let result = parse_with_config(data, &config, None).unwrap();
+        assert!(result.is_object());
+        assert!(result["tests"].is_array());
+    }
+
+    #[cfg(feature = "parser_tap")]
+    #[test]
+    fn test_parse_with_config_auto_tap_extension() {
+        let data = "1..1\nok 1 - Test\n";
+        let config = Config::Auto;
+        let result = parse_with_config(data, &config, Some("results.tap")).unwrap();
+        assert!(result.is_object());
+        assert!(result["tests"].is_array());
     }
 }
