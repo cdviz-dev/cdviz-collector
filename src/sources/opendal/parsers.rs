@@ -14,6 +14,8 @@ use super::Resource;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) enum Config {
+    #[serde(alias = "auto")]
+    Auto,
     #[serde(alias = "csv_row")]
     CsvRow,
     #[serde(alias = "json")]
@@ -41,6 +43,7 @@ impl Config {
         next: EventSourcePipe,
     ) -> Result<ParserEnum> {
         let out = match self {
+            Config::Auto => AutoParser::new(base_metadata, next).into(),
             Config::CsvRow => CsvRowParser::new(base_metadata, next).into(),
             Config::Json => JsonParser::new(base_metadata, next).into(),
             Config::Jsonl => JsonlParser::new(base_metadata, next).into(),
@@ -59,6 +62,7 @@ impl Config {
 #[enum_dispatch]
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum ParserEnum {
+    AutoParser,
     CsvRowParser,
     JsonParser,
     JsonlParser,
@@ -101,6 +105,119 @@ impl Parser for MetadataParser {
         }
         let event = EventSource { metadata, ..Default::default() };
         self.next.send(event)
+    }
+}
+
+pub(crate) struct AutoParser {
+    base_metadata: serde_json::Value,
+    next: EventSourcePipe,
+}
+
+impl AutoParser {
+    fn new(base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
+        Self { base_metadata, next }
+    }
+}
+
+impl Parser for AutoParser {
+    async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
+        use std::io::Read;
+
+        // Detect format from file extension
+        let path_str = resource.path();
+        let extension = std::path::Path::new(path_str).extension().and_then(|e| e.to_str());
+
+        // Read file data once
+        let bytes = op.read(path_str).await.into_diagnostic()?;
+        let resource_metadata = resource.as_json_metadata();
+        let headers = resource.as_headers();
+
+        // Merge base_metadata with resource metadata
+        let mut metadata = self.base_metadata.clone();
+        if let (Some(base_obj), Some(resource_obj)) =
+            (metadata.as_object_mut(), resource_metadata.as_object())
+        {
+            for (key, value) in resource_obj {
+                base_obj.insert(key.clone(), value.clone());
+            }
+        }
+
+        // Parse based on extension
+        match extension {
+            Some("json") => {
+                let mut buf = String::new();
+                bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
+                let body: serde_json::Value = serde_json::from_str(&buf)
+                    .map_err(|cause| Error::from_serde_error(&buf, cause))?;
+                let event = EventSource { metadata, headers, body };
+                self.next.send(event)
+            }
+            Some("jsonl") => {
+                let mut reader = bytes.reader();
+                let mut buf = String::new();
+                while reader.read_line(&mut buf).into_diagnostic()? > 0 {
+                    if buf.trim().is_empty() {
+                        buf.clear();
+                        continue;
+                    }
+                    let body: serde_json::Value = serde_json::from_str(&buf)
+                        .map_err(|cause| Error::from_serde_error(&buf, cause))?;
+                    let event =
+                        EventSource { metadata: metadata.clone(), headers: headers.clone(), body };
+                    self.next.send(event)?;
+                    buf.clear();
+                }
+                Ok(())
+            }
+            Some("csv") => {
+                use csv::Reader;
+                let mut rdr = Reader::from_reader(bytes.reader());
+                let csv_headers = rdr.headers().into_diagnostic()?.clone();
+                for record in rdr.records() {
+                    let record = record.into_diagnostic()?;
+                    let body = json!(
+                        csv_headers.iter().zip(record.iter()).collect::<HashMap<&str, &str>>()
+                    );
+                    let event =
+                        EventSource { metadata: metadata.clone(), headers: headers.clone(), body };
+                    self.next.send(event)?;
+                }
+                Ok(())
+            }
+            #[cfg(feature = "parser_xml")]
+            Some("xml") => {
+                let mut buf = String::new();
+                bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
+                let body = super::super::format_converters::parse_xml(&buf)?;
+                let event = EventSource { metadata, headers, body };
+                self.next.send(event)
+            }
+            #[cfg(feature = "parser_yaml")]
+            Some("yaml" | "yml") => {
+                let mut buf = String::new();
+                bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
+                let body = super::super::format_converters::parse_yaml(&buf)?;
+                let event = EventSource { metadata, headers, body };
+                self.next.send(event)
+            }
+            #[cfg(feature = "parser_tap")]
+            Some("tap") => {
+                let mut buf = String::new();
+                bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
+                let body = super::super::format_converters::parse_tap(&buf)?;
+                let event = EventSource { metadata, headers, body };
+                self.next.send(event)
+            }
+            _ => {
+                // Default fallback to JSON
+                let mut buf = String::new();
+                bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
+                let body: serde_json::Value = serde_json::from_str(&buf)
+                    .map_err(|cause| Error::from_serde_error(&buf, cause))?;
+                let event = EventSource { metadata, headers, body };
+                self.next.send(event)
+            }
+        }
     }
 }
 

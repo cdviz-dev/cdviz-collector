@@ -1,0 +1,26 @@
+{
+  "context": {
+    "id": "test-event-001",
+    "source": "/example/test/suite",
+    "timestamp": "2024-01-26T10:30:00Z",
+    "type": "dev.cdevents.testsuiterun.finished.0.2.0",
+    "version": "0.4.1"
+  },
+  "subject": {
+    "content": {
+      "outcome": "fail",
+      "stats": {
+        "failed": 1,
+        "passed": 3,
+        "skipped": 0,
+        "total": 4
+      },
+      "testSuite": {
+        "id": "MyTestSuite",
+        "name": "MyTestSuite"
+      }
+    },
+    "id": "MyTestSuite",
+    "type": "testsuiterun"
+  }
+}

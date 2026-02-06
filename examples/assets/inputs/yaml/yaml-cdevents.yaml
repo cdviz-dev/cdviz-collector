@@ -1,0 +1,19 @@
+context:
+  version: 0.4.1
+  id: test-event-001
+  source: /example/test/suite
+  type: dev.cdevents.testsuiterun.finished.0.2.0
+  timestamp: "2024-01-26T10:30:00Z"
+subject:
+  id: MyTestSuite
+  type: testsuiterun
+  content:
+    testSuite:
+      id: MyTestSuite
+      name: MyTestSuite
+    outcome: fail
+    stats:
+      total: 4
+      passed: 3
+      failed: 1
+      skipped: 0

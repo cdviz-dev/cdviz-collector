@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="MyTestSuite" tests="5" failures="1" errors="0" skipped="1" time="3.142">
+    <testcase name="test_addition" classname="MathTests" time="0.021">
+    </testcase>
+    <testcase name="test_subtraction" classname="MathTests" time="0.019">
+    </testcase>
+    <testcase name="test_multiplication" classname="MathTests" time="0.023">
+        <failure message="Expected 6 but got 5" type="AssertionError">
+AssertionError: Expected 6 but got 5
+    at MathTests.test_multiplication (math_tests.rs:42)
+        </failure>
+    </testcase>
+    <testcase name="test_division" classname="MathTests" time="0.025">
+    </testcase>
+    <testcase name="test_not_implemented" classname="MathTests" time="0.000">
+        <skipped message="Feature not implemented yet"/>
+    </testcase>
+</testsuite>

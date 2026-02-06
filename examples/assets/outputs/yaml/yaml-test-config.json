@@ -1,0 +1,39 @@
+{
+  "environment": "staging",
+  "name": "MyTestSuite",
+  "stats": {
+    "duration_ms": 88,
+    "failed": 1,
+    "passed": 3,
+    "skipped": 0,
+    "total": 4
+  },
+  "tests": [
+    {
+      "duration_ms": 21,
+      "name": "test_addition",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 19,
+      "name": "test_subtraction",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 23,
+      "error": {
+        "line": 42,
+        "message": "Expected 6 but got 5",
+        "type": "AssertionError"
+      },
+      "name": "test_multiplication",
+      "status": "failed"
+    },
+    {
+      "duration_ms": 25,
+      "name": "test_division",
+      "status": "passed"
+    }
+  ],
+  "version": "1.0.0"
+}

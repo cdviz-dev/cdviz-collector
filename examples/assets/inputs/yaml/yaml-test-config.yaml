@@ -1,0 +1,26 @@
+name: MyTestSuite
+version: "1.0.0"
+environment: staging
+tests:
+  - name: test_addition
+    status: passed
+    duration_ms: 21
+  - name: test_subtraction
+    status: passed
+    duration_ms: 19
+  - name: test_multiplication
+    status: failed
+    duration_ms: 23
+    error:
+      type: AssertionError
+      message: Expected 6 but got 5
+      line: 42
+  - name: test_division
+    status: passed
+    duration_ms: 25
+stats:
+  total: 4
+  passed: 3
+  failed: 1
+  skipped: 0
+  duration_ms: 88

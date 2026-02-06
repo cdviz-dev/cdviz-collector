@@ -121,16 +121,51 @@ run = [
 [tasks."test:transform"]
 depends = ["build:cli"]
 description = "run the transformation on examples/assets  (use `--mode review` to review and update)"
-run = """target/debug/cdviz-collector \
-  transform \
-  --disable-otel \
-  --directory examples/assets \
-  --mode {{option(name="mode", default="check")}} \
-  --config ./cdviz-collector.toml \
-  -t service_deployed \
-  --input ./inputs/transform \
-  --output ./outputs/transform
-"""
+run = [
+  """target/debug/cdviz-collector \
+    transform \
+    --disable-otel \
+    --directory examples/assets \
+    --mode {{option(name="mode", default="check")}} \
+    --config ./cdviz-collector.toml \
+    -t service_deployed \
+    --input ./inputs/transform \
+    --output ./outputs/transform
+  """,
+  """target/debug/cdviz-collector \
+    transform \
+    --disable-otel \
+    --directory examples/assets \
+    --mode {{option(name="mode", default="check")}} \
+    --config ./cdviz-collector.toml \
+     --no-check-cdevent \
+    -t passthrough \
+    --input ./inputs/xml \
+    --output ./outputs/xml
+  """,
+  """target/debug/cdviz-collector \
+    transform \
+    --disable-otel \
+    --directory examples/assets \
+    --mode {{option(name="mode", default="check")}} \
+    --config ./cdviz-collector.toml \
+     --no-check-cdevent \
+    -t passthrough \
+    --input ./inputs/tap \
+    --output ./outputs/tap
+  """,
+  """target/debug/cdviz-collector \
+    transform \
+    --disable-otel \
+    --directory examples/assets \
+    --mode {{option(name="mode", default="check")}} \
+    --config ./cdviz-collector.toml \
+     --no-check-cdevent \
+    -t passthrough \
+    --input ./inputs/yaml \
+    --output ./outputs/yaml
+  """,
+]
 
 # # release *arguments: install:cargo-release install:git-cliff
 # #   cargo release --workspace --execute {{ arguments }}

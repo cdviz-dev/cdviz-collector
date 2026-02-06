@@ -1,0 +1,43 @@
+{
+  "plan": {
+    "end": 3,
+    "start": 1
+  },
+  "tests": [
+    {
+      "description": "Authentication with valid credentials",
+      "directive": null,
+      "number": 1,
+      "status": "ok",
+      "yaml_diagnostics": null
+    },
+    {
+      "description": "Authentication with invalid credentials",
+      "directive": null,
+      "number": 2,
+      "status": "not_ok",
+      "yaml_diagnostics": {
+        "actual": {
+          "status": 401,
+          "user_id": null
+        },
+        "error_code": "AUTH_INVALID_PASSWORD",
+        "expected": {
+          "status": 200,
+          "user_id": "12345"
+        },
+        "message": "Authentication failed: Invalid password",
+        "severity": "fail",
+        "timestamp": "2024-01-26T10:30:00Z"
+      }
+    },
+    {
+      "description": "Cleanup authentication session",
+      "directive": null,
+      "number": 3,
+      "status": "ok",
+      "yaml_diagnostics": null
+    }
+  ],
+  "version": 14
+}

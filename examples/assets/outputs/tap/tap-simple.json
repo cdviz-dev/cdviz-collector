@@ -1,0 +1,44 @@
+{
+  "plan": {
+    "end": 5,
+    "start": 1
+  },
+  "tests": [
+    {
+      "description": "Creating test program",
+      "directive": null,
+      "number": 1,
+      "status": "ok",
+      "yaml_diagnostics": null
+    },
+    {
+      "description": "Test program runs, no errors",
+      "directive": null,
+      "number": 2,
+      "status": "ok",
+      "yaml_diagnostics": null
+    },
+    {
+      "description": "Test program is performant",
+      "directive": null,
+      "number": 3,
+      "status": "ok",
+      "yaml_diagnostics": null
+    },
+    {
+      "description": "Test program is safe",
+      "directive": null,
+      "number": 4,
+      "status": "not_ok",
+      "yaml_diagnostics": null
+    },
+    {
+      "description": "Test program exited cleanly",
+      "directive": null,
+      "number": 5,
+      "status": "ok",
+      "yaml_diagnostics": null
+    }
+  ],
+  "version": 14
+}

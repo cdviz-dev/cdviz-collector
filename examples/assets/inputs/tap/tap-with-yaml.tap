@@ -1,0 +1,17 @@
+TAP version 14
+1..3
+ok 1 - Authentication with valid credentials
+not ok 2 - Authentication with invalid credentials
+  ---
+  message: 'Authentication failed: Invalid password'
+  severity: fail
+  expected:
+    status: 200
+    user_id: '12345'
+  actual:
+    status: 401
+    user_id: null
+  error_code: AUTH_INVALID_PASSWORD
+  timestamp: '2024-01-26T10:30:00Z'
+  ...
+ok 3 - Cleanup authentication session

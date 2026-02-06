@@ -1,0 +1,61 @@
+{
+  "plan": {
+    "end": 6,
+    "start": 1
+  },
+  "tests": [
+    {
+      "description": "Basic functionality works",
+      "directive": null,
+      "number": 1,
+      "status": "ok",
+      "yaml_diagnostics": null
+    },
+    {
+      "description": "Edge case handled",
+      "directive": {
+        "kind": "SKIP",
+        "reason": "pending implementation"
+      },
+      "number": 2,
+      "status": "ok",
+      "yaml_diagnostics": null
+    },
+    {
+      "description": "Complex scenario",
+      "directive": null,
+      "number": 3,
+      "status": "not_ok",
+      "yaml_diagnostics": {
+        "message": "Timeout waiting for response",
+        "severity": "fail",
+        "timeout_ms": 5000
+      }
+    },
+    {
+      "description": "Database operations",
+      "directive": null,
+      "number": 4,
+      "status": "ok",
+      "yaml_diagnostics": null
+    },
+    {
+      "description": "Performance test",
+      "directive": {
+        "kind": "TODO",
+        "reason": "optimize algorithm"
+      },
+      "number": 5,
+      "status": "not_ok",
+      "yaml_diagnostics": null
+    },
+    {
+      "description": "Cleanup successful",
+      "directive": null,
+      "number": 6,
+      "status": "ok",
+      "yaml_diagnostics": null
+    }
+  ],
+  "version": 14
+}

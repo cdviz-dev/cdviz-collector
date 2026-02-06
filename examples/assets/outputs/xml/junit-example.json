@@ -1,0 +1,63 @@
+{
+  "testsuite": {
+    "#c": [
+      {
+        "testcase": {
+          "@classname": "MathTests",
+          "@name": "test_addition",
+          "@time": "0.021"
+        }
+      },
+      {
+        "testcase": {
+          "@classname": "MathTests",
+          "@name": "test_subtraction",
+          "@time": "0.019"
+        }
+      },
+      {
+        "testcase": {
+          "#c": [
+            {
+              "failure": {
+                "#t": "AssertionError: Expected 6 but got 5\n    at MathTests.test_multiplication (math_tests.rs:42)",
+                "@message": "Expected 6 but got 5",
+                "@type": "AssertionError"
+              }
+            }
+          ],
+          "@classname": "MathTests",
+          "@name": "test_multiplication",
+          "@time": "0.023"
+        }
+      },
+      {
+        "testcase": {
+          "@classname": "MathTests",
+          "@name": "test_division",
+          "@time": "0.025"
+        }
+      },
+      {
+        "testcase": {
+          "#c": [
+            {
+              "skipped": {
+                "@message": "Feature not implemented yet"
+              }
+            }
+          ],
+          "@classname": "MathTests",
+          "@name": "test_not_implemented",
+          "@time": "0.000"
+        }
+      }
+    ],
+    "@errors": "0",
+    "@failures": "1",
+    "@name": "MyTestSuite",
+    "@skipped": "1",
+    "@tests": "5",
+    "@time": "3.142"
+  }
+}

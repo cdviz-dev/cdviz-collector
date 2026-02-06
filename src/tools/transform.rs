@@ -1,13 +1,15 @@
 //! Transform command for cdviz-collector.
 //!
-//! The `transform` command processes JSON files from an input directory through
-//! configured transformers and writes the results to an output directory. This is
-//! primarily used for testing transformations, validating transformer configurations,
-//! and batch processing of event files.
+//! The `transform` command processes files from an input directory through
+//! configured transformers and writes the results to an output directory. Supports
+//! multiple input formats (JSON, XML, YAML, TAP, CSV) with automatic format detection
+//! based on file extension. This is primarily used for testing transformations,
+//! validating transformer configurations, and batch processing of event files.
 //!
 //! # Features
 //!
-//! - **Batch Processing**: Recursively processes all JSON files in input directory
+//! - **Multi-Format Support**: Process JSON, XML, YAML, TAP, and CSV files with auto-detection
+//! - **Batch Processing**: Recursively processes all matching files in input directory
 //! - **Transformer Chaining**: Apply multiple transformers in sequence
 //! - **`CDEvent` Validation**: Validates output against `CDEvents` specification
 //! - **Interactive Review**: Review differences before accepting changes
@@ -44,13 +46,14 @@
 //! # File Processing
 //!
 //! The transform command processes files as follows:
-//! 1. **Input Discovery**: Recursively finds `*.json` files in input directory
-//! 2. **File Filtering**: Excludes `*.headers.json`, `*.metadata.json`, and `*.json.new` files
-//! 3. **Transformation**: Applies configured transformers in sequence
-//! 4. **Temporary Output**: Creates `*.json.new` files with transformed content
-//! 5. **Validation**: Validates output against `CDEvents` specification (if enabled)
-//! 6. **Mode Processing**: Handles conflicts according to selected mode
-//! 7. **Cleanup**: Removes temporary files (unless `--keep-new-files` specified)
+//! 1. **Input Discovery**: Recursively finds files matching the selected parser format(s)
+//! 2. **Format Detection**: Auto-detects file format by extension (when using `--input-parser auto`)
+//! 3. **File Filtering**: Excludes `*.headers.json`, `*.metadata.json`, and `*.json.new` files
+//! 4. **Transformation**: Applies configured transformers in sequence
+//! 5. **Temporary Output**: Creates `*.json.new` files with transformed content
+//! 6. **Validation**: Validates output against `CDEvents` specification (if enabled)
+//! 7. **Mode Processing**: Handles conflicts according to selected mode
+//! 8. **Cleanup**: Removes temporary files (unless `--keep-new-files` specified)
 //!
 //! # Modes
 //!
@@ -171,6 +174,107 @@ pub(crate) struct TransformArgs {
     /// cleaned up after processing. Use this flag to preserve them for debugging.
     #[clap(long)]
     keep_new_files: bool,
+
+    /// Input file format parser selection.
+    ///
+    /// Determines how input files are parsed. Use 'auto' for automatic format
+    /// detection based on file extension, or specify an explicit format.
+    ///
+    /// Supported formats:
+    /// - auto: Auto-detect (json, xml, yaml, yml, tap, csv)
+    /// - json: JSON files
+    /// - jsonl: JSON Lines (one object per line)
+    /// - csv: CSV files (one event per row)
+    /// - xml: XML files (requires `parser_xml` feature)
+    /// - yaml: YAML files (requires `parser_yaml` feature)
+    /// - tap: TAP format (requires `parser_tap` feature)
+    #[clap(long = "input-parser", value_enum, default_value = "auto")]
+    parser: ParserSelection,
+}
+
+/// Input file format selection for the transform command
+#[derive(Debug, Clone, PartialEq, Eq, ValueEnum, Default)]
+enum ParserSelection {
+    /// Auto-detect format based on file extension
+    #[default]
+    Auto,
+    /// Parse as JSON
+    Json,
+    /// Parse as JSON Lines (one JSON object per line)
+    Jsonl,
+    /// Parse as CSV (one event per row)
+    #[value(name = "csv")]
+    CsvRow,
+    /// Parse as XML
+    #[cfg(feature = "parser_xml")]
+    Xml,
+    /// Parse as YAML
+    #[cfg(feature = "parser_yaml")]
+    Yaml,
+    /// Parse as TAP (Test Anything Protocol)
+    #[cfg(feature = "parser_tap")]
+    Tap,
+}
+
+impl ParserSelection {
+    /// Get file extensions for this parser
+    fn extensions(&self) -> Vec<&'static str> {
+        match self {
+            Self::Auto => {
+                let mut exts = vec!["json", "jsonl", "csv"];
+                #[cfg(feature = "parser_xml")]
+                exts.push("xml");
+                #[cfg(feature = "parser_yaml")]
+                exts.extend(&["yaml", "yml"]);
+                #[cfg(feature = "parser_tap")]
+                exts.push("tap");
+                exts
+            }
+            Self::Json => vec!["json"],
+            Self::Jsonl => vec!["jsonl"],
+            Self::CsvRow => vec!["csv"],
+            #[cfg(feature = "parser_xml")]
+            Self::Xml => vec!["xml"],
+            #[cfg(feature = "parser_yaml")]
+            Self::Yaml => vec!["yaml", "yml"],
+            #[cfg(feature = "parser_tap")]
+            Self::Tap => vec!["tap"],
+        }
+    }
+
+    /// Build glob patterns for file matching
+    fn path_patterns(&self) -> Vec<String> {
+        let mut patterns = Vec::new();
+
+        for ext in self.extensions() {
+            patterns.push(format!("**/*.{ext}"));
+        }
+
+        // Exclude special files
+        patterns.extend([
+            "!**/*.headers.json".to_string(),
+            "!**/*.metadata.json".to_string(),
+            "!**/*.json.new".to_string(),
+        ]);
+
+        patterns
+    }
+
+    /// Convert to `OpenDAL` parser config
+    fn to_parser_config(&self) -> source_opendal::parsers::Config {
+        match self {
+            Self::Auto => source_opendal::parsers::Config::Auto,
+            Self::Json => source_opendal::parsers::Config::Json,
+            Self::Jsonl => source_opendal::parsers::Config::Jsonl,
+            Self::CsvRow => source_opendal::parsers::Config::CsvRow,
+            #[cfg(feature = "parser_xml")]
+            Self::Xml => source_opendal::parsers::Config::Xml,
+            #[cfg(feature = "parser_yaml")]
+            Self::Yaml => source_opendal::parsers::Config::Yaml,
+            #[cfg(feature = "parser_tap")]
+            Self::Tap => source_opendal::parsers::Config::Tap,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Default)]
@@ -211,13 +315,8 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
         kind: Scheme::Fs,
         parameters: HashMap::from([("root".to_string(), args.input.to_string_lossy().to_string())]),
         recursive: true,
-        path_patterns: vec![
-            "**/*.json".to_string(),
-            "!**/*.headers.json".to_string(),
-            "!**/*.metadata.json".to_string(),
-            "!**/*.json.new".to_string(),
-        ],
-        parser: source_opendal::parsers::Config::Json,
+        path_patterns: args.parser.path_patterns(),
+        parser: args.parser.to_parser_config(),
         try_read_headers_json: true,
         metadata: serde_json::json!({
             "context": {

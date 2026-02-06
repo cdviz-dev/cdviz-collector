@@ -1,0 +1,7 @@
+TAP version 14
+1..5
+ok 1 - Creating test program
+ok 2 - Test program runs, no errors
+ok 3 - Test program is performant
+not ok 4 - Test program is safe
+ok 5 - Test program exited cleanly
