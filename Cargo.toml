@@ -37,7 +37,7 @@ config_remote = ["dep:opendal"]
 parser_all = ["parser_tap", "parser_xml", "parser_yaml"]
 parser_xml = []
 parser_yaml = ["dep:serde_yaml"]
-parser_tap = ["parser_yaml"]  # TAP depends on YAML for diagnostics
+parser_tap = ["parser_yaml", "dep:nom"]  # TAP depends on YAML for diagnostics
 #! ### Sinks
 sink_all = ["sink_db", "sink_folder", "sink_http", "sink_kafka", "sink_sse"]
 sink_db = ["dep:sqlx"]
@@ -141,7 +141,7 @@ regex = "1"
 reqwest = { version = "0.13", default-features = false, optional = true }
 reqwest-middleware = { version = "0.5", features = ["json"], optional = true }
 reqwest-retry = { version = "0.9", optional = true }
-reqwest-tracing = { version = "0.6", optional = true }
+reqwest-tracing = { version = "0.7", optional = true }
 secrecy = { version = "0.10", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -202,7 +202,7 @@ rstest = "0.26"
 tempfile = "3"
 test-strategy = "0.4"
 test-trace = "0.3"
-testcontainers = "0.26"  # version linked to testcontainers-*
+testcontainers = "0.27"  # version linked to testcontainers-*
 # testcontainers-redpanda-rs = "0.12" # vendored into testkit
 # time = "=0.3.39" # HACK explicit fix version (not used) to avoid compilation errors on domain #see https://github.com/NLnetLabs/domain/issues/502
 tower = { version = "0.5", features = ["util"] }
