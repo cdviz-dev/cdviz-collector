@@ -193,7 +193,7 @@ rstest = "0.26"
 tempfile = "3"
 test-strategy = "0.4"
 test-trace = "0.3"
-testcontainers = "0.26"  # version linked to testcontainers-*
+testcontainers = "0.27"  # version linked to testcontainers-*
 # testcontainers-redpanda-rs = "0.12" # vendored into testkit
 # time = "=0.3.39" # HACK explicit fix version (not used) to avoid compilation errors on domain #see https://github.com/NLnetLabs/domain/issues/502
 tower = { version = "0.5", features = ["util"] }
