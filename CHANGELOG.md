@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.9...0.20.0) - 2026-02-06
+
+### Added
+
+- add parsers support for `send` subcommand
+- add parsers support for `transform` subcommand
+- add `tap` and `yaml` (and converter to json) for cli and opendal source
+- add `xml` parser (and converter to json) for cli and opendal source
+
+### Fixed
+
+- *(deps)* update dependencies (include security vulnerabilities)
+
+### Other
+
+- *(deps)* update renovatebot/github-action action to v46 ([#246](https://github.com/cdviz-dev/cdviz-collector/pull/246))
+
 ## [0.19.9](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.8...0.19.9) - 2026-01-26
 
 ### Fixed
