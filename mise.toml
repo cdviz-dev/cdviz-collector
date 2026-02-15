@@ -51,6 +51,7 @@ run = [
 ]
 
 [tasks.autofix]
+description = "Automatically fix some linting issues & format code"
 depends_post = ["format"]
 run = "cargo clippy --all-features --fix --allow-dirty"
 
