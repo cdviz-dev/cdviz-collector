@@ -39,7 +39,15 @@ parser_xml = []
 parser_yaml = ["dep:serde_yaml"]
 parser_tap = ["parser_yaml", "dep:nom"]  # TAP depends on YAML for diagnostics
 #! ### Sinks
-sink_all = ["sink_db", "sink_folder", "sink_http", "sink_kafka", "sink_sse"]
+sink_all = [
+  "sink_clickhouse",
+  "sink_db",
+  "sink_folder",
+  "sink_http",
+  "sink_kafka",
+  "sink_sse",
+]
+sink_clickhouse = ["dep:clickhouse"]
 sink_db = ["dep:sqlx"]
 sink_folder = ["dep:opendal"]
 sink_http = [
@@ -86,6 +94,10 @@ cdevents-sdk = { version = "0.2", features = ["cloudevents"] }
 cid = "0.11"
 clap = { version = "4", features = ["derive", "env"] }
 clap-verbosity-flag = "3"
+clickhouse = { version = "0.14", default-features = false, features = [
+  "lz4",
+  "rustls-tls",
+], optional = true }
 cliclack = { version = "0.3", optional = true }
 cloudevents-sdk = { version = "0.9", features = ["http-binding"] }
 console = { version = "0.16", optional = true }  # compatible version with cliclack

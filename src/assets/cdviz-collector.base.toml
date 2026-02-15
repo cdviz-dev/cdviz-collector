@@ -20,6 +20,16 @@ url = "postgresql://postgres:passwd@localhost:5432/cdviz?search_path=cdviz"
 pool_connections_min = 1
 pool_connections_max = 10
 
+[sinks.clickhouse]
+enabled = false
+type = "clickhouse"
+url = "http://localhost:8123"
+database = "default"
+# user = "default"
+# password = ""
+# Query template with {field} placeholders - customize based on your table schema
+query = "INSERT INTO cdevents_lake (id, type, source, subject, predicate, specversion, timestamp, payload) VALUES ({id}, {type}, {source}, {subject}, {predicate}, {specversion}, {timestamp}, {payload})"
+
 [sources.cdevents_local_json]
 enabled = false
 

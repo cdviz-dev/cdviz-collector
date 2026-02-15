@@ -1,3 +1,5 @@
+#[cfg(feature = "sink_clickhouse")]
+pub(crate) mod clickhouse;
 #[cfg(feature = "sink_db")]
 pub(crate) mod db;
 pub(crate) mod debug;
@@ -13,6 +15,8 @@ pub(crate) mod sse;
 use crate::errors::{Report, Result};
 use crate::{Message, Receiver};
 use axum::Router;
+#[cfg(feature = "sink_clickhouse")]
+use clickhouse::ClickHouseSink;
 #[cfg(feature = "sink_db")]
 use db::DbSink;
 use debug::DebugSink;
@@ -33,6 +37,9 @@ type SinkHandlesAndRoutes = (Vec<JoinHandle<Result<()>>>, Vec<Router>);
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type")]
 pub(crate) enum Config {
+    #[cfg(feature = "sink_clickhouse")]
+    #[serde(alias = "clickhouse")]
+    Clickhouse(clickhouse::Config),
     #[cfg(feature = "sink_db")]
     #[serde(alias = "db")]
     Db(db::Config),
@@ -61,6 +68,8 @@ impl Default for Config {
 impl Config {
     pub(crate) fn is_enabled(&self) -> bool {
         match self {
+            #[cfg(feature = "sink_clickhouse")]
+            Self::Clickhouse(clickhouse::Config { enabled, .. }) => *enabled,
             #[cfg(feature = "sink_db")]
             Self::Db(db::Config { enabled, .. }) => *enabled,
             Self::Debug(debug::Config { enabled, .. }) => *enabled,
@@ -81,6 +90,8 @@ impl TryFrom<Config> for SinkEnum {
 
     fn try_from(value: Config) -> Result<Self> {
         let out = match value {
+            #[cfg(feature = "sink_clickhouse")]
+            Config::Clickhouse(config) => ClickHouseSink::try_from(config)?.into(),
             #[cfg(feature = "sink_db")]
             Config::Db(config) => DbSink::try_from(config)?.into(),
             Config::Debug(config) => DebugSink::try_from(config)?.into(),
@@ -100,6 +111,8 @@ impl TryFrom<Config> for SinkEnum {
 #[enum_dispatch]
 #[allow(clippy::enum_variant_names)]
 enum SinkEnum {
+    #[cfg(feature = "sink_clickhouse")]
+    ClickHouseSink,
     #[cfg(feature = "sink_db")]
     DbSink,
     DebugSink,

@@ -19,8 +19,8 @@
 
 ## Features
 
-- Multiple destinations (`PostgreSQL`, `HTTP`, File system, `Kafka`, `SSE`)
-- Multiple event sources (`HTTP` webhooks, File system, `S3`, `Kafka`, `SSE`)
+- Multiple destinations (`HTTP` webhooks, `HTTP SSE`, File system, `Kafka`, `PostgreSQL`, `ClickHouse`)
+- Multiple event sources (`HTTP` webhooks, `HTTP SSE`, File system, `S3`, `Kafka`)
 - Multi-format parsing: `JSON`, `JSONL`, `CSV`, `XML`, `YAML`, `TAP`, and raw `text`/`text_line`
 - Event transformation via `VRL` (Vector Remap Language)
 - Three operation modes: server, one-shot sending, batch transformation
@@ -74,7 +74,7 @@ flowchart LR
 
   subgraph sources
     src_cli(cli/stdin)
-    src_http(HTTP)
+    src_http(HTTP webhook / SSE)
     src_fs_content(FS folder with cdevents)
     src_fs_activity(FS folder activity)
     src_s3_content(S3 with cdevents)
@@ -98,6 +98,7 @@ flowchart LR
   subgraph sinks
     sink_stdout(stdout)
     sink_db(DB)
+    sink_clickhouse(ClickHouse)
     sink_http(HTTP)
     sink_kafka(Kafka)
     sink_nats(NATS):::future
@@ -105,6 +106,7 @@ flowchart LR
   q --> sink_stdout
   q --> sink_http
   q --> sink_db
+  q --> sink_clickhouse
   q --> sink_kafka
   q --> sink_nats
 ```
