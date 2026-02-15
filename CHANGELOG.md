@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.20.0...0.21.0) - 2026-02-15
+
+### Added
+
+- *(sink)* add a sink for ClickHouse
+- *(parsers)* add raw `text` and `text_line` parser support
+
+### Fixed
+
+- *(deps)* update
+- *(deps)* update rust crate toml to v1 ([#252](https://github.com/cdviz-dev/cdviz-collector/pull/252))
+
+### Other
+
+- document `autofix` task
+- *(deps)* update rust crate uuid to v1.21.0 ([#255](https://github.com/cdviz-dev/cdviz-collector/pull/255))
+- *(deps)* update renovatebot/github-action action to v46.1.0 ([#254](https://github.com/cdviz-dev/cdviz-collector/pull/254))
+- *(deps)* update rust crate tempfile to v3.25.0 ([#251](https://github.com/cdviz-dev/cdviz-collector/pull/251))
+
 ## [0.20.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.19.9...0.20.0) - 2026-02-06
 
 ### Added
