@@ -19,8 +19,9 @@
 
 ## Features
 
-- Multiple event sources (`HTTP` webhooks, File system, `S3`, `Kafka`, `SSE`)
 - Multiple destinations (`PostgreSQL`, `HTTP`, File system, `Kafka`, `SSE`)
+- Multiple event sources (`HTTP` webhooks, File system, `S3`, `Kafka`, `SSE`)
+- Multi-format parsing: `JSON`, `JSONL`, `CSV`, `XML`, `YAML`, `TAP`, and raw `text`/`text_line`
 - Event transformation via `VRL` (Vector Remap Language)
 - Three operation modes: server, one-shot sending, batch transformation
 

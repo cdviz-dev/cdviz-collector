@@ -153,6 +153,8 @@ pub(crate) struct SendArgs {
     /// - xml: Parse as XML (requires `parser_xml` feature)
     /// - yaml: Parse as YAML (requires `parser_yaml` feature)
     /// - tap: Parse as TAP format (requires `parser_tap` feature)
+    /// - text: Entire input as a single event with body `{"text": "..."}`
+    /// - text-line: Each non-empty line as a separate event with body `{"text": "..."}`
     #[clap(long = "input-parser", value_enum, default_value = "auto")]
     parser: ParserSelection,
 }
@@ -174,6 +176,10 @@ enum ParserSelection {
     /// Parse as TAP (Test Anything Protocol)
     #[cfg(feature = "parser_tap")]
     Tap,
+    /// Entire input as raw text
+    Text,
+    /// Each line as a separate raw text event
+    TextLine,
 }
 
 impl From<ParserSelection> for parsers::Config {
@@ -187,6 +193,8 @@ impl From<ParserSelection> for parsers::Config {
             ParserSelection::Yaml => parsers::Config::Yaml,
             #[cfg(feature = "parser_tap")]
             ParserSelection::Tap => parsers::Config::Tap,
+            ParserSelection::Text => parsers::Config::Text,
+            ParserSelection::TextLine => parsers::Config::TextLine,
         }
     }
 }
@@ -256,6 +264,8 @@ fn convert_args_into_toml(args: &SendArgs) -> Result<String> {
         parsers::Config::Yaml => "\"yaml\"".to_string(),
         #[cfg(feature = "parser_tap")]
         parsers::Config::Tap => "\"tap\"".to_string(),
+        parsers::Config::Text => "\"text\"".to_string(),
+        parsers::Config::TextLine => "\"text_line\"".to_string(),
     };
     cli_overrides.insert("sources.cli.extractor.parser".to_string(), parser_toml);
 

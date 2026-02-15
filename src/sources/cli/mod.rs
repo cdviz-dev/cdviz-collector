@@ -67,6 +67,25 @@ impl CliExtractor {
             return Ok(());
         }
 
+        // TextLine: split into lines and send each non-empty line as a separate event
+        if matches!(self.parser_config, parsers::Config::TextLine) {
+            let lines: Vec<&str> = data.lines().filter(|line| !line.trim().is_empty()).collect();
+            tracing::info!(count = lines.len(), "processing text lines");
+            for (index, line) in lines.into_iter().enumerate() {
+                let body = serde_json::json!({"text": line});
+                let mut metadata = self.base_metadata.clone();
+                if let Some(obj) = metadata.as_object_mut() {
+                    obj.insert("index".to_string(), serde_json::json!(index));
+                }
+                let event_source =
+                    EventSource { body, metadata, headers: std::collections::HashMap::new() };
+                if let Err(err) = self.next.send(event_source) {
+                    tracing::warn!(?err, index, "failed to send event");
+                }
+            }
+            return Ok(());
+        }
+
         // Parse using configured parser
         let json_value: serde_json::Value =
             parsers::parse_with_config(&data, &self.parser_config, self.data_source.as_deref())?;
@@ -208,6 +227,47 @@ mod tests {
 
         let events: Vec<EventSource> = collector.try_into_iter().unwrap().collect();
         assert_eq!(events.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_cli_extractor_text() {
+        let text_data = "hello world";
+        let reader = Box::new(Cursor::new(text_data));
+
+        let collector = Collector::<EventSource>::new();
+        let pipe = Box::new(collector.create_pipe());
+        let base_metadata = serde_json::json!({});
+        let parser_config = parsers::Config::Text;
+        let extractor = CliExtractor::new(reader, base_metadata, parser_config, None, pipe);
+
+        extractor.run().await.unwrap();
+
+        let events: Vec<EventSource> = collector.try_into_iter().unwrap().collect();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].body["text"], "hello world");
+    }
+
+    #[tokio::test]
+    async fn test_cli_extractor_text_line() {
+        let text_data = "line1\nline2\n\nline3\n";
+        let reader = Box::new(Cursor::new(text_data));
+
+        let collector = Collector::<EventSource>::new();
+        let pipe = Box::new(collector.create_pipe());
+        let base_metadata = serde_json::json!({});
+        let parser_config = parsers::Config::TextLine;
+        let extractor = CliExtractor::new(reader, base_metadata, parser_config, None, pipe);
+
+        extractor.run().await.unwrap();
+
+        let events: Vec<EventSource> = collector.try_into_iter().unwrap().collect();
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[0].body["text"], "line1");
+        assert_eq!(events[0].metadata["index"], 0);
+        assert_eq!(events[1].body["text"], "line2");
+        assert_eq!(events[1].metadata["index"], 1);
+        assert_eq!(events[2].body["text"], "line3");
+        assert_eq!(events[2].metadata["index"], 2);
     }
 
     #[tokio::test]

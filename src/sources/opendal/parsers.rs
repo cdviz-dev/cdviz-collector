@@ -33,6 +33,10 @@ pub(crate) enum Config {
     #[cfg(feature = "parser_tap")]
     #[serde(alias = "tap")]
     Tap,
+    #[serde(alias = "text")]
+    Text,
+    #[serde(alias = "text_line")]
+    TextLine,
 }
 
 impl Config {
@@ -54,6 +58,8 @@ impl Config {
             Config::Yaml => YamlParser::new(base_metadata, next).into(),
             #[cfg(feature = "parser_tap")]
             Config::Tap => TapParser::new(base_metadata, next).into(),
+            Config::Text => TextParser::new(base_metadata, next).into(),
+            Config::TextLine => TextLineParser::new(base_metadata, next).into(),
         };
         Ok(out)
     }
@@ -73,6 +79,8 @@ pub(crate) enum ParserEnum {
     YamlParser,
     #[cfg(feature = "parser_tap")]
     TapParser,
+    TextParser,
+    TextLineParser,
 }
 
 #[enum_dispatch(ParserEnum)]
@@ -120,6 +128,7 @@ impl AutoParser {
 }
 
 impl Parser for AutoParser {
+    #[allow(clippy::too_many_lines)]
     async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
         use std::io::Read;
 
@@ -207,6 +216,31 @@ impl Parser for AutoParser {
                 let body = super::super::format_converters::parse_tap(&buf)?;
                 let event = EventSource { metadata, headers, body };
                 self.next.send(event)
+            }
+            Some("txt") => {
+                let mut buf = String::new();
+                bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
+                let body = super::super::format_converters::parse_text(&buf);
+                let event = EventSource { metadata, headers, body };
+                self.next.send(event)
+            }
+            Some("log") => {
+                let mut reader = bytes.reader();
+                let mut buf = String::new();
+                while reader.read_line(&mut buf).into_diagnostic()? > 0 {
+                    let line = buf.trim_end_matches('\n').trim_end_matches('\r');
+                    if !line.is_empty() {
+                        let body = super::super::format_converters::parse_text(line);
+                        let event = EventSource {
+                            metadata: metadata.clone(),
+                            headers: headers.clone(),
+                            body,
+                        };
+                        self.next.send(event)?;
+                    }
+                    buf.clear();
+                }
+                Ok(())
             }
             _ => {
                 // Default fallback to JSON
@@ -474,6 +508,86 @@ impl Parser for TapParser {
 
         let event = EventSource { metadata, headers, body };
         self.next.send(event)
+    }
+}
+
+pub(crate) struct TextParser {
+    base_metadata: serde_json::Value,
+    next: EventSourcePipe,
+}
+
+impl TextParser {
+    fn new(base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
+        Self { base_metadata, next }
+    }
+}
+
+impl Parser for TextParser {
+    async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
+        use std::io::Read;
+
+        let bytes = op.read(resource.path()).await.into_diagnostic()?;
+        let resource_metadata = resource.as_json_metadata();
+        let headers = resource.as_headers();
+
+        let mut buf = String::new();
+        bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
+
+        let body = super::super::format_converters::parse_text(&buf);
+
+        let mut metadata = self.base_metadata.clone();
+        if let (Some(base_obj), Some(resource_obj)) =
+            (metadata.as_object_mut(), resource_metadata.as_object())
+        {
+            for (key, value) in resource_obj {
+                base_obj.insert(key.clone(), value.clone());
+            }
+        }
+
+        let event = EventSource { metadata, headers, body };
+        self.next.send(event)
+    }
+}
+
+pub(crate) struct TextLineParser {
+    base_metadata: serde_json::Value,
+    next: EventSourcePipe,
+}
+
+impl TextLineParser {
+    fn new(base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
+        Self { base_metadata, next }
+    }
+}
+
+impl Parser for TextLineParser {
+    async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
+        let bytes = op.read(resource.path()).await.into_diagnostic()?;
+        let resource_metadata = resource.as_json_metadata();
+        let headers = resource.as_headers();
+
+        let mut metadata = self.base_metadata.clone();
+        if let (Some(base_obj), Some(resource_obj)) =
+            (metadata.as_object_mut(), resource_metadata.as_object())
+        {
+            for (key, value) in resource_obj {
+                base_obj.insert(key.clone(), value.clone());
+            }
+        }
+
+        let mut reader = bytes.reader();
+        let mut buf = String::new();
+        while reader.read_line(&mut buf).into_diagnostic()? > 0 {
+            let line = buf.trim_end_matches('\n').trim_end_matches('\r');
+            if !line.is_empty() {
+                let body = super::super::format_converters::parse_text(line);
+                let event =
+                    EventSource { metadata: metadata.clone(), headers: headers.clone(), body };
+                self.next.send(event)?;
+            }
+            buf.clear();
+        }
+        Ok(())
     }
 }
 

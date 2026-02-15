@@ -5,10 +5,26 @@
 //! `OpenDAL` parsers and CLI source to avoid code duplication.
 
 use crate::errors::{Error, IntoDiagnostic, Result};
+use serde_json::json;
 use std::io::Cursor;
 
 #[cfg(feature = "parser_tap")]
 pub(crate) mod tap;
+
+/// Wrap raw text content as a JSON object with a `text` field.
+///
+/// This is the simplest parser — it wraps unstructured text into
+/// `{"text": "..."}` so that downstream VRL transformers can apply
+/// regex / key-value parsing on the `text` field.
+///
+/// # Arguments
+/// * `data` - The raw text content
+///
+/// # Returns
+/// A `serde_json::Value` of the form `{"text": "<data>"}`
+pub(crate) fn parse_text(data: &str) -> serde_json::Value {
+    json!({"text": data})
+}
 
 /// Convert JSON string to `serde_json::Value`.
 ///
@@ -135,6 +151,24 @@ pub(crate) fn parse_tap(data: &str) -> Result<serde_json::Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_text_simple() {
+        let result = parse_text("hello world");
+        assert_eq!(result["text"], "hello world");
+    }
+
+    #[test]
+    fn test_parse_text_empty() {
+        let result = parse_text("");
+        assert_eq!(result["text"], "");
+    }
+
+    #[test]
+    fn test_parse_text_multiline() {
+        let result = parse_text("line1\nline2\nline3");
+        assert_eq!(result["text"], "line1\nline2\nline3");
+    }
 
     #[test]
     fn test_parse_json_simple() {

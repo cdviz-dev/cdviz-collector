@@ -28,6 +28,11 @@ pub(crate) enum Config {
     /// Explicitly parse as TAP (Test Anything Protocol).
     #[cfg(feature = "parser_tap")]
     Tap,
+    /// Entire input as a single event with body `{"text": "..."}`.
+    Text,
+    /// Each non-empty line as a separate event with body `{"text": "..."}`.
+    #[serde(alias = "text_line")]
+    TextLine,
 }
 
 /// Parse data according to the specified parser configuration.
@@ -58,6 +63,8 @@ pub(crate) fn parse_with_config(
                 Some("yaml" | "yml") => super::super::format_converters::parse_yaml(data),
                 #[cfg(feature = "parser_tap")]
                 Some("tap") => super::super::format_converters::parse_tap(data),
+                Some("txt") => Ok(super::super::format_converters::parse_text(data)),
+                Some("log") => Ok(super::super::format_converters::parse_text(data)),
                 _ => {
                     // Default fallback to JSON for unknown extensions
                     super::super::format_converters::parse_json(data)
@@ -71,6 +78,10 @@ pub(crate) fn parse_with_config(
         Config::Yaml => super::super::format_converters::parse_yaml(data),
         #[cfg(feature = "parser_tap")]
         Config::Tap => super::super::format_converters::parse_tap(data),
+        Config::Text => Ok(super::super::format_converters::parse_text(data)),
+        // TextLine is handled by the caller (cli/mod.rs) which splits lines;
+        // if called directly, treat as whole-text.
+        Config::TextLine => Ok(super::super::format_converters::parse_text(data)),
     }
 }
 
@@ -99,7 +110,7 @@ mod tests {
         let data = r#"{"test": "value"}"#;
         let config = Config::Auto;
         // Unknown extension should fall back to JSON
-        let result = parse_with_config(data, &config, Some("data.txt")).unwrap();
+        let result = parse_with_config(data, &config, Some("data.unknown")).unwrap();
         assert_eq!(result["test"], "value");
     }
 
@@ -116,6 +127,39 @@ mod tests {
     fn test_config_default() {
         let config = Config::default();
         assert!(matches!(config, Config::Auto));
+    }
+
+    #[test]
+    fn test_parse_with_config_text() {
+        let data = "hello world";
+        let config = Config::Text;
+        let result = parse_with_config(data, &config, None).unwrap();
+        assert_eq!(result["text"], "hello world");
+    }
+
+    #[test]
+    fn test_parse_with_config_text_line() {
+        let data = "line1\nline2";
+        let config = Config::TextLine;
+        // When called directly, TextLine falls back to whole-text
+        let result = parse_with_config(data, &config, None).unwrap();
+        assert_eq!(result["text"], "line1\nline2");
+    }
+
+    #[test]
+    fn test_parse_with_config_auto_txt_extension() {
+        let data = "some raw text";
+        let config = Config::Auto;
+        let result = parse_with_config(data, &config, Some("output.txt")).unwrap();
+        assert_eq!(result["text"], "some raw text");
+    }
+
+    #[test]
+    fn test_parse_with_config_auto_log_extension() {
+        let data = "2024-01-01 INFO started";
+        let config = Config::Auto;
+        let result = parse_with_config(data, &config, Some("app.log")).unwrap();
+        assert_eq!(result["text"], "2024-01-01 INFO started");
     }
 
     #[test]
@@ -148,6 +192,14 @@ mod tests {
             let config: Config = serde_json::from_str(json).unwrap();
             assert!(matches!(config, Config::Tap));
         }
+
+        let json = r#""text""#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert!(matches!(config, Config::Text));
+
+        let json = r#""text_line""#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert!(matches!(config, Config::TextLine));
     }
 
     #[cfg(feature = "parser_xml")]
