@@ -90,7 +90,7 @@ axum = "0.8"
 axum-tracing-opentelemetry = "0.33"
 base64 = "0.22"
 bytes = { version = "1", optional = true }
-cdevents-sdk = { version = "0.2", features = ["cloudevents"] }
+cdevents-sdk = { version = "0.3", features = ["cloudevents"] }
 cid = "0.11"
 clap = { version = "4", features = ["derive", "env"] }
 clap-verbosity-flag = "3"
@@ -203,7 +203,7 @@ version = "0.5"
 
 [dev-dependencies]
 assert2 = "0.3"
-cdevents-sdk = { version = "0.2", features = ["testkit"] }
+cdevents-sdk = { version = "0.3", features = ["testkit"] }
 cdviz-collector-testkit = { path = "testkit" }
 figment = { version = "0.10", features = ["env", "test"] }
 indoc = "2"

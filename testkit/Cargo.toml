@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 # assert2 = "0.3"
-cdevents-sdk = { version = "0.2", features = ["testkit"] }
+cdevents-sdk = { version = "0.3", features = ["testkit"] }
 cdviz-collector = { path = ".." }
 # figment = { version = "0.10", features = ["env", "test"] }
 indoc = "2"
