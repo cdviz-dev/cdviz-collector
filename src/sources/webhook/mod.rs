@@ -118,7 +118,6 @@ mod tests_handler {
     use crate::pipes::collect_to_vec;
 
     use super::*;
-    use assert2::let_assert;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use pretty_assertions::assert_eq;
@@ -146,7 +145,7 @@ mod tests_handler {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let Some(output) = collector.try_into_iter().unwrap().next());
         assert_eq!(output.body, payload);
         assert_eq!(output.headers.get("content-type").unwrap(), "application/json");
     }
@@ -166,7 +165,7 @@ mod tests_handler {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        let_assert!(None = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let None = collector.try_into_iter().unwrap().next());
     }
 
     #[tokio::test]
@@ -184,7 +183,7 @@ mod tests_handler {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
-        let_assert!(None = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let None = collector.try_into_iter().unwrap().next());
     }
 }
 
@@ -271,7 +270,6 @@ mod security_tests {
     use crate::pipes::collect_to_vec;
     use crate::security::rule::Rule;
     use crate::security::signature::{Encoding, SignatureConfig, SignatureOn};
-    use assert2::let_assert;
     use axum::body::Body;
     use axum::http::{HeaderValue, Request, StatusCode};
     use serde_json::json;
@@ -317,7 +315,7 @@ mod security_tests {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let Some(output) = collector.try_into_iter().unwrap().next());
         assert_eq!(output.body, payload);
     }
 
@@ -351,7 +349,7 @@ mod security_tests {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-        let_assert!(None = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let None = collector.try_into_iter().unwrap().next());
     }
 
     #[tokio::test]
@@ -384,7 +382,7 @@ mod security_tests {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-        let_assert!(None = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let None = collector.try_into_iter().unwrap().next());
     }
 
     #[tokio::test]
@@ -409,7 +407,7 @@ mod security_tests {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        let_assert!(None = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let None = collector.try_into_iter().unwrap().next());
     }
 
     #[tokio::test]
@@ -437,7 +435,7 @@ mod security_tests {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let Some(output) = collector.try_into_iter().unwrap().next());
         assert_eq!(output.body["large_field"], large_data);
     }
 
@@ -492,7 +490,7 @@ mod security_tests {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let Some(output) = collector.try_into_iter().unwrap().next());
 
         // Should only have content-type, not authorization (sensitive)
         assert!(output.headers.contains_key("content-type"));
@@ -529,7 +527,7 @@ mod security_tests {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let Some(output) = collector.try_into_iter().unwrap().next());
         assert_eq!(output.body, payload);
     }
 
@@ -563,7 +561,7 @@ mod security_tests {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
-        let_assert!(None = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let None = collector.try_into_iter().unwrap().next());
     }
 
     #[tokio::test]
@@ -593,7 +591,7 @@ mod security_tests {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-        let_assert!(None = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let None = collector.try_into_iter().unwrap().next());
     }
 
     #[tokio::test]
@@ -644,7 +642,7 @@ mod security_tests {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let Some(output) = collector.try_into_iter().unwrap().next());
         assert_eq!(output.body, payload);
     }
 
@@ -702,7 +700,7 @@ mod security_tests {
 
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let_assert!(Some(output) = collector.try_into_iter().unwrap().next());
+        assert2::assert!(let Some(output) = collector.try_into_iter().unwrap().next());
         assert_eq!(output.body, payload);
     }
 }

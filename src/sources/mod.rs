@@ -206,7 +206,7 @@ pub(crate) fn create_sources_and_routes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert2::{assert, let_assert};
+    use assert2::assert;
     use serde_json::json;
 
     #[test]
@@ -417,7 +417,7 @@ mod tests {
 
         assert!(!body["context"]["timestamp"].is_string());
         set_timestamp_if_missing(&mut body);
-        let_assert!(Some(datetime) = body["context"]["timestamp"].as_str());
-        let_assert!(Ok(_) = datetime.parse::<jiff::Timestamp>());
+        assert2::assert!(let Some(datetime) = body["context"]["timestamp"].as_str());
+        assert2::assert!(let Ok(_) = datetime.parse::<jiff::Timestamp>());
     }
 }

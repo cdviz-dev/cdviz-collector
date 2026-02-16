@@ -46,7 +46,6 @@ impl Sink for FolderSink {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert2::let_assert;
     use cdevents_sdk::CDEvent;
     use std::path::PathBuf;
     use test_strategy::proptest;
@@ -85,7 +84,7 @@ mod tests {
         };
         let file = tmp_dir.path().join(format!("{id}.json"));
         assert!(!file.exists());
-        let_assert!(Ok(()) = sink.send(&msg).await);
+        assert2::assert!(let Ok(()) = sink.send(&msg).await);
         assert_eq(&cdevent, file);
         proptest::prop_assert!(true);
     }

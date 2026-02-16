@@ -99,7 +99,6 @@ mod tests {
     use super::*;
     use crate::pipes::collect_to_vec::Collector;
     use crate::sources::EventSource;
-    use assert2::let_assert;
     use std::time::Duration;
     use tokio::time::timeout;
 
@@ -110,13 +109,13 @@ mod tests {
         let pipe = Box::new(collector.create_pipe());
         let cancel_token = CancellationToken::new();
 
-        let_assert!(
+        assert2::assert!(let
             Ok(Extractor::Task(handle)) = config.make_extractor("test", pipe, cancel_token.clone())
         );
 
         // Cancel the token and verify task completes
         cancel_token.cancel();
-        let_assert!(Ok(Ok(_)) = timeout(Duration::from_millis(100), handle).await);
+        assert2::assert!(let Ok(Ok(_)) = timeout(Duration::from_millis(100), handle).await);
     }
 
     #[tokio::test]
@@ -130,7 +129,7 @@ mod tests {
         let pipe = Box::new(collector.create_pipe());
         let cancel_token = CancellationToken::new();
 
-        let_assert!(
+        assert2::assert!(let
             Ok(Extractor::Webhook(_router)) = config.make_extractor("test", pipe, cancel_token)
         );
     }
@@ -155,7 +154,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         // Should fail with invalid configuration
-        let_assert!(Err(_) = config.make_extractor("test", pipe, cancel_token));
+        assert2::assert!(let Err(_) = config.make_extractor("test", pipe, cancel_token));
     }
 
     #[test]
@@ -163,7 +162,7 @@ mod tests {
         // Test default config
         let toml_str = r#"type = "noop""#;
         let config: Config = toml::from_str(toml_str).unwrap();
-        let_assert!(Config::Sleep = config);
+        assert2::assert!(let Config::Sleep = config);
 
         // Test webhook config
         let toml_str = r#"

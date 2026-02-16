@@ -318,7 +318,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "can failed due rate limit on github"]
     async fn test_github_remote_file_integration() {
-        use assert2::{check, let_assert};
+        use assert2::check;
         use figment::providers::Serialized;
         use serde_json::json;
 
@@ -348,13 +348,13 @@ mod tests {
         let map = result.expect("Failed to read remote file configuration");
 
         // Check that we have the data for the default profile
-        let_assert!(Some(dict) = map.get(&figment::Profile::Default));
+        assert2::assert!(let Some(dict) = map.get(&figment::Profile::Default));
 
         // Check that transformers dict exists
-        let_assert!(Some(Value::Dict(_, transformers_dict)) = dict.get("transformers"));
+        assert2::assert!(let Some(Value::Dict(_, transformers_dict)) = dict.get("transformers"));
 
         // Check that test_transformer exists
-        let_assert!(
+        assert2::assert!(let
             Some(Value::Dict(_, test_transformer_dict)) = transformers_dict.get("test_transformer")
         );
 
@@ -363,7 +363,7 @@ mod tests {
         check!(!test_transformer_dict.contains_key("template_rfile"));
 
         // Verify the content is a string and contains VRL-like content
-        let_assert!(Some(Value::String(_, content)) = test_transformer_dict.get("template"));
+        assert2::assert!(let Some(Value::String(_, content)) = test_transformer_dict.get("template"));
 
         // The VRL file should contain transformation logic
         check!(
@@ -382,7 +382,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_http_remote_file_integration() {
-        use assert2::{check, let_assert};
+        use assert2::check;
         use figment::providers::Serialized;
         use serde_json::json;
 
@@ -411,13 +411,13 @@ mod tests {
         let map = result.expect("Failed to read remote file configuration");
 
         // Check that we have the data for the default profile
-        let_assert!(Some(dict) = map.get(&figment::Profile::Default));
+        assert2::assert!(let Some(dict) = map.get(&figment::Profile::Default));
 
         // Check that transformers dict exists
-        let_assert!(Some(Value::Dict(_, transformers_dict)) = dict.get("transformers"));
+        assert2::assert!(let Some(Value::Dict(_, transformers_dict)) = dict.get("transformers"));
 
         // Check that test_http_transformer exists
-        let_assert!(
+        assert2::assert!(let
             Some(Value::Dict(_, test_transformer_dict)) =
                 transformers_dict.get("test_http_transformer")
         );
@@ -427,7 +427,7 @@ mod tests {
         check!(!test_transformer_dict.contains_key("template_rfile"));
 
         // Verify the content is a string and contains VRL-like content
-        let_assert!(Some(Value::String(_, content)) = test_transformer_dict.get("template"));
+        assert2::assert!(let Some(Value::String(_, content)) = test_transformer_dict.get("template"));
 
         // The VRL file should contain transformation logic
         check!(

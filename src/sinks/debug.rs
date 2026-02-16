@@ -177,7 +177,6 @@ impl Sink for DebugSink {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert2::let_assert;
 
     #[test_strategy::proptest(
         async = "tokio",
@@ -188,7 +187,7 @@ mod tests {
         let config = Config { enabled: true, ..Config::default() };
         let sink = DebugSink::try_from(config).unwrap();
 
-        let_assert!(Ok(()) = sink.send(&msg).await);
+        assert2::assert!(let Ok(()) = sink.send(&msg).await);
     }
 
     #[test_strategy::proptest(
@@ -208,23 +207,23 @@ mod tests {
 
         let results = futures::future::join_all(tasks).await;
         for result in results {
-            let_assert!(Ok(Ok(())) = result);
+            assert2::assert!(let Ok(Ok(())) = result);
         }
     }
 
     #[test]
     fn test_debug_sink_config_creation() {
         let config = Config { enabled: true, ..Config::default() };
-        let_assert!(Ok(_) = DebugSink::try_from(config));
+        assert2::assert!(let Ok(_) = DebugSink::try_from(config));
 
         let config = Config { enabled: false, ..Config::default() };
-        let_assert!(Ok(_) = DebugSink::try_from(config));
+        assert2::assert!(let Ok(_) = DebugSink::try_from(config));
 
         let config = Config { enabled: true, format: Format::Json, ..Config::default() };
-        let_assert!(Ok(_) = DebugSink::try_from(config));
+        assert2::assert!(let Ok(_) = DebugSink::try_from(config));
 
         let config = Config { enabled: false, format: Format::RustDebug, ..Config::default() };
-        let_assert!(Ok(_) = DebugSink::try_from(config));
+        assert2::assert!(let Ok(_) = DebugSink::try_from(config));
     }
 
     #[test]
@@ -274,6 +273,6 @@ mod tests {
         let sink = DebugSink::try_from(config).unwrap();
 
         // This should not fail even with JSON serialization
-        let_assert!(Ok(()) = sink.send(&msg).await);
+        assert2::assert!(let Ok(()) = sink.send(&msg).await);
     }
 }

@@ -216,7 +216,6 @@ mod tests {
     use super::*;
     use crate::Message;
     use crate::security::header::HeaderSource;
-    use assert2::let_assert;
     use reqwest::Url;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -270,7 +269,7 @@ mod tests {
         let config = build_config(&format!("{}/events", mock_server.uri()));
         let sink = HttpSink::try_from(config).unwrap();
 
-        let_assert!(Ok(()) = sink.send(&msg).await);
+        assert2::assert!(let Ok(()) = sink.send(&msg).await);
     }
 
     #[test_strategy::proptest(async = "tokio", cases = 10)]
@@ -287,7 +286,7 @@ mod tests {
         let sink = HttpSink::try_from(config).unwrap();
 
         // Should not fail even on server error (logs warning)
-        let_assert!(Ok(()) = sink.send(&msg).await);
+        assert2::assert!(let Ok(()) = sink.send(&msg).await);
     }
 
     #[test_strategy::proptest(async = "tokio", cases = 10)]
@@ -297,7 +296,7 @@ mod tests {
         let sink = HttpSink::try_from(config).unwrap();
 
         // Should fail with network error
-        let_assert!(Err(_) = sink.send(&msg).await);
+        assert2::assert!(let Err(_) = sink.send(&msg).await);
     }
 
     #[test_strategy::proptest(async = "tokio", cases = 10)]
@@ -314,20 +313,20 @@ mod tests {
         let config = build_config(&format!("{}/events", mock_server.uri()));
         let sink = HttpSink::try_from(config).unwrap();
 
-        let_assert!(Ok(()) = sink.send(&msg).await);
+        assert2::assert!(let Ok(()) = sink.send(&msg).await);
     }
 
     #[test]
     fn test_http_sink_config_validation() {
         // Valid config
         let config = build_config("https://example.com/events");
-        let_assert!(Ok(_) = HttpSink::try_from(config));
+        assert2::assert!(let Ok(_) = HttpSink::try_from(config));
 
         // Config with various URL schemes
         let schemes = vec!["http", "https"];
         for scheme in schemes {
             let config = build_config(&format!("{scheme}://example.com/events"));
-            let_assert!(Ok(_) = HttpSink::try_from(config));
+            assert2::assert!(let Ok(_) = HttpSink::try_from(config));
         }
     }
 
@@ -338,7 +337,7 @@ mod tests {
         let config = build_config("http://insecure.example.com/events");
 
         // Currently allows HTTP - in production you might want to validate this
-        let_assert!(Ok(_) = HttpSink::try_from(config));
+        assert2::assert!(let Ok(_) = HttpSink::try_from(config));
     }
 
     #[tokio::test]
@@ -357,7 +356,7 @@ mod tests {
             let config = build_config(url);
 
             // Currently allows internal URLs - in production you might want to validate this
-            let_assert!(Ok(_) = HttpSink::try_from(config));
+            assert2::assert!(let Ok(_) = HttpSink::try_from(config));
         }
     }
 
@@ -386,7 +385,7 @@ mod tests {
         let sink = HttpSink::try_from(config).unwrap();
 
         // Should handle redirects properly
-        let_assert!(Ok(()) = sink.send(&msg).await);
+        assert2::assert!(let Ok(()) = sink.send(&msg).await);
     }
 
     #[test_strategy::proptest(async = "tokio", cases = 10)]
@@ -420,7 +419,7 @@ mod tests {
         };
         let sink = HttpSink::try_from(config).unwrap();
 
-        let_assert!(Ok(()) = sink.send(&msg).await);
+        assert2::assert!(let Ok(()) = sink.send(&msg).await);
     }
 
     #[test_strategy::proptest(
@@ -441,7 +440,7 @@ mod tests {
         let sink = HttpSink::try_from(config).unwrap();
 
         // Verify that tracing middleware is present and doesn't interfere
-        let_assert!(Ok(()) = sink.send(&msg).await);
+        assert2::assert!(let Ok(()) = sink.send(&msg).await);
     }
 
     #[tokio::test]
@@ -497,7 +496,7 @@ mod tests {
         let cdevent = CDEvent::try_from(event_source).unwrap();
         let message = Message { cdevent, headers: source_headers, trace_context: None };
 
-        let_assert!(Ok(()) = sink.send(&message).await);
+        assert2::assert!(let Ok(()) = sink.send(&message).await);
     }
 
     #[tokio::test]
@@ -566,7 +565,7 @@ mod tests {
         let cdevent = CDEvent::try_from(event_source).unwrap();
         let message = Message { cdevent, headers: source_headers, trace_context: None };
 
-        let_assert!(Ok(()) = sink.send(&message).await);
+        assert2::assert!(let Ok(()) = sink.send(&message).await);
     }
 }
 

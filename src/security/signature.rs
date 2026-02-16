@@ -195,7 +195,6 @@ impl IntoResponse for SignatureError {
 mod tests {
 
     use super::*;
-    use assert2::let_assert;
     use axum::{
         body::{Body, to_bytes},
         http::Request,
@@ -235,7 +234,7 @@ mod tests {
             signature_on: SignatureOn::Body,
             signature_encoding,
         };
-        let_assert!(
+        assert2::assert!(let
             Ok(signature) = build_signature(&config, &HeaderMap::new(), body_str.as_bytes())
         );
         let request = Request::builder()
@@ -245,7 +244,7 @@ mod tests {
             .body(Body::from(body_str))
             .unwrap();
 
-        let_assert!(Ok(_) = check_signature_on_request(request, &config).await);
+        assert2::assert!(let Ok(_) = check_signature_on_request(request, &config).await);
     }
 
     #[tokio::test]
@@ -266,7 +265,7 @@ mod tests {
             .body(Body::from(body_str))
             .unwrap();
 
-        let_assert!(
+        assert2::assert!(let
             Err(SignatureError::SignatureNotFound) =
                 check_signature_on_request(request, &config).await
         );
@@ -290,7 +289,7 @@ mod tests {
             .body(Body::from(body_str))
             .unwrap();
 
-        let_assert!(
+        assert2::assert!(let
             Err(SignatureError::VerificationMismatch) =
                 check_signature_on_request(request, &config).await
         );
@@ -323,7 +322,7 @@ mod tests {
             signature_encoding: Encoding::Hex,
         };
         let body_str = r#"{"action":"in_progress","workflow_job":{ ... }}"#;
-        let_assert!(
+        assert2::assert!(let
             Ok(signature) = build_signature(&config, &HeaderMap::new(), body_str.as_bytes())
         );
         assert_eq!(
@@ -356,7 +355,7 @@ mod tests {
         .into_iter()
         .map(|(k, v)| (k.parse().unwrap(), v.parse().unwrap()))
         .collect::<HeaderMap<_>>();
-        let_assert!(Ok(signature) = build_signature(&config, &headers, body_str.as_bytes()));
+        assert2::assert!(let Ok(signature) = build_signature(&config, &headers, body_str.as_bytes()));
         assert_eq!(signature, "v1,tZ1I4/hDygAJgO5TYxiSd6Sd0kDW6hPenDe+bTa3Kkw=");
     }
 
@@ -375,10 +374,10 @@ mod tests {
 
         assert_eq!(config.header, "X-Signature");
         assert_eq!(config.token.expose_secret(), "myToken");
-        let_assert!(Some(Encoding::Base64) = config.token_encoding);
+        assert2::assert!(let Some(Encoding::Base64) = config.token_encoding);
         assert_eq!(config.signature_prefix, Some("v1,".to_string()));
-        let_assert!(Encoding::Hex = config.signature_encoding);
-        let_assert!(SignatureOn::HeadersThenBody { separator, headers } = config.signature_on);
+        assert2::assert!(let Encoding::Hex = config.signature_encoding);
+        assert2::assert!(let SignatureOn::HeadersThenBody { separator, headers } = config.signature_on);
         assert_eq!(separator, ".");
         assert_eq!(headers, ["header1", "header2"]);
     }
@@ -397,17 +396,16 @@ mod tests {
 
         assert_eq!(config.header, "X-Signature");
         assert_eq!(config.token.expose_secret(), "myToken");
-        let_assert!(Some(Encoding::Hex) = config.token_encoding);
+        assert2::assert!(let Some(Encoding::Hex) = config.token_encoding);
         assert_eq!(config.signature_prefix, None);
-        let_assert!(Encoding::Hex = config.signature_encoding);
-        let_assert!(SignatureOn::Body = config.signature_on);
+        assert2::assert!(let Encoding::Hex = config.signature_encoding);
+        assert2::assert!(let SignatureOn::Body = config.signature_on);
     }
 }
 
 #[cfg(test)]
 mod security_edge_cases {
     use super::*;
-    use assert2::let_assert;
     use axum::http::{HeaderMap, HeaderValue};
 
     #[test]
@@ -422,13 +420,13 @@ mod security_edge_cases {
         };
 
         let empty_body = b"";
-        let_assert!(Ok(signature) = build_signature(&config, &HeaderMap::new(), empty_body));
+        assert2::assert!(let Ok(signature) = build_signature(&config, &HeaderMap::new(), empty_body));
         assert!(!signature.is_empty());
 
         // Verify empty body signature validation
         let mut headers = HeaderMap::new();
         headers.insert("X-Signature", signature.parse().unwrap());
-        let_assert!(Ok(()) = check_signature(&config, &headers, &bytes::Bytes::new()));
+        assert2::assert!(let Ok(()) = check_signature(&config, &headers, &bytes::Bytes::new()));
     }
 
     #[test]
@@ -444,12 +442,12 @@ mod security_edge_cases {
 
         // Test with binary data including null bytes
         let binary_body = b"\x00\x01\x02\xff\xfe\xfd";
-        let_assert!(Ok(signature) = build_signature(&config, &HeaderMap::new(), binary_body));
+        assert2::assert!(let Ok(signature) = build_signature(&config, &HeaderMap::new(), binary_body));
 
         let mut headers = HeaderMap::new();
         headers.insert("X-Signature", signature.parse().unwrap());
         let body_bytes = bytes::Bytes::copy_from_slice(binary_body);
-        let_assert!(Ok(()) = check_signature(&config, &headers, &body_bytes));
+        assert2::assert!(let Ok(()) = check_signature(&config, &headers, &body_bytes));
     }
 
     #[test]
@@ -464,7 +462,7 @@ mod security_edge_cases {
         };
 
         let body = b"test body";
-        let_assert!(Err(_) = build_signature(&config, &HeaderMap::new(), body));
+        assert2::assert!(let Err(_) = build_signature(&config, &HeaderMap::new(), body));
     }
 
     #[test]
@@ -479,7 +477,7 @@ mod security_edge_cases {
         };
 
         let body = b"test body";
-        let_assert!(Err(_) = build_signature(&config, &HeaderMap::new(), body));
+        assert2::assert!(let Err(_) = build_signature(&config, &HeaderMap::new(), body));
     }
 
     #[test]
@@ -494,7 +492,7 @@ mod security_edge_cases {
         };
 
         let body = b"test body";
-        let_assert!(Ok(correct_signature) = build_signature(&config, &HeaderMap::new(), body));
+        assert2::assert!(let Ok(correct_signature) = build_signature(&config, &HeaderMap::new(), body));
 
         // Test various incorrect signatures
         let allmost_correct = format!("{}x", &correct_signature[..correct_signature.len() - 1]);
@@ -511,7 +509,7 @@ mod security_edge_cases {
             let mut headers = HeaderMap::new();
             headers.insert("X-Signature", invalid_sig.parse().unwrap());
             let body_bytes = bytes::Bytes::copy_from_slice(body);
-            let_assert!(
+            assert2::assert!(let
                 Err(SignatureError::VerificationMismatch) =
                     check_signature(&config, &headers, &body_bytes)
             );
@@ -539,20 +537,20 @@ mod security_edge_cases {
         headers.insert("X-Ignored", HeaderValue::from_static("ignored"));
 
         let body = b"test body";
-        let_assert!(Ok(signature) = build_signature(&config, &headers, body));
+        assert2::assert!(let Ok(signature) = build_signature(&config, &headers, body));
 
         // Verify signature validation
         headers.insert("X-Signature", signature.parse().unwrap());
         let body_bytes = bytes::Bytes::copy_from_slice(body);
-        let_assert!(Ok(()) = check_signature(&config, &headers, &body_bytes));
+        assert2::assert!(let Ok(()) = check_signature(&config, &headers, &body_bytes));
 
         // Test that changing ignored header doesn't affect signature
         headers.insert("X-Ignored", HeaderValue::from_static("changed"));
-        let_assert!(Ok(()) = check_signature(&config, &headers, &body_bytes));
+        assert2::assert!(let Ok(()) = check_signature(&config, &headers, &body_bytes));
 
         // Test that changing included header breaks signature
         headers.insert("Content-Type", HeaderValue::from_static("text/plain"));
-        let_assert!(
+        assert2::assert!(let
             Err(SignatureError::VerificationMismatch) =
                 check_signature(&config, &headers, &body_bytes)
         );
@@ -570,14 +568,14 @@ mod security_edge_cases {
         };
 
         let body = b"Test Body";
-        let_assert!(Ok(signature) = build_signature(&config, &HeaderMap::new(), body));
+        assert2::assert!(let Ok(signature) = build_signature(&config, &HeaderMap::new(), body));
 
         // Test with different case body
         let different_case_body = b"test body";
         let mut headers = HeaderMap::new();
         headers.insert("X-Signature", signature.parse().unwrap());
         let body_bytes = bytes::Bytes::copy_from_slice(different_case_body);
-        let_assert!(
+        assert2::assert!(let
             Err(SignatureError::VerificationMismatch) =
                 check_signature(&config, &headers, &body_bytes)
         );
@@ -595,13 +593,13 @@ mod security_edge_cases {
         };
 
         let body = b"test body";
-        let_assert!(Ok(signature) = build_signature(&config, &HeaderMap::new(), body));
+        assert2::assert!(let Ok(signature) = build_signature(&config, &HeaderMap::new(), body));
 
         // HTTP headers are case-insensitive
         let mut headers = HeaderMap::new();
         headers.insert("X-SIGNATURE", signature.parse().unwrap()); // uppercase
         let body_bytes = bytes::Bytes::copy_from_slice(body);
-        let_assert!(Ok(()) = check_signature(&config, &headers, &body_bytes));
+        assert2::assert!(let Ok(()) = check_signature(&config, &headers, &body_bytes));
     }
 
     #[test]
@@ -616,12 +614,12 @@ mod security_edge_cases {
         };
 
         let unicode_body = "Hello 世界! 🚀".as_bytes();
-        let_assert!(Ok(signature) = build_signature(&config, &HeaderMap::new(), unicode_body));
+        assert2::assert!(let Ok(signature) = build_signature(&config, &HeaderMap::new(), unicode_body));
 
         let mut headers = HeaderMap::new();
         headers.insert("X-Signature", signature.parse().unwrap());
         let body_bytes = bytes::Bytes::copy_from_slice(unicode_body);
-        let_assert!(Ok(()) = check_signature(&config, &headers, &body_bytes));
+        assert2::assert!(let Ok(()) = check_signature(&config, &headers, &body_bytes));
     }
 
     #[test]
@@ -638,14 +636,14 @@ mod security_edge_cases {
 
         let headers = HeaderMap::new();
         let body = bytes::Bytes::from("test");
-        let_assert!(
+        assert2::assert!(let
             Err(SignatureError::SignatureNotFound) = check_signature(&config, &headers, &body)
         );
 
         // Test with non-UTF8 header value (if possible to create)
         let mut headers = HeaderMap::new();
         headers.insert("Missing-Header", HeaderValue::from_bytes(b"\xff\xfe").unwrap());
-        let_assert!(
+        assert2::assert!(let
             Err(SignatureError::SignatureNotFound) = check_signature(&config, &headers, &body)
         );
     }

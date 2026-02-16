@@ -102,7 +102,7 @@ async fn load_header_json(path: &str, op: &Operator) -> Option<HashMap<String, S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert2::{check, let_assert};
+    use assert2::check;
     use futures::TryStreamExt;
     use std::path::Path;
 
@@ -112,7 +112,7 @@ mod tests {
         let builder = opendal::services::Fs::default().root(&root.to_string_lossy());
         let op: Operator = Operator::new(builder).unwrap().finish();
         let mut entries = op.lister_with(prefix).await.unwrap();
-        let_assert!(Ok(Some(entry)) = entries.try_next().await);
+        assert2::assert!(let Ok(Some(entry)) = entries.try_next().await);
         let resource = Resource::from_entry(&op, entry, true).await;
         (op, resource)
     }
@@ -124,7 +124,7 @@ mod tests {
         check!(resource.name() == "file01.txt");
         check!(resource.path() == "dir1/file01.txt");
         check!(resource.content_length() > 0);
-        let_assert!(Some(_) = resource.last_modified());
+        assert2::assert!(let Some(_) = resource.last_modified());
     }
 
     #[tokio::test]
@@ -134,9 +134,9 @@ mod tests {
         let result = resource.as_json_metadata();
         check!(result["name"] == "file01.txt");
         check!(result["path"] == "dir1/file01.txt");
-        let_assert!(Some(abs_root) = result["root"].as_str());
+        assert2::assert!(let Some(abs_root) = result["root"].as_str());
         check!(abs_root.ends_with("examples/assets/inputs"));
-        let_assert!(
+        assert2::assert!(let
             Ok(_) = result["last_modified"].as_str().unwrap_or_default().parse::<Timestamp>()
         );
     }
@@ -145,7 +145,7 @@ mod tests {
     async fn as_headers_on_exists() {
         let (_, resource) = provide_op_resource("dir1/file02.txt").await;
         let result = resource.as_headers();
-        let_assert!(Some(value) = result.get("header1"));
+        assert2::assert!(let Some(value) = result.get("header1"));
         check!(value == "value1");
     }
 

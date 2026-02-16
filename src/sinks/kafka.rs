@@ -249,7 +249,6 @@ impl Sink for KafkaSink {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert2::let_assert;
     use std::collections::HashMap;
 
     #[test]
@@ -263,7 +262,7 @@ mod tests {
         };
 
         // Should not panic during creation (actual connection happens at send time)
-        let_assert!(Ok(_) = KafkaSink::try_from(config));
+        assert2::assert!(let Ok(_) = KafkaSink::try_from(config));
     }
 
     #[test]
@@ -281,7 +280,7 @@ mod tests {
             ..Default::default()
         };
 
-        let_assert!(Ok(_) = KafkaSink::try_from(config));
+        assert2::assert!(let Ok(_) = KafkaSink::try_from(config));
     }
 
     #[test]
