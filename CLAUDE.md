@@ -6,6 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 cdviz-collector is a Rust (edition 2024) service and CLI tool for collecting SDLC/CI/CD events and dispatching them as CDEvents. It provides a configurable pipeline architecture that can receive events from various sources, transform them, and send them to multiple destinations.
 
+### Operation Modes
+
+cdviz-collector operates in three modes:
+1. **Server mode** (`connect`) - Long-running service connecting sources to sinks
+2. **One-shot mode** (`send`) - Direct event sending for testing/scripting
+3. **Batch transformation** (`transform`) - Offline file transformation using configured transformers
+
 ### Workspace Structure
 
 - **`cdviz-collector`** (root) - Main binary crate
@@ -57,6 +64,13 @@ cargo nextest run --run-ignored only
 
 Use `--mode review` with example tasks to review and update expected outputs.
 
+### Additional Testing Tasks
+
+- `mise run test:ignored` - Run ignored/integration tests only
+- `mise run test:coverage` - Generate test coverage report (outputs to `target/test-coverage/html/`)
+- `mise run examples:httpyac` - Run httpyac tests on example files
+- `mise run examples:debug-formats` - Demonstrate debug sink format options (rust_debug vs json)
+
 ## Architecture
 
 ### Pipeline Flow
@@ -65,13 +79,13 @@ Events flow through a three-stage pipeline:
 
 1. **Sources** (`src/sources/`) - Input adapters: webhook (HTTP), opendal (filesystem/S3), SSE, Kafka, CLI
    - `extractors.rs` - Event extraction logic
-   - `transformers/` - VRL and Handlebars transformation engines
+   - `transformers/` - VRL transformation engine
 2. **Pipes** (`src/pipes/`) - Processing middleware (passthrough, log, collect, discard)
-3. **Sinks** (`src/sinks/`) - Output adapters: PostgreSQL (db), HTTP, folder, SSE, Kafka, debug
+3. **Sinks** (`src/sinks/`) - Output adapters: PostgreSQL (db), ClickHouse, HTTP, folder, SSE, Kafka, debug
 
 ### Message Flow
 
-Raw input → `extractors::Extractor` → Transformation (VRL/Handlebars) → CDEvent → In-memory broadcast queue → Multiple sinks
+Raw input → `extractors::Extractor` → Transformation (VRL) → CDEvent → In-memory broadcast queue → Multiple sinks
 
 ### Configuration System
 
@@ -84,11 +98,10 @@ Raw input → `extractors::Extractor` → Transformation (VRL/Handlebars) → CD
 
 Key Cargo features (combine with `_all` suffixes for groups):
 
-- `sink_db`, `sink_folder`, `sink_http`, `sink_kafka`, `sink_sse`
+- `sink_clickhouse`, `sink_db`, `sink_folder`, `sink_http`, `sink_kafka`, `sink_sse`
 - `source_opendal`, `source_sse`, `source_kafka`
 - `parser_tap`, `parser_xml`, `parser_yaml` (also: json, jsonl, csv_row, text, text_line built-in)
 - `tool_transform` - Batch transformation CLI tool
-- `transformer_hbs` - Handlebars transformations
 - `transformer_vrl` - Vector Remap Language transformations
 
 ## Code Quality Constraints
