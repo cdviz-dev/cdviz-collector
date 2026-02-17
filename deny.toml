@@ -81,6 +81,7 @@ ignore = [
   # { id = "RUSTSEC-2025-0119", reason = "number_prefix 0.4.0 is used by cliclack 0.3.6 -> indicatif 0.17" },
   # { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile 2.2.0 is used by testcontainers 0.26 -> bollard 0.19" },
   { id = "RUSTSEC-2024-0436", reason = "paste 1.0.15 is used by clickhouse v0.14.2 -> ... -> higher-kinded-types v0.2.1" },
+  { id = "RUSTSEC-2025-0134", reason = "paste 1.0.15 is used by async-nats v0.37.0 -> ... -> rustls-pemfile v2.2.0" },
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
@@ -202,7 +203,7 @@ skip = [
   "bitflags",
   "console",
   "convert_case",
-  # "core-foundation",
+  "core-foundation",
   # "fancy-regex",
   # "fluent-uri",
   "foldhash",
@@ -231,7 +232,10 @@ skip = [
   "reqwest-middleware",
   "reqwest-retry",
   "retry-policies",
-  # "security-framework",
+  "openssl-probe",
+  "rustls-native-certs",
+  "rustls-webpki",
+  "security-framework",
   "snafu",
   "snafu-derive",
   # "socket2",
