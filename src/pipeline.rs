@@ -135,15 +135,15 @@ impl PipelineBuilder {
 
         // Collect all handles that need to complete
         let mut all_handles = Vec::new();
-        all_handles.extend(source_handles);
         all_handles.extend(sink_handles);
+        all_handles.extend(source_handles);
 
         // Optionally start HTTP server
         if enable_http_server {
             // Combine all routes and start HTTP server
             let mut routes = Vec::new();
-            routes.extend(source_routes);
             routes.extend(sink_routes);
+            routes.extend(source_routes);
 
             let server_handle = crate::http::launch(&self.config.http, routes, shutdown_token);
             all_handles.push(server_handle);

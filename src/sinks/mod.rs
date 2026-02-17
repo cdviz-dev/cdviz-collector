@@ -30,6 +30,7 @@ use kafka::KafkaSink;
 use serde::Deserialize;
 #[cfg(feature = "sink_sse")]
 use sse::SseSink;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
 
 type SinkHandlesAndRoutes = (Vec<JoinHandle<Result<()>>>, Vec<Router>);
@@ -141,10 +142,22 @@ pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> Join
     tokio::spawn(async move {
         let sink = SinkEnum::try_from(config)?;
         let mut rx = rx;
-        while let Ok(msg) = rx.recv().await {
-            tracing::debug!(name, event_id = ?msg.cdevent.id(), "sending");
-            if let Err(err) = sink.send(&msg).await {
-                tracing::warn!(name, ?err, "fail during sending of event");
+        tracing::info!(name, kind = "sink", "start to receive from message queue");
+        loop {
+            match rx.recv().await {
+                Ok(msg) => {
+                    tracing::debug!(name, event_id = ?msg.cdevent.id(), "sending");
+                    if let Err(err) = sink.send(&msg).await {
+                        tracing::warn!(name, kind = "sink", ?err, "fail during sending of event");
+                    }
+                }
+                Err(RecvError::Lagged(_)) => {
+                    tracing::warn!(name, kind = "sink", "message queue lagged (event dropped)");
+                }
+                Err(RecvError::Closed) => {
+                    tracing::info!(name, kind = "sink", "message queue closed");
+                    break;
+                }
             }
         }
         tracing::info!(name, kind = "sink", "exiting");
