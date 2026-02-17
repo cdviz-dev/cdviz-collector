@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.22.0...0.23.0) - 2026-02-17
+
+### Added
+
+- add NATS as source and sink ([#261](https://github.com/cdviz-dev/cdviz-collector/pull/261))
+
 ## [0.22.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.21.0...0.22.0) - 2026-02-17
 
 ### Added

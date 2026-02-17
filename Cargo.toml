@@ -1,6 +1,6 @@
 [package]
 name = "cdviz-collector"
-version = "0.22.0"
+version = "0.23.0"
 edition = "2024"
 description = "A service and CLI tool for collecting SDLC/CI/CD events and dispatching them as CDEvents"
 homepage = "https://cdviz.dev"
