@@ -34,6 +34,7 @@ use crate::{
 };
 use axum::Router;
 use futures::future::TryJoinAll;
+use serde::{Deserialize, Serialize};
 use tokio::{sync::broadcast, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
@@ -46,13 +47,26 @@ pub(crate) struct PipelineBuilder {
     tx: Sender<Message>,
 }
 
+/// The http server config
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct PipelineConfig {
+    /// Listening host of http server
+    pub(crate) queue_capacity: usize,
+}
+
+impl Default for PipelineConfig {
+    fn default() -> Self {
+        Self { queue_capacity: 1024 }
+    }
+}
+
 impl PipelineBuilder {
     /// Create a new pipeline builder with the provided configuration.
     ///
     /// This sets up the internal broadcast channel for message passing between
     /// sources and sinks.
     pub fn new(config: Config) -> Self {
-        let (tx, rx) = broadcast::channel::<Message>(1024);
+        let (tx, rx) = broadcast::channel::<Message>(config.pipeline.queue_capacity);
         // Drop the receiver immediately - we want the channel to close naturally
         // when all senders are dropped
         drop(rx);
