@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.21.0...0.22.0) - 2026-02-17
+
+### Added
+
+- allow to configure the capacity if the internal queue (default 1024)
+- *(deps)* add support of CDEvents 0.5
+
+### Fixed
+
+- sink drops message on lag instead of stopping
+- *(deps)* update usage of assert2
+
+### Other
+
+- update `CLAUDE.md`
+- *(deps)* update (cargo) `dist`
+
 ## [0.21.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.20.0...0.21.0) - 2026-02-15
 
 ### Added
