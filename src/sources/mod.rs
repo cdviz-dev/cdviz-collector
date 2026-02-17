@@ -3,6 +3,8 @@ pub(crate) mod extractors;
 pub(crate) mod format_converters;
 #[cfg(feature = "source_kafka")]
 pub(crate) mod kafka;
+#[cfg(feature = "source_nats")]
+pub(crate) mod nats;
 #[cfg(feature = "source_opendal")]
 pub(crate) mod opendal;
 pub(crate) mod send_cdevents;
@@ -63,6 +65,8 @@ impl Config {
             extractors::Config::Opendal(config) => &mut config.metadata,
             #[cfg(feature = "source_kafka")]
             extractors::Config::Kafka(config) => &mut config.metadata,
+            #[cfg(feature = "source_nats")]
+            extractors::Config::Nats(config) => &mut config.metadata,
             #[cfg(feature = "source_sse")]
             extractors::Config::Sse(config) => &mut config.metadata,
             extractors::Config::Sleep => return, // No metadata for Sleep

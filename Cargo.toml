@@ -45,6 +45,7 @@ sink_all = [
   "sink_folder",
   "sink_http",
   "sink_kafka",
+  "sink_nats",
   "sink_sse",
 ]
 sink_clickhouse = ["dep:clickhouse"]
@@ -62,10 +63,12 @@ sink_http = [
   "reqwest/rustls",
 ]
 sink_kafka = ["dep:rdkafka"]
+sink_nats = ["dep:async-nats"]
 sink_sse = ["dep:tokio-stream"]
 #! ### Sources
-source_all = ["source_kafka", "source_opendal", "source_sse"]
+source_all = ["source_kafka", "source_nats", "source_opendal", "source_sse"]
 source_kafka = ["dep:rdkafka"]
+source_nats = ["dep:async-nats"]
 source_opendal = ["dep:bytes", "dep:csv", "dep:globset", "dep:opendal"]
 source_sse = ["reqwest-eventsource", "dep:uuid"]
 tool_transform = ["source_opendal", "tool_ui", "transformer_vrl"]
@@ -86,6 +89,7 @@ reqwest-eventsource = [
 ]
 
 [dependencies]
+async-nats = { version = "0.46", optional = true }
 axum = "0.8"
 axum-tracing-opentelemetry = "0.33"
 base64 = "0.22"
