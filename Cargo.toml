@@ -206,7 +206,7 @@ vrl = { version = "0.30", default-features = false, features = [
 version = "0.5"
 
 [dev-dependencies]
-assert2 = "0.3"
+assert2 = "0.4"
 cdevents-sdk = { version = "0.3", features = ["testkit"] }
 cdviz-collector-testkit = { path = "testkit" }
 figment = { version = "0.10", features = ["env", "test"] }
