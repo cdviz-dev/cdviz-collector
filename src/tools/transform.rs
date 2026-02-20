@@ -121,18 +121,20 @@ pub(crate) struct TransformArgs {
     #[clap(short = 't', long = "transformer-refs", default_value = "passthrough", value_delimiter= ',', num_args = 1..)]
     transformer_refs: Vec<String>,
 
-    /// Input directory containing JSON files to transform.
+    /// Input directory containing files to transform.
     ///
-    /// Directory path containing the JSON files to be processed. The tool will
-    /// recursively search for *.json files, excluding *.headers.json,
+    /// Directory path containing the files to be processed. The tool will
+    /// recursively search for files matching the selected `--input-parser` format
+    /// (json, jsonl, csv, xml, yaml, tap), excluding *.headers.json,
     /// *.metadata.json, and *.json.new files.
     #[clap(short = 'i', long = "input")]
     input: PathBuf,
 
-    /// Output directory for transformed JSON files.
+    /// Output directory for transformed files (always written as JSON).
     ///
     /// Directory where transformed files will be written. The directory structure
-    /// from the input will be preserved. Files will initially be created with
+    /// from the input will be preserved. Regardless of input format, output files
+    /// are always written as JSON. Files will initially be created with
     /// .json.new extension before being processed according to the selected mode.
     #[clap(short = 'o', long = "output")]
     output: PathBuf,
