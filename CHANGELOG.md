@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.23.0...0.23.1) - 2026-02-20
+
+### Other
+
+- *(deps)* update rust crate assert2 to 0.4 ([#263](https://github.com/cdviz-dev/cdviz-collector/pull/263))
+
 ## [0.23.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.22.0...0.23.0) - 2026-02-17
 
 ### Added
