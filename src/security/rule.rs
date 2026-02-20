@@ -77,8 +77,8 @@ pub enum ValidationError {
     #[display("Header '{header}' is missing")]
     MissingHeader { header: String },
 
-    #[display("Header '{header}' has invalid value")]
-    InvalidValue { header: String },
+    #[display("Header '{header}' has invalid value: {reason}")]
+    InvalidValue { header: String, reason: String },
 
     #[display("Header '{header}' signature validation failed: {error}")]
     SignatureValidation { header: String, error: String },
@@ -121,8 +121,12 @@ pub fn validate_header(
     rule_config: &HeaderRuleConfig,
     body: Option<&[u8]>,
 ) -> Result<(), ValidationError> {
-    let header_name = HeaderName::from_str(&rule_config.header)
-        .map_err(|_| ValidationError::InvalidValue { header: rule_config.header.clone() })?;
+    let header_name = HeaderName::from_str(&rule_config.header).map_err(|err| {
+        ValidationError::InvalidValue {
+            header: rule_config.header.clone(),
+            reason: err.to_string(),
+        }
+    })?;
 
     let header_value = headers.get(&header_name);
 
@@ -144,7 +148,10 @@ pub fn validate_header(
             };
 
             if !matches {
-                return Err(ValidationError::InvalidValue { header: rule_config.header.clone() });
+                return Err(ValidationError::InvalidValue {
+                    header: rule_config.header.clone(),
+                    reason: "value does not match expected".to_string(),
+                });
             }
         }
         Rule::Matches { pattern } => {
@@ -152,8 +159,9 @@ pub fn validate_header(
                 ValidationError::MissingHeader { header: rule_config.header.clone() }
             })?;
 
-            let regex = regex::Regex::new(pattern).map_err(|_| ValidationError::InvalidValue {
+            let regex = regex::Regex::new(pattern).map_err(|err| ValidationError::InvalidValue {
                 header: rule_config.header.clone(),
+                reason: err.to_string(),
             })?;
 
             if !regex.is_match(actual_value) {
@@ -780,6 +788,27 @@ mod tests {
                 assert_eq!(signature_prefix, &Some("sig=".to_string()));
             }
             _ => panic!("Expected signature rule"),
+        }
+    }
+
+    #[test]
+    fn test_invalid_regex_pattern_includes_reason() {
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Custom", HeaderValue::from_static("value"));
+
+        let rule_config = HeaderRuleConfig {
+            header: "X-Custom".to_string(),
+            // Deliberately invalid regex: unmatched `(`
+            rule: Rule::Matches { pattern: r"(invalid[".to_string() },
+        };
+
+        let err = validate_header(&headers, &rule_config, None).unwrap_err();
+        match err {
+            ValidationError::InvalidValue { header, reason } => {
+                assert_eq!(header, "X-Custom");
+                assert!(!reason.is_empty(), "regex compile error should be included in reason");
+            }
+            other => panic!("Expected InvalidValue, got {other:?}"),
         }
     }
 }

@@ -39,6 +39,13 @@ impl TryFrom<Config> for DbSink {
     type Error = Report;
 
     fn try_from(config: Config) -> Result<Self> {
+        if config.pool_connections_min > config.pool_connections_max {
+            miette::bail!(
+                "pool_connections_min ({}) must be <= pool_connections_max ({})",
+                config.pool_connections_min,
+                config.pool_connections_max
+            );
+        }
         let pool_options = PgPoolOptions::new()
             .min_connections(config.pool_connections_min)
             .max_connections(config.pool_connections_max);
