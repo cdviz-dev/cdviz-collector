@@ -89,15 +89,15 @@ use tokio_util::sync::CancellationToken;
 #[derive(Debug, Clone, Args)]
 #[command(args_conflicts_with_subcommands = true, flatten_help = true)]
 pub(crate) struct SendArgs {
-    /// JSON data to send to the sink.
+    /// Data to send to the sink.
     ///
     /// Can be specified as:
-    /// - Direct JSON string: '{"test": "value"}'
-    /// - File path: @data.json
+    /// - Direct string: '{"test": "value"}' or raw text/XML/YAML content
+    /// - File path: @data.json (format auto-detected from extension)
     /// - Stdin: @-
     ///
-    /// The JSON data will be processed through the configured pipeline
-    /// and sent to the specified sink.
+    /// The data will be parsed according to `--input-parser` and processed
+    /// through the configured pipeline before being sent to the specified sink.
     #[clap(short = 'd', long = "data")]
     data: String,
 
