@@ -12,6 +12,7 @@ use vrl::value::Secrets;
 pub(crate) struct Processor {
     next: EventSourcePipe,
     renderer: Program,
+    source: String,
 }
 
 impl Processor {
@@ -20,8 +21,6 @@ impl Processor {
         let mut fns = vrl::stdlib::all();
         // Add custom PURL functions
         fns.extend(super::vrl_purl::all_custom_functions());
-        // Compile the program (and panic if it's invalid)
-        //TODO check result of compilation, log the error, warning, etc.
         let src = if template.is_empty() {
             // empty fallback to identity (array of one element: the input)
             "[.]"
@@ -35,9 +34,27 @@ impl Processor {
                 Err(MietteDiagnostic::new(formatter.to_string()))?
                 // bail!("VRL compilation error")
             }
-            Ok(res) => Ok(Self { next, renderer: res.program }),
+            Ok(res) => Ok(Self { next, renderer: res.program, source: src.to_string() }),
         }
     }
+}
+
+/// Converts a byte offset in `source` to a 1-based `(line, col)` pair.
+fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
+    let mut line = 1usize;
+    let mut col = 1usize;
+    for (i, ch) in source.char_indices() {
+        if i >= offset {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    (line, col)
 }
 
 impl Pipe for Processor {
@@ -68,25 +85,34 @@ impl Pipe for Processor {
         // This executes the VRL program, making any modifications to the target, and returning a result.
         let res = self.renderer.resolve(&mut ctx).map_err(|cause| {
             let vrl_diag = Diagnostic::from(cause);
-            //tracing::error!(diagnostics = %formatter, "VRL compilation error");
-            MietteDiagnostic::new(vrl_diag.message)
-                .with_severity(match vrl_diag.severity {
+            // Extract before consuming vrl_diag with Formatter
+            let severity = vrl_diag.severity;
+            let labels: Vec<_> = vrl_diag
+                .labels
+                .iter()
+                .map(|label| {
+                    let start = label.span.start();
+                    let len = label.span.end() - start;
+                    let (line, col) = byte_offset_to_line_col(&self.source, start);
+                    (format!("line {line}:{col} - {}", label.message), start, len)
+                })
+                .collect();
+            let help =
+                vrl_diag.notes.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
+            // Formatter converts byte offsets to line/col in the main message
+            let message = Formatter::new(&self.source, vec![vrl_diag]).to_string();
+            MietteDiagnostic::new(message)
+                .with_severity(match severity {
                     vrl::diagnostic::Severity::Error => miette::Severity::Error,
                     vrl::diagnostic::Severity::Warning | vrl::diagnostic::Severity::Bug => {
                         miette::Severity::Warning
                     }
                     vrl::diagnostic::Severity::Note => miette::Severity::Advice,
                 })
-                .with_labels(vrl_diag.labels.iter().map(|label| {
-                    LabeledSpan::new(
-                        Some(label.message.clone()),
-                        label.span.start(),
-                        label.span.end() - label.span.start(),
-                    )
+                .with_labels(labels.into_iter().map(|(msg, offset, len)| {
+                    LabeledSpan::new(Some(msg), offset, len)
                 }))
-                .with_help(
-                    vrl_diag.notes.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n"),
-                )
+                .with_help(help)
         })?;
 
         //TODO serde from Value to EventSource without json serialization/deserialization
@@ -182,5 +208,50 @@ mod tests {
         let mut outputs = collector.try_into_iter().unwrap();
         assert_eq!(outputs.next(), Some(expected));
         assert_eq!(outputs.next(), None);
+    }
+
+    #[test_trace::test]
+    fn test_compilation_error_returns_err() {
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let result = Processor::new("this is not valid vrl !!!", Box::new(collector.create_pipe()));
+        assert!(result.is_err(), "invalid VRL should return an error");
+        let err_msg = result.err().expect("is_err checked above").to_string();
+        assert!(!err_msg.is_empty(), "compilation error should produce a non-empty message");
+    }
+
+    #[test_trace::test]
+    fn test_runtime_error_is_propagated() {
+        // `.nonexistent_field` on a missing path at runtime causes an error in VRL
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let mut processor = Processor::new(
+            // del on a required field that doesn't exist raises a runtime error
+            indoc::indoc! { r"
+            .body.x = to_int!(.body.not_a_number)
+            [.]"},
+            Box::new(collector.create_pipe()),
+        )
+        .unwrap();
+        let input = EventSource {
+            metadata: serde_json::json!({}),
+            headers: std::collections::HashMap::new(),
+            body: serde_json::json!({"not_a_number": "hello"}),
+        };
+        let result = processor.send(input);
+        assert!(result.is_err(), "runtime VRL error should propagate as Err");
+    }
+
+    #[test_trace::test]
+    fn test_byte_offset_to_line_col_first_char() {
+        assert_eq!(byte_offset_to_line_col("abc", 0), (1, 1));
+    }
+
+    #[test_trace::test]
+    fn test_byte_offset_to_line_col_second_line() {
+        assert_eq!(byte_offset_to_line_col("abc\ndef", 4), (2, 1));
+    }
+
+    #[test_trace::test]
+    fn test_byte_offset_to_line_col_mid_line() {
+        assert_eq!(byte_offset_to_line_col("abc\ndef", 5), (2, 2));
     }
 }

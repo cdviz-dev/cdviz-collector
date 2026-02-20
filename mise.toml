@@ -1,3 +1,4 @@
+#:tombi schema.strict = false
 [settings]
 experimental = true
 # idiomatic_version_file_enable_tools = ["rust"]
@@ -101,6 +102,10 @@ run = [
   # "cargo hack nextest --each-feature -- --test-threads=1",
 ]
 
+[tasks."test:one"]
+description = "run a single test by name pattern, e.g. `mise run test:one -- test_name`"
+run = "cargo --locked nextest run {{arg(var=true)}}"
+
 [tasks."test:ignored"]
 wait_for = ["lint", "lint:*", "build:cli"]
 run = [
@@ -165,6 +170,26 @@ run = [
     -t passthrough \
     --input ./inputs/yaml \
     --output ./outputs/yaml
+  """,
+]
+
+[tasks."test:transform:community"]
+depends = ["build:cli"]
+description = "run some transformation on transformers-community submodule (use `--mode review` to review and update)"
+run = [
+  """target/debug/cdviz-collector \
+    transform \
+    --disable-otel \
+    --directory transformers/passthrough \
+    --mode {{option(name="mode", default="check")}} \
+    --config ./cdviz-collector.toml -t passthrough --input ./inputs --output ./outputs
+  """,
+  """target/debug/cdviz-collector \
+    transform \
+    --disable-otel \
+    --directory transformers/github_events \
+    --mode {{option(name="mode", default="check")}} \
+    --config ./cdviz-collector.toml -t github_events --input ./inputs --output ./outputs
   """,
 ]
 

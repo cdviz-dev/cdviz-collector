@@ -591,21 +591,88 @@ impl Parser for TextLineParser {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::errors::Error;
-//     //use miette::IntoDiagnostic;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pipes::collect_to_vec;
+    use futures::TryStreamExt;
+    use std::path::Path;
 
-//     #[test]
-//     fn test_parse_json_with_null() {
-//         let input = r#"
-//         {
-//           "a_null": null
-//         }
-//         "#;
-//         let _body: serde_json::Value = serde_json::from_str(&input)
-//             .map_err(|cause| Error::from_serde_error(input, cause))
-//             //.into_diagnostic()
-//             .unwrap();
-//     }
-// }
+    /// Build a filesystem `Operator` rooted at the example input assets and return
+    /// the first [`Resource`] whose path starts with `prefix`.
+    async fn make_op_and_resource(prefix: &str) -> (Operator, Resource) {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/assets/inputs");
+        let builder = opendal::services::Fs::default().root(&root.to_string_lossy());
+        let op = Operator::new(builder).unwrap().finish();
+        let mut entries = op.lister_with(prefix).await.unwrap();
+        let entry = entries.try_next().await.unwrap().expect("at least one entry for prefix");
+        let resource = Resource::from_entry(&op, entry, false).await;
+        (op, resource)
+    }
+
+    #[tokio::test]
+    async fn metadata_parser_emits_event_with_path() {
+        let (op, resource) = make_op_and_resource("cdevents_json/artifact_published").await;
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let base_metadata = serde_json::json!({"source": "test"});
+        let mut parser =
+            MetadataParser::new(base_metadata, Box::new(collector.create_pipe()));
+        parser.parse(&op, &resource).await.unwrap();
+
+        let mut events = collector.try_into_iter().unwrap();
+        let event = events.next().expect("MetadataParser should emit one event");
+        // Body is empty (metadata only parser does not read file content)
+        assert_eq!(event.body, serde_json::Value::Null);
+        // Base metadata key is preserved
+        assert_eq!(event.metadata["source"], "test");
+        // Resource path is merged into metadata
+        assert!(event.metadata["path"].is_string());
+        assert_eq!(events.next(), None);
+    }
+
+    #[tokio::test]
+    async fn json_parser_emits_event_with_json_body() {
+        let (op, resource) = make_op_and_resource("cdevents_json/artifact_published").await;
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let mut parser =
+            JsonParser::new(serde_json::json!({}), Box::new(collector.create_pipe()));
+        parser.parse(&op, &resource).await.unwrap();
+
+        let mut events = collector.try_into_iter().unwrap();
+        let event = events.next().expect("JsonParser should emit one event");
+        assert!(event.body.is_object(), "body should be a JSON object");
+        // The sample file has a top-level "context" key
+        assert!(event.body["context"].is_object(), "body should contain 'context'");
+        assert_eq!(events.next(), None);
+    }
+
+    #[tokio::test]
+    async fn auto_parser_dispatches_json_extension() {
+        let (op, resource) = make_op_and_resource("cdevents_json/artifact_published").await;
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let mut parser =
+            AutoParser::new(serde_json::json!({}), Box::new(collector.create_pipe()));
+        parser.parse(&op, &resource).await.unwrap();
+
+        let mut events = collector.try_into_iter().unwrap();
+        let event = events.next().expect("AutoParser should emit one event for .json file");
+        assert!(event.body.is_object());
+        assert!(event.body["context"].is_object());
+        assert_eq!(events.next(), None);
+    }
+
+    #[tokio::test]
+    async fn auto_parser_dispatches_txt_as_text() {
+        let (op, resource) = make_op_and_resource("dir1/file01").await;
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let mut parser =
+            AutoParser::new(serde_json::json!({}), Box::new(collector.create_pipe()));
+        parser.parse(&op, &resource).await.unwrap();
+
+        let mut events = collector.try_into_iter().unwrap();
+        let event = events.next().expect("AutoParser should emit one event for .txt file");
+        // parse_text wraps content as {"text": "..."}
+        assert!(event.body["text"].is_string(), "txt should produce {{\"text\": ...}} body");
+        assert_eq!(events.next(), None);
+    }
+}
