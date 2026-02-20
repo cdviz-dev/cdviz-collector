@@ -9,6 +9,7 @@ cdviz-collector is a Rust (edition 2024) service and CLI tool for collecting SDL
 ### Operation Modes
 
 cdviz-collector operates in three modes:
+
 1. **Server mode** (`connect`) - Long-running service connecting sources to sinks
 2. **One-shot mode** (`send`) - Direct event sending for testing/scripting
 3. **Batch transformation** (`transform`) - Offline file transformation using configured transformers

@@ -1,4 +1,10 @@
 use crate::errors::{Error, IntoDiagnostic, ReportWrapper, Result};
+
+/// Default maximum request body size (1 MB).
+///
+/// Applied globally to all HTTP routes including webhooks. Override per-route with
+/// [`axum::extract::DefaultBodyLimit`] if a source needs a different limit.
+const DEFAULT_BODY_LIMIT_BYTES: usize = 1024 * 1024;
 use axum::Extension;
 use axum::{Json, Router, extract::DefaultBodyLimit, http, response::IntoResponse, routing::get};
 use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
@@ -104,8 +110,7 @@ fn app(routes: Vec<Router>, shutdown_token: CancellationToken) -> Router {
             // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
             // requests don't hang forever.
             TimeoutLayer::with_status_code(http::StatusCode::REQUEST_TIMEOUT, Duration::from_secs(3)),
-            // Replace the default of 2MB with 1MB.
-            DefaultBodyLimit::max(1024*1024),
+            DefaultBodyLimit::max(DEFAULT_BODY_LIMIT_BYTES),
         ))
 }
 

@@ -102,6 +102,10 @@ run = [
   # "cargo hack nextest --each-feature -- --test-threads=1",
 ]
 
+[tasks."test:one"]
+description = "run a single test by name pattern, e.g. `mise run test:one -- test_name`"
+run = "cargo --locked nextest run {{arg(var=true)}}"
+
 [tasks."test:ignored"]
 wait_for = ["lint", "lint:*", "build:cli"]
 run = [
