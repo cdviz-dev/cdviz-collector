@@ -161,7 +161,7 @@ pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> Join
                 Ok(msg) => {
                     tracing::debug!(name, event_id = ?msg.cdevent.id(), "sending");
                     if let Err(err) = sink.send(&msg).await {
-                        tracing::warn!(name, kind = "sink", ?err, "fail during sending of event");
+                        tracing::warn!(name, kind = "sink", event_id = ?msg.cdevent.id(), ?err, "fail during sending of event");
                     }
                 }
                 Err(RecvError::Lagged(_)) => {

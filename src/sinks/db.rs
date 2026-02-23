@@ -74,12 +74,28 @@ pub(crate) struct DbSink {
 impl Sink for DbSink {
     #[tracing::instrument(skip(self, message), fields(cdevent_id = %message.cdevent.id()))]
     async fn send(&self, message: &Message) -> Result<()> {
-        store_event(
+        let result = store_event(
             &self.pool,
             // TODO build Event from raw json
             Event { payload: serde_json::to_value(&message.cdevent).into_diagnostic()? },
         )
-        .await?;
+        .await;
+        if let Err(ref err) = result {
+            // PostgreSQL error code 23505 = unique_violation
+            // This is expected on restart when opendal replays already-processed files
+            // (see TODO in sources/opendal/mod.rs about state persistence)
+            let is_duplicate =
+                err.downcast_ref::<sqlx::Error>()
+                    .and_then(|e| {
+                        if let sqlx::Error::Database(db_err) = e { db_err.code() } else { None }
+                    })
+                    .is_some_and(|code| code == "23505");
+            if is_duplicate {
+                tracing::debug!(cdevent_id = %message.cdevent.id(), "event already stored (duplicate), skipping");
+                return Ok(());
+            }
+        }
+        result?;
         Ok(())
     }
 }
