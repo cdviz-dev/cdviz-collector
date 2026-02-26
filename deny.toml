@@ -201,7 +201,7 @@ skip = [
   # "ansi_term@0.11.0",
   # "base64",
   "bitflags",
-  "console",
+  # "console",
   "convert_case",
   "core-foundation",
   # "fancy-regex",
