@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.23.0...0.24.0) - 2026-02-26
+
+### Added
+
+- add `config` subcommand to help debug
+- *(transformer)* improve error reporting for VRL transformer
+
+### Fixed
+
+- *(deps)* update
+- change the error message on duplicate error from database sink
+
+### Other
+
+- small improvements
+- update cli help
+- *(deps)* update rust crate assert2 to 0.4 ([#263](https://github.com/cdviz-dev/cdviz-collector/pull/263))
+
 ## [0.23.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.22.0...0.23.0) - 2026-02-17
 
 ### Added
