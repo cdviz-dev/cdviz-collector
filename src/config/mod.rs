@@ -95,14 +95,6 @@ impl ConfigBuilder {
             figment = figment.merge(provider);
         }
 
-        // Add user config file if provided
-        if let Some(config_file) = self.config_file {
-            let provider = FileAdapter::wrap(Toml::file(config_file.as_path()));
-            #[cfg(feature = "config_remote")]
-            let provider = RemoteFileAdapter::wrap(provider);
-            figment = figment.merge(provider);
-        }
-
         // Add environment variables if enabled
         if self.enable_env_vars {
             let provider = FileAdapter::wrap(Env::prefixed("CDVIZ_COLLECTOR__").split("__"));
@@ -114,6 +106,14 @@ impl ConfigBuilder {
         // Add CLI overrides if provided
         if let Some(cli_overrides) = self.cli_overrides {
             let provider = FileAdapter::wrap(Toml::string(&cli_overrides));
+            #[cfg(feature = "config_remote")]
+            let provider = RemoteFileAdapter::wrap(provider);
+            figment = figment.merge(provider);
+        }
+
+        // Add user config file if provided
+        if let Some(config_file) = self.config_file {
+            let provider = FileAdapter::wrap(Toml::file(config_file.as_path()));
             #[cfg(feature = "config_remote")]
             let provider = RemoteFileAdapter::wrap(provider);
             figment = figment.merge(provider);
