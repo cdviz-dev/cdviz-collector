@@ -75,6 +75,49 @@ impl ConfigBuilder {
         self
     }
 
+    /// Assemble the `Figment` without any adapters (`FileAdapter` / `RemoteFileAdapter`).
+    /// Useful for inspecting the raw merged configuration before path/remote resolution.
+    pub fn build_raw_figment(self) -> Figment {
+        let mut figment = Figment::new();
+
+        if let Some(base_config) = self.base_config {
+            figment = figment.merge(Toml::string(&base_config));
+        }
+
+        if let Some(config_file) = self.config_file {
+            figment = figment.merge(Toml::file(config_file.as_path()));
+        }
+
+        if self.enable_env_vars {
+            figment = figment.merge(Env::prefixed("CDVIZ_COLLECTOR__").split("__"));
+        }
+
+        if let Some(cli_overrides) = self.cli_overrides {
+            figment = figment.merge(Toml::string(&cli_overrides));
+        }
+
+        figment
+    }
+
+    /// Assemble the `Figment` with adapters applied once to the fully merged config.
+    ///
+    /// Uses a two-phase approach: first merge all plain sources, then apply
+    /// `FileAdapter` and `RemoteFileAdapter` once on the combined result.
+    /// This ensures remote config definitions from any layer are visible when
+    /// resolving `_rfile` references from any other layer.
+    pub fn build_figment(self) -> Result<Figment> {
+        // Phase 1: merge all plain sources without adapters
+        let raw = self.build_raw_figment();
+        let raw_value: toml::Value = raw.extract().into_diagnostic()?;
+        let raw_toml = toml::to_string(&raw_value).into_diagnostic()?;
+
+        // Phase 2: apply adapters once on the fully merged config
+        let provider = FileAdapter::wrap(Toml::string(&raw_toml));
+        #[cfg(feature = "config_remote")]
+        let provider = RemoteFileAdapter::wrap(provider);
+        Ok(Figment::new().merge(provider))
+    }
+
     /// Build the final Config
     pub fn build(self) -> Result<Config> {
         // Check if config file exists if specified
@@ -85,39 +128,7 @@ impl ConfigBuilder {
                 .into_diagnostic();
         }
 
-        let mut figment = Figment::new();
-
-        // Add base configuration if provided
-        if let Some(base_config) = self.base_config {
-            let provider = FileAdapter::wrap(Toml::string(&base_config));
-            #[cfg(feature = "config_remote")]
-            let provider = RemoteFileAdapter::wrap(provider);
-            figment = figment.merge(provider);
-        }
-
-        // Add user config file if provided
-        if let Some(config_file) = self.config_file {
-            let provider = FileAdapter::wrap(Toml::file(config_file.as_path()));
-            #[cfg(feature = "config_remote")]
-            let provider = RemoteFileAdapter::wrap(provider);
-            figment = figment.merge(provider);
-        }
-
-        // Add environment variables if enabled
-        if self.enable_env_vars {
-            let provider = FileAdapter::wrap(Env::prefixed("CDVIZ_COLLECTOR__").split("__"));
-            #[cfg(feature = "config_remote")]
-            let provider = RemoteFileAdapter::wrap(provider);
-            figment = figment.merge(provider);
-        }
-
-        // Add CLI overrides if provided
-        if let Some(cli_overrides) = self.cli_overrides {
-            let provider = FileAdapter::wrap(Toml::string(&cli_overrides));
-            #[cfg(feature = "config_remote")]
-            let provider = RemoteFileAdapter::wrap(provider);
-            figment = figment.merge(provider);
-        }
+        let figment = self.build_figment()?;
 
         // Extract final configuration
         // TODO improve error reporting with :

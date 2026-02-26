@@ -34,8 +34,6 @@ use tokio_util::sync::CancellationToken;
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
-// TODO add options (or subcommand) to `check-configuration` (regardless of enabled), `configuration-dump` (after consolidation (with filter or not enabled) and exit or not),
-// TODO add options to overide config from cli arguments (like from env)
 #[derive(Debug, Clone, Parser)]
 #[command(
     flatten_help = true,
@@ -72,6 +70,14 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Clone, Subcommand)]
 enum Command {
+    /// Inspect or validate the resolved configuration.
+    ///
+    /// Merges the base configuration, user configuration file, and environment
+    /// variables, then prints the result (--print) and/or validates it against
+    /// the typed Config structure (--check).
+    #[command(arg_required_else_help = true)]
+    Config(tools::config::ConfigArgs),
+
     /// Launch collector as a server to connect sources to sinks.
     ///
     /// Runs the collector in server mode, enabling configured sources to collect
@@ -165,6 +171,7 @@ pub(crate) async fn run(
         std::env::set_current_dir(dir).into_diagnostic()?;
     }
     match cli.command {
+        Command::Config(args) => tools::config::config_cmd(args),
         Command::Connect(args) => tools::connect::connect(args, shutdown_token).await,
         Command::Send(args) => tools::send::send(args, shutdown_token).await,
         #[cfg(feature = "tool_transform")]
