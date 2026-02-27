@@ -155,16 +155,4 @@ mod tests {
         let result = resource.as_headers();
         check!(result.is_empty());
     }
-
-    // TODO
-    // #[tokio::test]
-    // async fn csv_row_via_template_works() {
-    //     let (op, entry) = provide_op_entry("cdevents.").await;
-    //     let dest = collect_to_vec::Processor::new();
-    //     let collector = dest.collector();
-    //     let sut = CsvRowParser::new(Box::new(collector));
-    //     assert!(Ok(()) == sut.parse(&op, &entry).await);
-    //     check!(collector.len() == 3);
-    //     // TODO check!(collector[0]. == "dev".as_bytes());
-    // }
 }

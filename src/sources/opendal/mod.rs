@@ -1,4 +1,4 @@
-//TODO add persistance for state (time window to not reprocess same file after restart)
+//TODO add persistence for state (time window to not reprocess same file after restart)
 
 mod filter;
 pub(crate) mod parsers;
@@ -72,7 +72,6 @@ impl OpendalExtractor {
         let recursive = self.recursive;
         let try_read_headers_json = self.try_read_headers_json;
         let parser = &mut self.parser;
-        // TODO convert into arg of instrument
         tracing::debug!(filter=? filter, scheme =? op.info().scheme(), root =? op.info().root(), "scanning");
         let mut lister = op
         .lister_with("")

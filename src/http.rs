@@ -128,7 +128,6 @@ async fn health() -> impl IntoResponse {
 
 // try to follow [RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457.html)
 impl IntoResponse for Error {
-    //TODO report the trace_id into the message to help to debug
     fn into_response(self) -> axum::response::Response {
         // let (status, error_message) = match self {
         //     Error::Db(e) => (http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
@@ -147,7 +146,6 @@ impl IntoResponse for Error {
 
 // try to follow [RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457.html)
 impl IntoResponse for ReportWrapper {
-    //TODO report the trace_id into the message to help to debug
     fn into_response(self) -> axum::response::Response {
         let trace_id = find_current_trace_id();
         tracing::warn!(error = ?self);

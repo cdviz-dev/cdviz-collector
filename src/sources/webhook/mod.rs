@@ -63,11 +63,8 @@ pub(crate) fn make_route(config: &Config, next: EventSourcePipe) -> Router {
     Router::new().route(&format!("/webhook/{}", config.id), post(webhook)).with_state(state)
 }
 
-//TODO support events in cloudevents format (extract info from headers)
-//TODO try [deser](https://crates.io/crates/deserr) to return good error
-//TODO use cloudevents
-//TODO add metadata & headers info into SourceEvent
-//TODO log & convert error
+//TODO support receiving events in CloudEvents format (extract type/source from CE-* headers)
+//TODO try [deser](https://crates.io/crates/deserr) to return structured validation errors
 #[tracing::instrument(skip(state, headers, body))]
 async fn webhook(
     State(state): State<WebhookState>,

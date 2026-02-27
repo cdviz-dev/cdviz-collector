@@ -19,7 +19,6 @@ impl Processor {
 impl Pipe for Processor {
     type Input = EventSource;
     fn send(&mut self, input: Self::Input) -> Result<()> {
-        // TODO if source is empty, set a default value based on configuration TBD
         let cdevent = CDEvent::try_from(input.clone())?;
 
         // Include headers from EventSource into the message and capture trace context

@@ -33,9 +33,6 @@ pub(crate) struct ConnectArgs {
     config: Option<PathBuf>,
 }
 
-//TODO add transformers ( eg file/event info, into cdevents) for sources
-//TODO integrations with cloudevents (sources & sink)
-//TODO integrations with kafka / redpanda, nats,
 /// Returns true if the connection service ran successfully
 pub(crate) async fn connect(args: ConnectArgs, shutdown_token: CancellationToken) -> Result<bool> {
     let config = Config::from_file(args.config)?;

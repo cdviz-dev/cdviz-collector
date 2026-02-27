@@ -59,8 +59,9 @@ fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
 
 impl Pipe for Processor {
     type Input = EventSource;
-    //TODO optimize EventSource to avoid serialization/deserialization via json to convert to/from Value
-    //TODO build a microbenchmark to compare the performance of converting to/from Value
+    //TODO optimize: EventSource currently round-trips through serde_json::Value to enter/exit the
+    // VRL runtime; a direct Value↔EventSource conversion would avoid two alloc+parse passes.
+    // Add a microbenchmark before optimising.
     fn send(&mut self, input: Self::Input) -> Result<()> {
         // This is the target that can be accessed / modified in the VRL program.
         // You can use any custom type that implements `Target`, but `TargetValue` is also provided for convenience.
@@ -117,7 +118,6 @@ impl Pipe for Processor {
                 .with_help(help)
         })?;
 
-        //TODO serde from Value to EventSource without json serialization/deserialization
         let output: Option<Vec<EventSource>> =
             serde_json::from_value(serde_json::to_value(res).into_diagnostic()?)
                 .into_diagnostic()?;

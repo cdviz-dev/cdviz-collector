@@ -155,7 +155,6 @@ impl Injector for HeaderInjector {
 }
 
 impl Sink for HttpSink {
-    //TODO use cloudevents
     #[tracing::instrument(skip(self, msg), fields(cdevent_id = %msg.cdevent.id()))]
     async fn send(&self, msg: &Message) -> Result<()> {
         let cd_event = msg.cdevent.clone();
@@ -199,7 +198,8 @@ impl Sink for HttpSink {
             }
         };
         let response = req.send().await.into_diagnostic()?;
-        // TODO handle error, retry, etc
+        // TODO: non-success HTTP responses (4xx/5xx) are only logged; transient errors are
+        // retried by reqwest_middleware but persistent failures (e.g. 400, 404) are silently ignored.
         if !response.status().is_success() {
             tracing::warn!(
                 cdevent_id = msg.cdevent.id().as_str(),
