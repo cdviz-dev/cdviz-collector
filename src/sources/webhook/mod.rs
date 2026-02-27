@@ -1,5 +1,6 @@
 use super::EventSourcePipe;
 use crate::errors::ReportWrapper;
+use crate::security::header::filter_http_headers;
 use crate::security::rule::{
     HeaderRuleConfig, HeaderRuleMap, header_rule_map_to_configs, validate_headers,
 };
@@ -86,28 +87,12 @@ async fn webhook(
         return err.into_response();
     }
     let Json(body): Json<serde_json::Value> = maybe_json.unwrap_or_default();
-    let headers = header_to_map(&headers, &state.headers_to_keep);
+    let headers = filter_http_headers(&headers, &state.headers_to_keep);
     let event = EventSource { metadata: state.base_metadata.clone(), headers, body };
     if let Err(err) = state.next.lock().await.send(event) {
         return ReportWrapper::from(err).into_response();
     }
     (axum::http::StatusCode::CREATED).into_response()
-}
-
-/// Convert a header map to a map of header name to header value
-/// The output map will only contain headers that are in the `headers_to_keep` list
-/// and that are not sensitive.
-#[allow(clippy::min_ident_chars)]
-fn header_to_map(
-    headers: &HeaderMap,
-    headers_to_keep: &[HeaderName],
-) -> std::collections::HashMap<String, String> {
-    headers
-        .iter()
-        .filter(|(_, v)| !v.is_sensitive())
-        .filter(|(k, _)| headers_to_keep.contains(k))
-        .filter_map(|(k, v)| v.to_str().ok().map(|v| (k.as_str().to_string(), v.to_string())))
-        .collect()
 }
 
 #[cfg(test)]
@@ -181,82 +166,6 @@ mod tests_handler {
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
         assert2::assert!(let None = collector.try_into_iter().unwrap().next());
-    }
-}
-
-#[cfg(test)]
-mod tests_headers_conversion {
-    use std::collections::HashMap;
-
-    use axum::http::{HeaderMap, HeaderValue};
-    use pretty_assertions::assert_eq;
-
-    use super::*;
-
-    #[test]
-    fn test_header_to_map_with_valid_headers() {
-        let mut headers = HeaderMap::new();
-        headers.insert("Content-Type", HeaderValue::from_static("application/json"));
-        headers.insert("X-Custom-Header", HeaderValue::from_static("custom_value"));
-
-        let headers_to_keep = vec![
-            HeaderName::from_str("Content-Type").unwrap(),
-            HeaderName::from_str("X-Custom-Header").unwrap(),
-        ];
-
-        let result = header_to_map(&headers, &headers_to_keep);
-        let mut expected = HashMap::new();
-        expected.insert("Content-Type".to_lowercase(), "application/json".to_string());
-        expected.insert("X-Custom-Header".to_lowercase(), "custom_value".to_string());
-
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_header_to_map_with_sensitive_headers() {
-        let mut headers = HeaderMap::new();
-        let mut authorization = HeaderValue::from_static("Bearer token");
-        authorization.set_sensitive(true);
-        headers.insert("Authorization", authorization);
-        headers.insert("Content-Type", HeaderValue::from_static("application/json"));
-
-        let headers_to_keep = vec![
-            HeaderName::from_str("Authorization").unwrap(),
-            HeaderName::from_str("Content-Type").unwrap(),
-        ];
-
-        let result = header_to_map(&headers, &headers_to_keep);
-        let mut expected = HashMap::new();
-        expected.insert("Content-Type".to_lowercase(), "application/json".to_string());
-
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_header_to_map_with_empty_headers() {
-        let headers = HeaderMap::new();
-        let headers_to_keep = vec![
-            HeaderName::from_str("Content-Type").unwrap(),
-            HeaderName::from_str("X-Custom-Header").unwrap(),
-        ];
-
-        let result = header_to_map(&headers, &headers_to_keep);
-        let expected: HashMap<String, String> = HashMap::new();
-
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_header_to_map_with_non_matching_headers() {
-        let mut headers = HeaderMap::new();
-        headers.insert("Content-Type", HeaderValue::from_static("application/json"));
-
-        let headers_to_keep = vec![HeaderName::from_str("X-Custom-Header").unwrap()];
-
-        let result = header_to_map(&headers, &headers_to_keep);
-        let expected: HashMap<String, String> = HashMap::new();
-
-        assert_eq!(result, expected);
     }
 }
 

@@ -147,6 +147,24 @@ fn generate_header_value_with_context(
     })
 }
 
+/// Convert an HTTP [`HeaderMap`] to a `HashMap<String, String>`, keeping only
+/// headers that appear in `headers_to_keep` and are not marked sensitive.
+///
+/// Used by HTTP-based sources (e.g. webhook) to extract forwarded headers from
+/// incoming requests before passing them into the pipeline.
+#[allow(clippy::min_ident_chars)]
+pub(crate) fn filter_http_headers(
+    headers: &HeaderMap,
+    headers_to_keep: &[HeaderName],
+) -> HashMap<String, String> {
+    headers
+        .iter()
+        .filter(|(_, v)| !v.is_sensitive())
+        .filter(|(k, _)| headers_to_keep.contains(k))
+        .filter_map(|(k, v)| v.to_str().ok().map(|v| (k.as_str().to_string(), v.to_string())))
+        .collect()
+}
+
 /// Map-based configuration for outgoing headers
 /// Maps header names directly to their source configurations
 pub type OutgoingHeaderMap = HashMap<String, HeaderSource>;
@@ -556,5 +574,71 @@ mod tests {
             }
             _ => panic!("Expected signature header source"),
         }
+    }
+
+    #[test]
+    fn test_filter_http_headers_with_valid_headers() {
+        use std::str::FromStr;
+        let mut headers = HeaderMap::new();
+        headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+        headers.insert("X-Custom-Header", HeaderValue::from_static("custom_value"));
+        headers.insert("Authorization", HeaderValue::from_static("Bearer token"));
+
+        let headers_to_keep = vec![
+            HeaderName::from_str("Content-Type").unwrap(),
+            HeaderName::from_str("X-Custom-Header").unwrap(),
+        ];
+
+        let result = filter_http_headers(&headers, &headers_to_keep);
+        let mut expected = HashMap::new();
+        expected.insert("content-type".to_string(), "application/json".to_string());
+        expected.insert("x-custom-header".to_string(), "custom_value".to_string());
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_http_headers_excludes_sensitive() {
+        use std::str::FromStr;
+        let mut headers = HeaderMap::new();
+        let mut authorization = HeaderValue::from_static("Bearer token");
+        authorization.set_sensitive(true);
+        headers.insert("Authorization", authorization);
+        headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+
+        let headers_to_keep = vec![
+            HeaderName::from_str("Authorization").unwrap(),
+            HeaderName::from_str("Content-Type").unwrap(),
+        ];
+
+        let result = filter_http_headers(&headers, &headers_to_keep);
+        let mut expected = HashMap::new();
+        expected.insert("content-type".to_string(), "application/json".to_string());
+        // Authorization is sensitive and must be excluded
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_http_headers_empty_map() {
+        use std::str::FromStr;
+        let headers = HeaderMap::new();
+        let headers_to_keep = vec![
+            HeaderName::from_str("Content-Type").unwrap(),
+            HeaderName::from_str("X-Custom-Header").unwrap(),
+        ];
+
+        let result = filter_http_headers(&headers, &headers_to_keep);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_filter_http_headers_no_keeplist_match() {
+        use std::str::FromStr;
+        let mut headers = HeaderMap::new();
+        headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+
+        let headers_to_keep = vec![HeaderName::from_str("X-Custom-Header").unwrap()];
+
+        let result = filter_http_headers(&headers, &headers_to_keep);
+        assert!(result.is_empty());
     }
 }
