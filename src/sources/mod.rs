@@ -123,8 +123,8 @@ impl TryFrom<EventSource> for CDEvent {
     fn try_from(value: EventSource) -> std::result::Result<Self, Self::Error> {
         let mut body = value.body;
         set_timestamp_if_missing(&mut body);
+        set_source_if_missing(&mut body, &value.metadata);
         set_id_zero_or_missing_to_cid(&mut body)?;
-        // TODO if source is empty, set a default value based on configuration TBD
         let mut cdevent: CDEvent = serde_json::from_value(body.clone()).map_err(|cause0| {
             // to provide located / contextualized error, body is converted into string, to be then parsed with error
             // TODO find an alternatives that avoid string conversion and reparse
@@ -155,7 +155,7 @@ fn set_id_zero_or_missing_to_cid(body: &mut serde_json::Value) -> Result<()> {
     let compute_id = body
         .get("context")
         .and_then(|context| context.get("id"))
-        .is_none_or(|v| v.is_null() || (v.as_str() == Some("0")));
+        .is_none_or(|s| s.is_null() || s.as_str().is_none_or(|id| id.is_empty() || id == "0"));
     if compute_id {
         // Do not use multihash-codetable because one of it's transitive dependency raise
         // an alert "unmaintained advisory detected" about `proc-macro-error`
@@ -175,12 +175,27 @@ fn set_id_zero_or_missing_to_cid(body: &mut serde_json::Value) -> Result<()> {
 
 fn set_timestamp_if_missing(body: &mut serde_json::Value) {
     use serde_json::json;
-    let compute_timestamp = body
-        .get("context")
-        .is_none_or(|context| context.get("timestamp").is_none_or(serde_json::Value::is_null));
+    let compute_timestamp = body.get("context").is_none_or(|context| {
+        context.get("timestamp").is_none_or(|s| s.is_null() || s.as_str().is_none_or(str::is_empty))
+    });
     if compute_timestamp {
         let timestamp = jiff::Timestamp::now().to_string(); //rfc3339
         body["context"]["timestamp"] = json!(timestamp);
+    }
+}
+
+fn set_source_if_missing(body: &mut serde_json::Value, metadata: &serde_json::Value) {
+    let source_missing = body.get("context").is_none_or(|context| {
+        context.get("source").is_none_or(|s| s.is_null() || s.as_str().is_none_or(str::is_empty))
+    });
+    if source_missing
+        && let Some(source) = metadata
+            .get("context")
+            .and_then(|c| c.get("source"))
+            .and_then(serde_json::Value::as_str)
+            .filter(|s| !s.is_empty())
+    {
+        body["context"]["source"] = serde_json::json!(source);
     }
 }
 
@@ -423,5 +438,48 @@ mod tests {
         set_timestamp_if_missing(&mut body);
         assert2::assert!(let Some(datetime) = body["context"]["timestamp"].as_str());
         assert2::assert!(let Ok(_) = datetime.parse::<jiff::Timestamp>());
+    }
+
+    #[test]
+    fn test_set_source_if_missing() {
+        let metadata = json!({
+            "context": {
+                "source": "https://example.com?source=my-source"
+            }
+        });
+
+        // Case 1: source absent → filled from metadata
+        let mut body = json!({ "context": {} });
+        set_source_if_missing(&mut body, &metadata);
+        assert_eq!(
+            body["context"]["source"].as_str(),
+            Some("https://example.com?source=my-source")
+        );
+
+        // Case 2: source null → filled from metadata
+        let mut body = json!({ "context": { "source": null } });
+        set_source_if_missing(&mut body, &metadata);
+        assert_eq!(
+            body["context"]["source"].as_str(),
+            Some("https://example.com?source=my-source")
+        );
+
+        // Case 3: source empty string → filled from metadata
+        let mut body = json!({ "context": { "source": "" } });
+        set_source_if_missing(&mut body, &metadata);
+        assert_eq!(
+            body["context"]["source"].as_str(),
+            Some("https://example.com?source=my-source")
+        );
+
+        // Case 4: source already set → not overridden
+        let mut body = json!({ "context": { "source": "/existing/source" } });
+        set_source_if_missing(&mut body, &metadata);
+        assert_eq!(body["context"]["source"].as_str(), Some("/existing/source"));
+
+        // Case 5: metadata has no context.source → body unchanged
+        let mut body = json!({ "context": {} });
+        set_source_if_missing(&mut body, &json!({}));
+        assert!(body["context"]["source"].is_null());
     }
 }
