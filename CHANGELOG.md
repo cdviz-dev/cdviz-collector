@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.24.0...0.25.0) - 2026-02-27
+
+### Added
+
+- default `context.source` when not set with value of `metadata.context.source` ([#272](https://github.com/cdviz-dev/cdviz-collector/pull/272))
+
+### Other
+
+- *(deps)* update actions/upload-artifact action to v7 ([#270](https://github.com/cdviz-dev/cdviz-collector/pull/270))
+
 ## [0.24.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.23.0...0.24.0) - 2026-02-26
 
 ### Added
