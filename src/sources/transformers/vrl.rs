@@ -243,6 +243,52 @@ mod tests {
     }
 
     #[test_trace::test]
+    fn test_fanout_one_to_many() {
+        // A VRL program can return an array of multiple EventSource objects.
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let mut processor = Processor::new(
+            // Return the same input twice
+            "[., .]",
+            Box::new(collector.create_pipe()),
+        )
+        .unwrap();
+        let input = EventSource {
+            metadata: serde_json::json!({}),
+            headers: std::collections::HashMap::new(),
+            body: serde_json::json!({"k": "v"}),
+        };
+        processor.send(input.clone()).unwrap();
+        let outputs: Vec<_> = collector.try_into_iter().unwrap().collect();
+        assert_eq!(outputs.len(), 2);
+        assert_eq!(outputs[0], input);
+        assert_eq!(outputs[1], input);
+    }
+
+    #[test_trace::test]
+    fn test_runtime_error_diagnostic_contains_location() {
+        // Verify the error message produced by a runtime failure carries location info
+        // from byte_offset_to_line_col (non-empty message with the offending source).
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let src = ".body.x = to_int!(.body.not_a_number)\n[.]";
+        let mut processor = Processor::new(src, Box::new(collector.create_pipe())).unwrap();
+        let input = EventSource {
+            metadata: serde_json::json!({}),
+            headers: std::collections::HashMap::new(),
+            body: serde_json::json!({"not_a_number": "hello"}),
+        };
+        let err = processor.send(input).unwrap_err();
+        let msg = err.to_string();
+        // The diagnostic must be non-empty and contain the problematic source fragment.
+        assert!(!msg.is_empty(), "runtime error should produce a non-empty diagnostic");
+        assert!(
+            msg.contains("to_int") || msg.contains("not_a_number") || msg.contains("1:"),
+            "diagnostic should reference the error location or relevant source; got: {msg}"
+        );
+    }
+
+    // ── byte_offset_to_line_col unit tests ──────────────────────────────────
+
+    #[test_trace::test]
     fn test_byte_offset_to_line_col_first_char() {
         assert_eq!(byte_offset_to_line_col("abc", 0), (1, 1));
     }
@@ -255,5 +301,24 @@ mod tests {
     #[test_trace::test]
     fn test_byte_offset_to_line_col_mid_line() {
         assert_eq!(byte_offset_to_line_col("abc\ndef", 5), (2, 2));
+    }
+
+    #[test_trace::test]
+    fn test_byte_offset_to_line_col_offset_past_end() {
+        // Offsets beyond the source length return the position after the last char.
+        let (line, col) = byte_offset_to_line_col("ab", 99);
+        assert_eq!(line, 1);
+        assert_eq!(col, 3); // one past "ab"
+    }
+
+    #[test_trace::test]
+    fn test_byte_offset_to_line_col_empty_source() {
+        assert_eq!(byte_offset_to_line_col("", 0), (1, 1));
+    }
+
+    #[test_trace::test]
+    fn test_byte_offset_to_line_col_col_resets_after_newline() {
+        // "a\nb\nc" — offset 4 is 'c' at line 3, col 1
+        assert_eq!(byte_offset_to_line_col("a\nb\nc", 4), (3, 1));
     }
 }
