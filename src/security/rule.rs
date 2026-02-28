@@ -792,6 +792,105 @@ mod tests {
     }
 
     #[test]
+    fn test_exists_rule_rejects_empty_value() {
+        // Header present but empty must be rejected (same as missing)
+        let mut headers = HeaderMap::new();
+        headers.insert("X-API-Key", HeaderValue::from_static(""));
+
+        let rule_config = HeaderRuleConfig { header: "X-API-Key".to_string(), rule: Rule::Exists };
+
+        let err = validate_header(&headers, &rule_config, None).unwrap_err();
+        assert!(matches!(err, ValidationError::MissingHeader { .. }));
+    }
+
+    #[test]
+    fn test_validation_error_http_status_codes() {
+        use axum::response::IntoResponse;
+        // MissingHeader and SignatureValidation → 401 UNAUTHORIZED
+        assert_eq!(
+            StatusCode::UNAUTHORIZED,
+            ValidationError::MissingHeader { header: "X-Foo".into() }.into_response().status()
+        );
+        assert_eq!(
+            StatusCode::UNAUTHORIZED,
+            ValidationError::SignatureValidation { header: "X-Foo".into(), error: "bad".into() }
+                .into_response()
+                .status()
+        );
+        // InvalidValue and PatternMismatch → 403 FORBIDDEN
+        assert_eq!(
+            StatusCode::FORBIDDEN,
+            ValidationError::InvalidValue { header: "X-Foo".into(), reason: "mismatch".into() }
+                .into_response()
+                .status()
+        );
+        assert_eq!(
+            StatusCode::FORBIDDEN,
+            ValidationError::PatternMismatch { header: "X-Foo".into() }.into_response().status()
+        );
+    }
+
+    #[test]
+    fn test_invalid_header_name_returns_invalid_value() {
+        let headers = HeaderMap::new();
+        let rule_config = HeaderRuleConfig {
+            // Header names cannot contain spaces
+            header: "Invalid Header Name".to_string(),
+            rule: Rule::Exists,
+        };
+
+        let err = validate_header(&headers, &rule_config, None).unwrap_err();
+        match err {
+            ValidationError::InvalidValue { header, reason } => {
+                assert_eq!(header, "Invalid Header Name");
+                assert!(!reason.is_empty());
+            }
+            other => panic!("Expected InvalidValue, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_equals_missing_header_returns_missing_not_mismatch() {
+        let headers = HeaderMap::new(); // no Content-Type
+        let rule_config = HeaderRuleConfig {
+            header: "Content-Type".to_string(),
+            rule: Rule::Equals { value: "application/json".to_string(), case_sensitive: true },
+        };
+
+        let err = validate_header(&headers, &rule_config, None).unwrap_err();
+        assert!(matches!(err, ValidationError::MissingHeader { .. }), "got {err:?}");
+    }
+
+    #[test]
+    fn test_matches_missing_header_returns_missing_not_pattern_mismatch() {
+        let headers = HeaderMap::new(); // no Authorization
+        let rule_config = HeaderRuleConfig {
+            header: "Authorization".to_string(),
+            rule: Rule::Matches { pattern: r"^Bearer \w+$".to_string() },
+        };
+
+        let err = validate_header(&headers, &rule_config, None).unwrap_err();
+        assert!(matches!(err, ValidationError::MissingHeader { .. }), "got {err:?}");
+    }
+
+    #[test]
+    fn test_validate_headers_short_circuits_on_first_failure() {
+        let headers = HeaderMap::new(); // no headers at all
+
+        // Two failing rules — only the first error should be returned
+        let rules = vec![
+            HeaderRuleConfig { header: "X-First".to_string(), rule: Rule::Exists },
+            HeaderRuleConfig { header: "X-Second".to_string(), rule: Rule::Exists },
+        ];
+
+        let err = validate_headers(&headers, &rules, None).unwrap_err();
+        match err {
+            ValidationError::MissingHeader { header } => assert_eq!(header, "X-First"),
+            other => panic!("Expected MissingHeader for X-First, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn test_invalid_regex_pattern_includes_reason() {
         let mut headers = HeaderMap::new();
         headers.insert("X-Custom", HeaderValue::from_static("value"));

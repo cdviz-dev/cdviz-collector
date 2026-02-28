@@ -623,6 +623,62 @@ mod security_edge_cases {
     }
 
     #[test]
+    fn test_check_signature_rejects_missing_prefix() {
+        // When a prefix is configured, a raw (unprefixed) signature must be rejected.
+        let config = SignatureConfig {
+            header: "X-Hub-Signature-256".to_string(),
+            token: "secret-token".into(),
+            token_encoding: None,
+            signature_prefix: Some("sha256=".to_string()),
+            signature_on: SignatureOn::Body,
+            signature_encoding: Encoding::Hex,
+        };
+
+        let body = b"payload";
+
+        // Build the raw (unprefixed) signature so the HMAC itself is correct.
+        let raw_config = SignatureConfig { signature_prefix: None, ..config.clone() };
+        let raw_sig = build_signature(&raw_config, &HeaderMap::new(), body).unwrap();
+
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Hub-Signature-256", raw_sig.parse().unwrap());
+        let body_bytes = bytes::Bytes::copy_from_slice(body);
+
+        // The raw sig omits "sha256=", so full comparison must fail.
+        assert2::assert!(let
+            Err(SignatureError::VerificationMismatch) =
+                check_signature(&config, &headers, &body_bytes)
+        );
+    }
+
+    #[test]
+    fn test_headers_then_body_missing_headers_are_skipped() {
+        // When a listed header is absent it must be silently omitted from the signed payload.
+        let config = SignatureConfig {
+            header: "X-Signature".to_string(),
+            token: "secret".into(),
+            token_encoding: None,
+            signature_prefix: None,
+            signature_on: SignatureOn::HeadersThenBody {
+                headers: vec!["Present-Header".to_string(), "Missing-Header".to_string()],
+                separator: ".".to_string(),
+            },
+            signature_encoding: Encoding::Hex,
+        };
+
+        let mut headers = HeaderMap::new();
+        headers.insert("Present-Header", HeaderValue::from_static("value"));
+        // Missing-Header is intentionally absent
+
+        let body = b"body";
+        let sig = build_signature(&config, &headers, body).unwrap();
+
+        headers.insert("X-Signature", sig.parse().unwrap());
+        let body_bytes = bytes::Bytes::copy_from_slice(body);
+        assert2::assert!(let Ok(()) = check_signature(&config, &headers, &body_bytes));
+    }
+
+    #[test]
     fn test_signature_error_types() {
         // Test SignatureNotFound
         let config = SignatureConfig {
