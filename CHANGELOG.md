@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.25.0...0.25.1) - 2026-03-02
+
+### Other
+
+- add test to opendal's parsers
+- add edge-cases on vrl
+- add unit tests for security/rule.rs and security/signature.rs
+- move & rename `filter_http_headers`
+- remove deprecated "TODO" comments
+
 ## [0.25.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.24.0...0.25.0) - 2026-02-27
 
 ### Added
