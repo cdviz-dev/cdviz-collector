@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.25.1...0.26.0) - 2026-03-04
+
+### Added
+
+- *(db, clickhouse)* add basic retry with exponential backoff on transient error (eg: network)
+- *(db)* add parameters to configure db pool, and default `pool_connections_min` to `0`
+
+### Other
+
+- disable check of formatting from task `lint` and `ci`
+- *(header)* add test to check http headers are processed "case insensitive"
+
 ## [0.25.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.25.0...0.25.1) - 2026-03-02
 
 ### Other
