@@ -11,6 +11,8 @@ pub(crate) mod http;
 pub(crate) mod kafka;
 #[cfg(feature = "sink_nats")]
 pub(crate) mod nats;
+#[cfg(any(feature = "sink_clickhouse", feature = "sink_db"))]
+mod retry;
 #[cfg(feature = "sink_sse")]
 pub(crate) mod sse;
 

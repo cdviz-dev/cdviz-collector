@@ -27,12 +27,17 @@
 //! query = "INSERT INTO cdevents_lake (id, type, source, subject, predicate, specversion, timestamp, payload) VALUES ({id}, {type}, {source}, {subject}, {predicate}, {specversion}, {timestamp}, {payload})"
 //! ```
 
-use super::Sink;
+use std::time::Duration;
+
+use super::{Sink, retry};
 use crate::Message;
 use crate::errors::{IntoDiagnostic, Report, Result};
+use retry_policies::policies::ExponentialBackoff;
 use secrecy::{ExposeSecret, SecretString, zeroize::Zeroize};
 use serde::Deserialize;
 use tracing::Instrument;
+
+use retry::default_total_duration_of_retries;
 
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct Config {
@@ -48,6 +53,10 @@ pub(crate) struct Config {
     password: Option<SecretString>,
     /// INSERT query template with {field} placeholders
     query: String,
+    /// Total duration across all retry attempts for transient connection errors.
+    /// Set to `0s` to disable retries.
+    #[serde(default = "default_total_duration_of_retries", with = "humantime_serde")]
+    total_duration_of_retries: Duration,
 }
 
 /// Supported placeholder fields in query templates
@@ -157,6 +166,7 @@ impl ParsedQuery {
 pub(crate) struct ClickHouseSink {
     client: clickhouse::Client,
     parsed_query: ParsedQuery,
+    total_duration_of_retries: Duration,
 }
 
 // Manual Debug impl since clickhouse::Client doesn't implement Debug
@@ -200,29 +210,41 @@ impl TryFrom<Config> for ClickHouseSink {
             "Using ClickHouse sink"
         );
 
-        Ok(Self { client, parsed_query })
+        Ok(Self {
+            client,
+            parsed_query,
+            total_duration_of_retries: config.total_duration_of_retries,
+        })
     }
 }
 
 impl Sink for ClickHouseSink {
     #[tracing::instrument(skip(self, message), fields(cdevent_id = %message.cdevent.id()))]
     async fn send(&self, message: &Message) -> Result<()> {
-        // Extract all field values in order
-        let mut values = Vec::new();
-        for field in &self.parsed_query.fields {
-            values.push(field.extract_value(message)?);
-        }
-
-        // Build and execute query with bindings
-        let mut query = self.client.query(&self.parsed_query.sql);
-        for value in values {
-            query = query.bind(value);
-        }
-
-        query.execute().instrument(build_otel_span("INSERT")).await.into_diagnostic()?;
-
-        Ok(())
+        let values: Result<Vec<String>> =
+            self.parsed_query.fields.iter().map(|f| f.extract_value(message)).collect();
+        let values = values?;
+        let policy = ExponentialBackoff::builder()
+            .build_with_total_retry_duration(self.total_duration_of_retries);
+        retry::retry_on_transient(&policy, is_transient_clickhouse_error, || {
+            execute_query(&self.client, &self.parsed_query.sql, &values)
+        })
+        .await
     }
+}
+
+async fn execute_query(client: &clickhouse::Client, sql: &str, values: &[String]) -> Result<()> {
+    let mut query = client.query(sql);
+    for value in values {
+        query = query.bind(value.as_str());
+    }
+    query.execute().instrument(build_otel_span("INSERT")).await.into_diagnostic()
+}
+
+fn is_transient_clickhouse_error(err: &Report) -> bool {
+    err.downcast_ref::<clickhouse::error::Error>().is_some_and(|e| {
+        matches!(e, clickhouse::error::Error::Network(_) | clickhouse::error::Error::TimedOut)
+    })
 }
 
 // OTel span for ClickHouse operations
@@ -350,6 +372,7 @@ mod tests {
             user: Some("default".to_string()),
             password: None,
             query: "INSERT INTO cdevents_lake (id, type, source, subject, predicate, specversion, timestamp, payload) VALUES ({id}, {type}, {source}, {subject}, {predicate}, {specversion}, {timestamp}, {payload})".to_string(),
+            total_duration_of_retries: default_total_duration_of_retries(),
         };
 
         let sink = ClickHouseSink::try_from(config).unwrap();

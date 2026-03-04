@@ -1,10 +1,11 @@
 use std::time::Duration;
 
-use super::Sink;
+use super::{Sink, retry};
 use crate::{
     Message,
     errors::{IntoDiagnostic, Report, Result},
 };
+use retry_policies::policies::ExponentialBackoff;
 use secrecy::{ExposeSecret, SecretString, zeroize::Zeroize};
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -29,6 +30,7 @@ fn default_pool_max_lifetime() -> Duration {
 fn default_pool_test_before_acquire() -> bool {
     true
 }
+use retry::default_total_duration_of_retries;
 
 /// The database client config
 #[derive(Clone, Debug, Deserialize)]
@@ -76,6 +78,10 @@ pub(crate) struct Config {
     #[serde(default = "default_pool_test_before_acquire")]
     pool_test_before_acquire: bool,
 
+    /// Total duration across all retry attempts for transient connection errors.
+    /// Set to `0s` to disable retries.
+    #[serde(default = "default_total_duration_of_retries", with = "humantime_serde")]
+    total_duration_of_retries: Duration,
 }
 
 /// Build database connections pool
@@ -112,44 +118,56 @@ impl TryFrom<Config> for DbSink {
         );
 
         let pool = pool_options.connect_lazy(config.url.expose_secret()).into_diagnostic()?;
+        let total_duration_of_retries = config.total_duration_of_retries;
         let mut config = config;
         config.url.zeroize();
-        Ok(Self { pool })
+        Ok(Self { pool, total_duration_of_retries })
     }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct DbSink {
     pool: PgPool,
+    total_duration_of_retries: Duration,
 }
 
 impl Sink for DbSink {
     #[tracing::instrument(skip(self, message), fields(cdevent_id = %message.cdevent.id()))]
     async fn send(&self, message: &Message) -> Result<()> {
-        let result = store_event(
-            &self.pool,
-            // TODO build Event from raw json
-            Event { payload: serde_json::to_value(&message.cdevent).into_diagnostic()? },
-        )
-        .await;
-        if let Err(ref err) = result {
-            // PostgreSQL error code 23505 = unique_violation
-            // This is expected on restart when opendal replays already-processed files
-            // (see TODO in sources/opendal/mod.rs about state persistence)
-            let is_duplicate =
-                err.downcast_ref::<sqlx::Error>()
-                    .and_then(|e| {
-                        if let sqlx::Error::Database(db_err) = e { db_err.code() } else { None }
-                    })
-                    .is_some_and(|code| code == "23505");
-            if is_duplicate {
-                tracing::debug!(cdevent_id = %message.cdevent.id(), "event already stored (duplicate), skipping");
-                return Ok(());
-            }
-        }
-        result?;
-        Ok(())
+        // TODO build Event from raw json
+        let payload = serde_json::to_value(&message.cdevent).into_diagnostic()?;
+        let policy = ExponentialBackoff::builder()
+            .build_with_total_retry_duration(self.total_duration_of_retries);
+        retry::retry_on_transient(&policy, is_transient_sqlx_error, || {
+            store_event_dedup(&self.pool, Event { payload: payload.clone() })
+        })
+        .await
     }
+}
+
+/// Stores the event, treating a duplicate (`PostgreSQL` 23505 `unique_violation`) as success.
+/// Duplicates are expected on restart when opendal replays already-processed files
+/// (see TODO in sources/opendal/mod.rs about state persistence).
+async fn store_event_dedup(pg_pool: &PgPool, event: Event) -> Result<()> {
+    match store_event(pg_pool, event).await {
+        Err(ref err) if is_duplicate_event(err) => {
+            tracing::debug!("event already stored (duplicate), skipping");
+            Ok(())
+        }
+        other => other,
+    }
+}
+
+fn is_duplicate_event(err: &Report) -> bool {
+    err.downcast_ref::<sqlx::Error>()
+        .and_then(|e| if let sqlx::Error::Database(db_err) = e { db_err.code() } else { None })
+        .is_some_and(|code| code == "23505")
+}
+
+fn is_transient_sqlx_error(err: &Report) -> bool {
+    err.downcast_ref::<sqlx::Error>().is_some_and(|e| {
+        matches!(e, sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed | sqlx::Error::Io(_))
+    })
 }
 
 #[derive(sqlx::FromRow)]
@@ -245,6 +263,7 @@ mod tests {
             pool_idle_timeout: default_pool_idle_timeout(),
             pool_max_lifetime: default_pool_max_lifetime(),
             pool_test_before_acquire: default_pool_test_before_acquire(),
+            total_duration_of_retries: default_total_duration_of_retries(),
         };
         let dbsink = DbSink::try_from(config).unwrap();
         //Basic initialize the db schema
