@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use super::Sink;
 use crate::{
     Message,
@@ -9,6 +11,25 @@ use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use tracing::Instrument;
 
+fn default_pool_connections_max() -> u32 {
+    10
+}
+fn default_pool_connections_min() -> u32 {
+    0
+}
+fn default_pool_acquire_timeout() -> Duration {
+    Duration::from_secs(30)
+}
+fn default_pool_idle_timeout() -> Duration {
+    Duration::from_secs(10 * 60)
+}
+fn default_pool_max_lifetime() -> Duration {
+    Duration::from_secs(30 * 60)
+}
+fn default_pool_test_before_acquire() -> bool {
+    true
+}
+
 /// The database client config
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct Config {
@@ -19,15 +40,42 @@ pub(crate) struct Config {
     url: SecretString,
 
     /// The minimum number of connections to the database to maintain at all times.
-    /// minimum > 0, require to have access to the database at startup time,
-    /// consume a little more resource on idle
-    /// and could increase performance on low load (keep prepared statement,...)
+    /// minimum > 0, requires access to the database at startup time,
+    /// consumes a little more resource on idle
+    /// and could increase performance on low load (keep prepared statements, etc.)
     // https://docs.rs/sqlx/latest/sqlx/pool/struct.PoolOptions.html#method.min_connections
+    #[serde(default = "default_pool_connections_min")]
     pool_connections_min: u32,
 
     /// The maximum number of connections to the database to open / to maintain.
     // https://docs.rs/sqlx/latest/sqlx/pool/struct.PoolOptions.html#method.max_connections
+    #[serde(default = "default_pool_connections_max")]
     pool_connections_max: u32,
+
+    /// The maximum time to wait when acquiring a connection from the pool.
+    // https://docs.rs/sqlx/latest/sqlx/pool/struct.PoolOptions.html#method.acquire_timeout
+    #[serde(default = "default_pool_acquire_timeout", with = "humantime_serde")]
+    pool_acquire_timeout: Duration,
+
+    /// The maximum idle duration for individual connections.
+    /// Connections idle for longer than this are closed and removed from the pool.
+    /// `None` disables idle timeout.
+    // https://docs.rs/sqlx/latest/sqlx/pool/struct.PoolOptions.html#method.idle_timeout
+    #[serde(default = "default_pool_idle_timeout", with = "humantime_serde")]
+    pool_idle_timeout: Duration,
+
+    /// The maximum lifetime of individual connections.
+    /// Connections older than this are closed and replaced.
+    /// `None` disables max lifetime.
+    // https://docs.rs/sqlx/latest/sqlx/pool/struct.PoolOptions.html#method.max_lifetime
+    #[serde(default = "default_pool_max_lifetime", with = "humantime_serde")]
+    pool_max_lifetime: Duration,
+
+    /// If `true`, a health check query is run before returning a connection from the pool.
+    // https://docs.rs/sqlx/latest/sqlx/pool/struct.PoolOptions.html#method.test_before_acquire
+    #[serde(default = "default_pool_test_before_acquire")]
+    pool_test_before_acquire: bool,
+
 }
 
 /// Build database connections pool
@@ -48,7 +96,11 @@ impl TryFrom<Config> for DbSink {
         }
         let pool_options = PgPoolOptions::new()
             .min_connections(config.pool_connections_min)
-            .max_connections(config.pool_connections_max);
+            .max_connections(config.pool_connections_max)
+            .acquire_timeout(config.pool_acquire_timeout)
+            .idle_timeout(config.pool_idle_timeout)
+            .max_lifetime(config.pool_max_lifetime)
+            .test_before_acquire(config.pool_test_before_acquire);
         tracing::info!(
             max_connections = pool_options.get_max_connections(),
             min_connections = pool_options.get_min_connections(),
@@ -189,6 +241,10 @@ mod tests {
             },
             pool_connections_min: 1,
             pool_connections_max: 30,
+            pool_acquire_timeout: default_pool_acquire_timeout(),
+            pool_idle_timeout: default_pool_idle_timeout(),
+            pool_max_lifetime: default_pool_max_lifetime(),
+            pool_test_before_acquire: default_pool_test_before_acquire(),
         };
         let dbsink = DbSink::try_from(config).unwrap();
         //Basic initialize the db schema

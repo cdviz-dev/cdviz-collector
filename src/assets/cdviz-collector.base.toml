@@ -20,8 +20,12 @@ parameters = { root = "./sink" }
 enabled = false
 type = "db"
 url = "postgresql://postgres:passwd@localhost:5432/cdviz?search_path=cdviz"
-pool_connections_min = 1
+pool_connections_min = 0
 pool_connections_max = 10
+pool_acquire_timeout = "30s"
+pool_idle_timeout = "10m"
+pool_max_lifetime = "30m"
+pool_test_before_acquire = true
 
 # [sinks.clickhouse]
 # enabled = false
