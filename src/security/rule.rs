@@ -910,4 +910,74 @@ mod tests {
             other => panic!("Expected InvalidValue, got {other:?}"),
         }
     }
+
+    /// HTTP header names are case-insensitive (RFC 7230). The config may use any casing
+    /// (e.g. "X-GitLab-Token", "x-gitlab-token", "X-GITLAB-TOKEN") and it should match
+    /// the incoming request header regardless of its casing.
+    #[rstest::rstest]
+    #[case("X-GitLab-Token", "x-gitlab-token")]
+    #[case("x-gitlab-token", "X-Gitlab-Token")]
+    #[case("X-GITLAB-TOKEN", "X-Gitlab-Token")]
+    #[case("X-Gitlab-Token", "X-GITLAB-TOKEN")]
+    fn test_header_name_case_insensitive_exists(
+        #[case] config_name: &str,
+        #[case] request_name: &str,
+    ) {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            HeaderName::from_str(request_name).unwrap(),
+            HeaderValue::from_static("my-secret"),
+        );
+        let rule_config = HeaderRuleConfig { header: config_name.to_string(), rule: Rule::Exists };
+        assert!(
+            validate_header(&headers, &rule_config, None).is_ok(),
+            "config header name '{config_name}' should match request header '{request_name}'"
+        );
+    }
+
+    #[rstest::rstest]
+    #[case("X-GitLab-Token", "x-gitlab-token")]
+    #[case("x-gitlab-token", "X-Gitlab-Token")]
+    #[case("X-GITLAB-TOKEN", "X-Gitlab-Token")]
+    fn test_header_name_case_insensitive_equals(
+        #[case] config_name: &str,
+        #[case] request_name: &str,
+    ) {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            HeaderName::from_str(request_name).unwrap(),
+            HeaderValue::from_static("expected-token"),
+        );
+        let rule_config = HeaderRuleConfig {
+            header: config_name.to_string(),
+            rule: Rule::Equals { value: "expected-token".to_string(), case_sensitive: true },
+        };
+        assert!(
+            validate_header(&headers, &rule_config, None).is_ok(),
+            "config header name '{config_name}' should match request header '{request_name}' for Equals rule"
+        );
+    }
+
+    #[rstest::rstest]
+    #[case("X-GitLab-Token", "x-gitlab-token")]
+    #[case("x-gitlab-token", "X-Gitlab-Token")]
+    #[case("X-GITLAB-TOKEN", "X-Gitlab-Token")]
+    fn test_header_name_case_insensitive_matches(
+        #[case] config_name: &str,
+        #[case] request_name: &str,
+    ) {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            HeaderName::from_str(request_name).unwrap(),
+            HeaderValue::from_static("glpat-abc123"),
+        );
+        let rule_config = HeaderRuleConfig {
+            header: config_name.to_string(),
+            rule: Rule::Matches { pattern: r"^glpat-\w+$".to_string() },
+        };
+        assert!(
+            validate_header(&headers, &rule_config, None).is_ok(),
+            "config header name '{config_name}' should match request header '{request_name}' for Matches rule"
+        );
+    }
 }

@@ -470,6 +470,48 @@ mod security_tests {
         assert2::assert!(let None = collector.try_into_iter().unwrap().next());
     }
 
+    /// HTTP header names are case-insensitive (RFC 7230). The config key may use any casing
+    /// and must match the incoming request header regardless of its casing.
+    #[rstest::rstest]
+    #[case("X-GitLab-Token", "x-gitlab-token")]
+    #[case("x-gitlab-token", "X-Gitlab-Token")]
+    #[case("X-GITLAB-TOKEN", "X-Gitlab-Token")]
+    #[tokio::test]
+    async fn test_webhook_header_name_case_insensitive(
+        #[case] config_name: &str,
+        #[case] request_name: &str,
+    ) {
+        let config = Config {
+            metadata: serde_json::json!({}),
+            id: "gitlab".to_string(),
+            headers_to_keep: vec![],
+            headers: {
+                let mut map = HeaderRuleMap::new();
+                map.insert(config_name.to_string(), Rule::Exists);
+                map
+            },
+            ..Default::default()
+        };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        let router = make_route(&config, Box::new(collector.create_pipe()));
+
+        let payload = serde_json::json!({"event": "push"});
+        let request = Request::builder()
+            .uri("/webhook/gitlab")
+            .method("POST")
+            .header("content-type", "application/json")
+            .header(request_name, "glpat-secret-token")
+            .body(Body::from(payload.to_string()))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::CREATED,
+            "config header name '{config_name}' should match request header '{request_name}'"
+        );
+    }
+
     #[tokio::test]
     async fn test_webhook_header_validation_missing_header() {
         let config = Config {
