@@ -1,6 +1,4 @@
-#![allow(clippy::print_stdout)]
-#![allow(clippy::print_stderr)]
-#![allow(clippy::disallowed_macros)]
+use std::io::Write as _;
 use std::path::PathBuf;
 
 use clap::Args;
@@ -39,13 +37,15 @@ pub(crate) fn config_cmd(args: ConfigArgs) -> Result<bool> {
     if args.print_raw {
         let figment = Config::builder().with_config_file(args.config.clone()).build_raw_figment();
         let value: toml::Value = figment.extract().into_diagnostic()?;
-        println!("{}", toml::to_string_pretty(&value).into_diagnostic()?);
+        writeln!(std::io::stdout(), "{}", toml::to_string_pretty(&value).into_diagnostic()?)
+            .into_diagnostic()?;
     }
 
     if args.print {
         let figment = Config::builder().with_config_file(args.config.clone()).build_figment()?;
         let value: toml::Value = figment.extract().into_diagnostic()?;
-        println!("{}", toml::to_string_pretty(&value).into_diagnostic()?);
+        writeln!(std::io::stdout(), "{}", toml::to_string_pretty(&value).into_diagnostic()?)
+            .into_diagnostic()?;
     }
 
     if args.check {
@@ -54,12 +54,14 @@ pub(crate) fn config_cmd(args: ConfigArgs) -> Result<bool> {
                 let src_count = config.sources.len();
                 let sink_count = config.sinks.len();
                 let tx_count = config.transformers.len();
-                println!(
+                cliclack::log::success(format!(
                     "Configuration is valid ({src_count} source(s), {sink_count} sink(s), {tx_count} transformer(s))"
-                );
+                ))
+                .into_diagnostic()?;
             }
             Err(e) => {
-                eprintln!("Configuration is invalid: {e:?}");
+                cliclack::log::error(format!("Configuration is invalid: {e:?}"))
+                    .into_diagnostic()?;
                 return Ok(false);
             }
         }
