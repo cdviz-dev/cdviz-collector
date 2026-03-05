@@ -33,7 +33,7 @@ jobs:
           EOF
           VERSION=$(yq -r '.releases[0].app_version' < plan.json)
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{github.actor}}
