@@ -31,6 +31,7 @@ use crate::{
     errors::{Error, IntoDiagnostic, Result},
     message::{Message, Sender},
     sinks, sources,
+    sources::transformers,
 };
 use axum::Router;
 use futures::future::TryJoinAll;
@@ -47,16 +48,25 @@ pub(crate) struct PipelineBuilder {
     tx: Sender<Message>,
 }
 
-/// The http server config
+fn default_queue_capacity() -> usize {
+    1024
+}
+
+/// Pipeline-level configuration
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct PipelineConfig {
-    /// Listening host of http server
+    #[serde(default = "default_queue_capacity")]
     pub(crate) queue_capacity: usize,
+    #[serde(default)]
+    pub(crate) transformer_refs: Vec<String>,
+    /// Populated during config resolution, not from TOML directly
+    #[serde(default, skip_serializing)]
+    pub(crate) transformers: Vec<transformers::Config>,
 }
 
 impl Default for PipelineConfig {
     fn default() -> Self {
-        Self { queue_capacity: 1024 }
+        Self { queue_capacity: 1024, transformer_refs: vec![], transformers: vec![] }
     }
 }
 

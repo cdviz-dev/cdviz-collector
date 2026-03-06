@@ -148,6 +148,21 @@ impl ConfigBuilder {
             source_config.resolve_transformers(&config.transformers)
         })?;
 
+        // Resolve pipeline-level global transformer chain
+        let global_transformers = sources::transformers::resolve_transformer_refs(
+            &config.pipeline.transformer_refs,
+            &config.transformers,
+        )?;
+        config.pipeline.transformers = global_transformers;
+
+        // Append global transformers to every source's chain
+        if !config.pipeline.transformers.is_empty() {
+            let global = config.pipeline.transformers.clone();
+            config.sources.iter_mut().for_each(|(_name, source_config)| {
+                source_config.append_transformers(&global);
+            });
+        }
+
         // inject context.source into each source's metadata
         let root_url = &config.http.root_url;
         config.sources.iter_mut().for_each(|(name, source_config)| {
@@ -183,6 +198,35 @@ mod tests {
         Jail::expect_with(|_jail| {
             let config: Config = Config::from_file(None).unwrap();
             assert!(!config.sinks.get("debug").unwrap().is_enabled());
+            Ok(())
+        });
+    }
+
+    #[rstest]
+    fn global_transformer_refs_appended_to_sources() {
+        Jail::expect_with(|_jail| {
+            let config: Config = ConfigBuilder::new()
+                .with_env_vars(false)
+                .with_base_config(
+                    r#"
+[pipeline]
+transformer_refs = ["passthrough"]
+
+[transformers.passthrough]
+type = "passthrough"
+
+[sources.dummy]
+enabled = true
+"#,
+                )
+                .build()
+                .unwrap();
+
+            let source = config.sources.get("dummy").unwrap();
+            // The global passthrough transformer must be present in the source's list
+            assert!(!source.transformers.is_empty());
+            // The pipeline-level resolved list must also contain it
+            assert!(!config.pipeline.transformers.is_empty());
             Ok(())
         });
     }

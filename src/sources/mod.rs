@@ -37,7 +37,7 @@ pub(crate) struct Config {
     #[serde(default)]
     transformer_refs: Vec<String>,
     #[serde(default)]
-    transformers: Vec<transformers::Config>,
+    pub(crate) transformers: Vec<transformers::Config>,
 }
 
 impl Config {
@@ -52,6 +52,10 @@ impl Config {
         let mut tconfigs = transformers::resolve_transformer_refs(&self.transformer_refs, configs)?;
         self.transformers.append(&mut tconfigs);
         Ok(())
+    }
+
+    pub(crate) fn append_transformers(&mut self, extra: &[transformers::Config]) {
+        self.transformers.extend_from_slice(extra);
     }
 
     /// Inject `context.source` into extractor metadata if not already set.
