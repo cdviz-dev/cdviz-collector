@@ -10,12 +10,12 @@ pub(crate) mod opendal;
 pub(crate) mod send_cdevents;
 #[cfg(feature = "source_sse")]
 pub(crate) mod sse;
-pub(crate) mod transformers;
 pub(crate) mod webhook;
 
 use crate::cdevent_utils::sanitize_id;
 use crate::errors::{Error, IntoDiagnostic, Result};
 use crate::pipes::Pipe;
+use crate::transformers;
 use crate::{Message, Sender};
 use axum::Router;
 use cdevents_sdk::CDEvent;

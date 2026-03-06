@@ -3,10 +3,10 @@ mod vrl;
 #[cfg(feature = "transformer_vrl")]
 pub(crate) mod vrl_purl;
 
-use super::EventSourcePipe;
 use crate::{
     errors::{Error, IntoDiagnostic, Result},
     pipes::{discard_all, log, passthrough},
+    sources::EventSourcePipe,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -55,20 +55,3 @@ pub fn resolve_transformer_refs(
         .collect::<Result<Vec<_>>>()?;
     Ok(transformers)
 }
-
-// pub struct Identity {
-//     next: EventSourcePipe,
-// }
-
-// impl Identity {
-//     fn new(next: EventSourcePipe) -> Self {
-//         Self { next }
-//     }
-// }
-
-// impl Pipe for Identity {
-//     type Input = EventSource;
-//     fn send(&mut self, input: Self::Input) -> Result<()> {
-//         self.next.send(input)
-//     }
-// }

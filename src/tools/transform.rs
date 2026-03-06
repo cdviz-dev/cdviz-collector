@@ -84,7 +84,8 @@ use crate::{
     config,
     errors::{IntoDiagnostic, Result, miette},
     pipes::Pipe,
-    sources::{EventSource, EventSourcePipe, opendal as source_opendal, transformers},
+    sources::{EventSource, EventSourcePipe, opendal as source_opendal},
+    transformers,
     tools::difference::normalize_json_value,
     utils::PathExt,
 };

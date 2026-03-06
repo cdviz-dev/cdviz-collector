@@ -30,8 +30,7 @@ use crate::{
     config::Config,
     errors::{Error, IntoDiagnostic, Result},
     message::{Message, Sender},
-    sinks, sources,
-    sources::transformers,
+    sinks, sources, transformers,
 };
 use axum::Router;
 use futures::future::TryJoinAll;

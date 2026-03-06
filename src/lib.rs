@@ -14,6 +14,7 @@ mod security;
 mod sinks;
 mod sources;
 mod tools;
+mod transformers;
 mod utils;
 
 // re-export

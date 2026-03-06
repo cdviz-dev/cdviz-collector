@@ -4,7 +4,7 @@ mod toml_provider;
 
 use crate::{
     errors::{Error, IntoDiagnostic, Result},
-    http, pipeline, sinks, sources,
+    http, pipeline, sinks, sources, transformers,
 };
 use figment::{
     Figment,
@@ -25,7 +25,7 @@ pub(crate) struct Config {
     pub(crate) sinks: HashMap<String, sinks::Config>,
     // extractors: HashMap<String, sources::extractors::Config>,
     #[serde(default)]
-    pub(crate) transformers: HashMap<String, sources::transformers::Config>,
+    pub(crate) transformers: HashMap<String, transformers::Config>,
     #[serde(default)]
     pub(crate) http: http::Config,
     #[serde(default)]
@@ -149,7 +149,7 @@ impl ConfigBuilder {
         })?;
 
         // Resolve pipeline-level global transformer chain
-        let global_transformers = sources::transformers::resolve_transformer_refs(
+        let global_transformers = transformers::resolve_transformer_refs(
             &config.pipeline.transformer_refs,
             &config.transformers,
         )?;
