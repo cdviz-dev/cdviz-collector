@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.27.0...0.28.0) - 2026-03-06
+
+### Added
+
+- *(pipeline)* add global transformer chain applied to all sources
+
+### Other
+
+- move transformers module from sources to crate top level
+- update README with NATS support
+
 ## [0.27.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.26.0...0.27.0) - 2026-03-06
 
 ### Added
