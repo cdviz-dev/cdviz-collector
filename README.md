@@ -80,7 +80,7 @@ flowchart LR
     src_s3_content(S3 with cdevents)
     src_s3_activity(S3 activity)
     src_kafka(Kafka)
-    src_nats(NATS):::future
+    src_nats(NATS)
     src_ecr(AWS ECR):::future
     src_misc(...):::future
   end
@@ -101,7 +101,7 @@ flowchart LR
     sink_clickhouse(ClickHouse)
     sink_http(HTTP)
     sink_kafka(Kafka)
-    sink_nats(NATS):::future
+    sink_nats(NATS)
   end
   q --> sink_stdout
   q --> sink_http
