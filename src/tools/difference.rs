@@ -30,6 +30,15 @@ impl Comparison {
     }
 }
 
+pub fn normalize_json_value(value: &serde_json::Value) -> Option<String> {
+    serde_json::to_string_pretty(value).ok()
+}
+
+fn normalize_json(content: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(content).ok()?;
+    normalize_json_value(&value)
+}
+
 pub fn find_differences(files: &Vec<PathBuf>) -> Result<HashMap<Comparison, Difference>> {
     let mut differences = HashMap::new();
     for path in files {
@@ -41,14 +50,28 @@ pub fn find_differences(files: &Vec<PathBuf>) -> Result<HashMap<Comparison, Diff
                     std::fs::read_to_string(&comparison.expected).into_diagnostic()?;
                 let actual_content =
                     std::fs::read_to_string(&comparison.actual).into_diagnostic()?;
-                if expected_content != actual_content {
-                    differences.insert(
-                        comparison,
-                        Difference::StringContent {
-                            expected: expected_content,
-                            actual: actual_content,
-                        },
-                    );
+                let expected_norm = normalize_json(&expected_content);
+                let actual_norm = normalize_json(&actual_content);
+                match (expected_norm, actual_norm) {
+                    (Some(e), Some(a)) => {
+                        if e != a {
+                            differences.insert(
+                                comparison,
+                                Difference::StringContent { expected: e, actual: a },
+                            );
+                        }
+                    }
+                    _ => {
+                        if expected_content != actual_content {
+                            differences.insert(
+                                comparison,
+                                Difference::StringContent {
+                                    expected: expected_content,
+                                    actual: actual_content,
+                                },
+                            );
+                        }
+                    }
                 }
             } else {
                 differences
@@ -155,6 +178,19 @@ mod tests {
     }
 
     #[test]
+    fn find_no_differences_json_whitespace() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let actual = tmpdir.path().join("foo.json.new");
+        std::fs::write(&actual, r#"{"b":1,"a":2}"#).unwrap();
+        let expected = tmpdir.path().join("foo.json");
+        std::fs::write(&expected, "{\n  \"a\": 2,\n  \"b\": 1\n}").unwrap();
+        let files = vec![actual.clone(), expected.clone()];
+
+        let diffs = find_differences(&files).unwrap();
+        assert_eq!(diffs.len(), 0);
+    }
+
+    #[test]
     fn find_differences_on_content() {
         let tmpdir = tempfile::tempdir().unwrap();
         let actual = tmpdir.path().join("foo.json.new");
@@ -173,6 +209,8 @@ mod tests {
             diff,
             Difference::StringContent { actual: "{}".to_string(), expected: "[]".to_string() }
         );
+        // Both are valid JSON so the stored content is the normalized form; for simple
+        // single-token values like `{}` and `[]` the normalized form is identical to the input.
     }
 
     #[test]
