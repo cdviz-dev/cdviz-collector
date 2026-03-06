@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.26.0...0.27.0) - 2026-03-06
+
+### Added
+
+- transform compare json as "normalized json" ([#286](https://github.com/cdviz-dev/cdviz-collector/pull/286))
+
+### Fixed
+
+- *(deps)* update rust crate vrl to 0.31 ([#284](https://github.com/cdviz-dev/cdviz-collector/pull/284))
+- *(deps)* update rust crate cliclack to 0.4 ([#278](https://github.com/cdviz-dev/cdviz-collector/pull/278))
+
+### Other
+
+- *(deps)* update dependency rust to v1.94.0 ([#282](https://github.com/cdviz-dev/cdviz-collector/pull/282))
+- *(deps)* update docker/setup-buildx-action action to v4 ([#285](https://github.com/cdviz-dev/cdviz-collector/pull/285))
+- *(deps)* update rust crate uuid to v1.22.0 ([#283](https://github.com/cdviz-dev/cdviz-collector/pull/283))
+- enhance output of subcommand `config` ([#281](https://github.com/cdviz-dev/cdviz-collector/pull/281))
+- *(deps)* update docker/login-action action to v4 ([#279](https://github.com/cdviz-dev/cdviz-collector/pull/279))
+
 ## [0.26.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.25.1...0.26.0) - 2026-03-04
 
 ### Added
