@@ -85,6 +85,7 @@ use crate::{
     errors::{IntoDiagnostic, Result, miette},
     pipes::Pipe,
     sources::{EventSource, EventSourcePipe, opendal as source_opendal, transformers},
+    tools::difference::normalize_json_value,
     utils::PathExt,
 };
 use cdevents_sdk::CDEvent;
@@ -404,7 +405,7 @@ impl Pipe for OutputToJsonFile {
 
         std::fs::write(
             path.with_extension("json.new"),
-            serde_json::to_string_pretty(&input.body).into_diagnostic()?,
+            normalize_json_value(&input.body).ok_or_else(|| miette!("failed to serialize body"))?,
         )
         .into_diagnostic()?;
         if self.export_headers {
