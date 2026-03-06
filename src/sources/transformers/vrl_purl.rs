@@ -336,8 +336,18 @@ impl Function for PurlFromOciImage {
         "purl_from_oci_image"
     }
 
+    fn category(&self) -> &'static str {
+        Category::Parse.as_ref()
+    }
+
+    fn return_kind(&self) -> u16 {
+        kind::OBJECT
+    }
+
     fn parameters(&self) -> &'static [Parameter] {
-        &[Parameter { keyword: "image", kind: kind::BYTES, required: true }]
+        const PARAMS: &[Parameter] =
+            &[Parameter::required("image", kind::BYTES, "The OCI/Docker image string to parse")];
+        PARAMS
     }
 
     fn examples(&self) -> &'static [Example] {
@@ -419,8 +429,21 @@ impl Function for PurlToString {
         "purl_to_string"
     }
 
+    fn category(&self) -> &'static str {
+        Category::Convert.as_ref()
+    }
+
+    fn return_kind(&self) -> u16 {
+        kind::BYTES
+    }
+
     fn parameters(&self) -> &'static [Parameter] {
-        &[Parameter { keyword: "purl_object", kind: kind::OBJECT, required: true }]
+        const PARAMS: &[Parameter] = &[Parameter::required(
+            "purl_object",
+            kind::OBJECT,
+            "The PURL object to convert to string",
+        )];
+        PARAMS
     }
 
     fn examples(&self) -> &'static [Example] {
@@ -486,12 +509,21 @@ impl Function for PurlFromArgoCdHelm {
         "purl_from_argocd_helm"
     }
 
+    fn category(&self) -> &'static str {
+        Category::Parse.as_ref()
+    }
+
+    fn return_kind(&self) -> u16 {
+        kind::OBJECT
+    }
+
     fn parameters(&self) -> &'static [Parameter] {
-        &[
-            Parameter { keyword: "repo_url", kind: kind::BYTES, required: true },
-            Parameter { keyword: "chart", kind: kind::BYTES, required: true },
-            Parameter { keyword: "target_revision", kind: kind::BYTES, required: true },
-        ]
+        const PARAMS: &[Parameter] = &[
+            Parameter::required("repo_url", kind::BYTES, "The Helm repository URL"),
+            Parameter::required("chart", kind::BYTES, "The Helm chart name"),
+            Parameter::required("target_revision", kind::BYTES, "The target revision or version"),
+        ];
+        PARAMS
     }
 
     fn examples(&self) -> &'static [Example] {
@@ -573,12 +605,25 @@ impl Function for PurlFromArgoCdGitSource {
         "purl_from_argocd_git_source"
     }
 
+    fn category(&self) -> &'static str {
+        Category::Parse.as_ref()
+    }
+
+    fn return_kind(&self) -> u16 {
+        kind::OBJECT
+    }
+
     fn parameters(&self) -> &'static [Parameter] {
-        &[
-            Parameter { keyword: "repo_url", kind: kind::BYTES, required: true },
-            Parameter { keyword: "path", kind: kind::BYTES, required: false },
-            Parameter { keyword: "target_revision", kind: kind::BYTES, required: true },
-        ]
+        const PARAMS: &[Parameter] = &[
+            Parameter::required("repo_url", kind::BYTES, "The Git repository URL"),
+            Parameter::optional("path", kind::BYTES, "The path within the repository"),
+            Parameter::required(
+                "target_revision",
+                kind::BYTES,
+                "The target revision, branch, or tag",
+            ),
+        ];
+        PARAMS
     }
 
     fn examples(&self) -> &'static [Example] {
