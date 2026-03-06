@@ -215,6 +215,7 @@ pub fn header_rule_map_to_configs(map: &HeaderRuleMap) -> Vec<HeaderRuleConfig> 
 }
 
 #[cfg(test)]
+#[allow(clippy::result_large_err)]
 mod tests {
     use super::*;
     use axum::http::{HeaderMap, HeaderValue};
