@@ -85,8 +85,8 @@ use crate::{
     errors::{IntoDiagnostic, Result, miette},
     pipes::Pipe,
     sources::{EventSource, EventSourcePipe, opendal as source_opendal},
-    transformers,
     tools::difference::normalize_json_value,
+    transformers,
     utils::PathExt,
 };
 use cdevents_sdk::CDEvent;

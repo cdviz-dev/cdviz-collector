@@ -4,7 +4,7 @@ use super::kafka;
 use super::nats;
 #[cfg(feature = "source_sse")]
 use super::sse;
-use super::{EventSourcePipe, cli, opendal, webhook};
+use super::{EventSourcePipe, cli, opendal, subprocess, webhook};
 use crate::errors::Result;
 use axum::Router;
 use serde::Deserialize;
@@ -33,6 +33,8 @@ pub(crate) enum Config {
     #[cfg(feature = "source_sse")]
     #[serde(alias = "sse")]
     Sse(sse::Config),
+    #[serde(alias = "subprocess")]
+    Subprocess(subprocess::Config),
 }
 
 pub enum Extractor {
@@ -107,6 +109,14 @@ impl Config {
                     extractor.run(cancel_token).await?;
                     tracing::info!(name, kind = "source", "exiting");
                     // extractor is moved into run(), so no need to drop explicitly
+                    Ok(())
+                }))
+            }
+            Config::Subprocess(config) => {
+                let extractor = subprocess::SubprocessExtractor::new(config.clone(), next);
+                Extractor::Task(tokio::spawn(async move {
+                    extractor.run(cancel_token).await?;
+                    tracing::info!(name, kind = "source", "exiting");
                     Ok(())
                 }))
             }

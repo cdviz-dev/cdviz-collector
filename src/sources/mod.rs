@@ -10,6 +10,7 @@ pub(crate) mod opendal;
 pub(crate) mod send_cdevents;
 #[cfg(feature = "source_sse")]
 pub(crate) mod sse;
+pub(crate) mod subprocess;
 pub(crate) mod webhook;
 
 use crate::cdevent_utils::sanitize_id;
@@ -22,6 +23,7 @@ use cdevents_sdk::CDEvent;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -58,6 +60,15 @@ impl Config {
         self.transformers.extend_from_slice(extra);
     }
 
+    pub(crate) fn inject_subprocess_exit_code_out(
+        &mut self,
+        exit_code_out: Arc<std::sync::atomic::AtomicI32>,
+    ) {
+        if let extractors::Config::Subprocess(sub) = &mut self.extractor {
+            sub.exit_code_out = exit_code_out;
+        }
+    }
+
     /// Inject `context.source` into extractor metadata if not already set.
     /// This is called during config loading to populate the source URL.
     pub(crate) fn inject_context_source(&mut self, source_name: &str, root_url: &url::Url) {
@@ -73,6 +84,7 @@ impl Config {
             extractors::Config::Nats(config) => &mut config.metadata,
             #[cfg(feature = "source_sse")]
             extractors::Config::Sse(config) => &mut config.metadata,
+            extractors::Config::Subprocess(config) => &mut config.metadata,
             extractors::Config::Sleep => return, // No metadata for Sleep
         };
 

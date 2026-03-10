@@ -334,6 +334,159 @@ fn create_test_cdevent() -> serde_json::Value {
     })
 }
 
+// ── --run integration tests ──────────────────────────────────────────────
+
+/// Test that `--run taskrun -- true` emits exactly two `CDEvents` (started + finished)
+/// and returns success (exit 0).
+#[tokio::test(flavor = "multi_thread")]
+async fn test_send_run_taskrun_exit_0_emits_two_events() {
+    let mock_server = MockServer::start().await;
+    let sink_url = mock_server.uri();
+
+    // Expect 2 CDEvents: taskrun.started + taskrun.finished
+    let mock = Mock::given(method("POST"))
+        .and(path("/events"))
+        .and(header("ce-specversion", "1.0"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(2);
+    mock_server.register(mock).await;
+
+    let result = cdviz_collector::run_with_args(vec![
+        "--disable-otel",
+        "send",
+        "--run",
+        "taskrun",
+        "-u",
+        &format!("{sink_url}/events"),
+        "--",
+        "true",
+    ])
+    .await;
+
+    sleep(Duration::from_millis(200)).await;
+    mock_server.verify().await;
+
+    // exit 0 → Ok(true)
+    assert!(matches!(result, Ok(true)), "Expected Ok(true), got: {result:?}");
+}
+
+/// Test that `--run taskrun -- false` emits two `CDEvents` and returns failure (exit 1).
+#[tokio::test(flavor = "multi_thread")]
+async fn test_send_run_taskrun_exit_1_returns_false() {
+    let mock_server = MockServer::start().await;
+    let sink_url = mock_server.uri();
+
+    let mock = Mock::given(method("POST"))
+        .and(path("/events"))
+        .and(header("ce-specversion", "1.0"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(2);
+    mock_server.register(mock).await;
+
+    let result = cdviz_collector::run_with_args(vec![
+        "--disable-otel",
+        "send",
+        "--run",
+        "taskrun",
+        "-u",
+        &format!("{sink_url}/events"),
+        "--",
+        "false",
+    ])
+    .await;
+
+    sleep(Duration::from_millis(200)).await;
+    mock_server.verify().await;
+
+    // exit 1 → Ok(false)
+    assert!(matches!(result, Ok(false)), "Expected Ok(false), got: {result:?}");
+}
+
+/// Test that `--run taskrun` `CDEvents` contain correct event types.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_send_run_taskrun_event_types() {
+    use std::sync::{Arc, Mutex};
+
+    let mock_server = MockServer::start().await;
+    let sink_url = mock_server.uri();
+    let received_types: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
+    let received_types_clone = Arc::clone(&received_types);
+
+    let mock = Mock::given(method("POST"))
+        .and(path("/events"))
+        .and(header("ce-specversion", "1.0"))
+        .respond_with(move |req: &wiremock::Request| {
+            // Extract the ce-type header which contains the CDEvent type
+            if let Some(ce_type) = req.headers.get("ce-type")
+                && let Ok(mut types) = received_types_clone.lock()
+            {
+                types.push(ce_type.to_str().unwrap_or("").to_string());
+            }
+            ResponseTemplate::new(200)
+        })
+        .expect(2);
+    mock_server.register(mock).await;
+
+    cdviz_collector::run_with_args(vec![
+        "--disable-otel",
+        "send",
+        "--run",
+        "taskrun",
+        "-u",
+        &format!("{sink_url}/events"),
+        "--",
+        "true",
+    ])
+    .await
+    .unwrap();
+
+    sleep(Duration::from_millis(200)).await;
+    mock_server.verify().await;
+
+    let types = received_types.lock().unwrap();
+    assert!(
+        types.iter().any(|t| t.contains("taskrun.started")),
+        "Expected taskrun.started event, got: {types:?}"
+    );
+    assert!(
+        types.iter().any(|t| t.contains("taskrun.finished")),
+        "Expected taskrun.finished event, got: {types:?}"
+    );
+}
+
+/// Test that `--run` with `--metadata suite_name=my-suite` overrides the suite name.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_send_run_metadata_override() {
+    let mock_server = MockServer::start().await;
+    let sink_url = mock_server.uri();
+
+    let mock = Mock::given(method("POST"))
+        .and(path("/events"))
+        .and(header("ce-specversion", "1.0"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(2);
+    mock_server.register(mock).await;
+
+    let result = cdviz_collector::run_with_args(vec![
+        "--disable-otel",
+        "send",
+        "--run",
+        "taskrun",
+        "--metadata",
+        "suite_name=my-custom-suite",
+        "-u",
+        &format!("{sink_url}/events"),
+        "--",
+        "true",
+    ])
+    .await;
+
+    sleep(Duration::from_millis(200)).await;
+    mock_server.verify().await;
+
+    assert!(matches!(result, Ok(true)), "Expected Ok(true), got: {result:?}");
+}
+
 /// Create a test `CDEvent` with custom ID
 fn create_test_cdevent_with_id(id: &str) -> serde_json::Value {
     json!({

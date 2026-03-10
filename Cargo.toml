@@ -11,7 +11,7 @@ categories = []
 publish = true
 
 [package.metadata.cargo-machete]
-ignored = ["humantime-serde"]  # auto-registered and used at runtime
+ignored = ["humantime-serde"]
 
 [workspace]
 members = ["testkit"]
@@ -35,7 +35,7 @@ default = [
 config_remote = ["dep:opendal"]
 #! ### Parsers
 parser_all = ["parser_tap", "parser_xml", "parser_yaml"]
-parser_tap = ["dep:nom", "parser_yaml"]  # TAP depends on YAML for diagnostics
+parser_tap = ["dep:nom", "parser_yaml"]
 parser_xml = []
 parser_yaml = ["dep:serde_yaml"]
 #! ### Internal fork/vendoring
@@ -80,7 +80,7 @@ sink_sse = ["dep:tokio-stream"]
 source_all = ["source_kafka", "source_nats", "source_opendal", "source_sse"]
 source_kafka = ["dep:rdkafka"]
 source_nats = ["dep:async-nats"]
-source_opendal = ["dep:bytes", "dep:csv", "dep:globset", "dep:opendal"]
+source_opendal = ["dep:bytes", "dep:csv", "dep:opendal"]
 source_sse = ["dep:uuid", "reqwest-eventsource"]
 tool_transform = ["source_opendal", "tool_ui", "transformer_vrl"]
 #! ### Tools
@@ -120,7 +120,7 @@ figment_file_provider_adapter = "0.1"
 futures = "0.3"
 futures-core = { version = "0.3", optional = true }
 futures-timer = { version = "3", optional = true }
-globset = { version = "0.4", optional = true }
+globset = "0.4"
 hmac = "0.12"
 humantime-serde = "1"
 init-tracing-opentelemetry = { version = "0.36", features = [
@@ -134,7 +134,8 @@ mime = { version = "0.3", optional = true }
 multihash = "0.19"
 nom = { version = "7.1", optional = true }
 opendal = { version = "0.55", default-features = false, features = [
-  "services-fs",  # "services-ftp",
+  "services-fs",
+  # "services-ftp",
   "services-gcs",
   "services-github",
   "services-http",

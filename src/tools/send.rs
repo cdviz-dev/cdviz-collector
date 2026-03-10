@@ -82,7 +82,13 @@ use crate::{
 };
 use clap::{Args, ValueEnum};
 use reqwest::Url;
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicI32, Ordering},
+    },
+};
 use tokio_util::sync::CancellationToken;
 
 /// Arguments for send command
@@ -98,8 +104,9 @@ pub(crate) struct SendArgs {
     ///
     /// The data will be parsed according to `--input-parser` and processed
     /// through the configured pipeline before being sent to the specified sink.
+    /// Can be repeated to send multiple items.
     #[clap(short = 'd', long = "data")]
-    data: String,
+    data: Vec<String>,
 
     /// HTTP URL to send the data to.
     ///
@@ -157,6 +164,26 @@ pub(crate) struct SendArgs {
     /// - text-line: Each non-empty line as a separate event with body `{"text": "..."}`
     #[clap(long = "input-parser", value_enum, default_value = "auto")]
     parser: ParserSelection,
+
+    /// Wrap a child process and emit `CDEvents` around it.
+    #[clap(long = "run")]
+    run: Option<String>,
+
+    /// Disable result file parsing, use exit code only (--run mode).
+    #[clap(long = "no-data")]
+    no_data: bool,
+
+    /// Override metadata fields: --metadata key=value (repeatable, --run mode).
+    #[clap(long = "metadata")]
+    metadata: Vec<String>,
+
+    /// Fail if collector sink is unreachable (default: warn and continue).
+    #[clap(long = "fail-on-collector-error")]
+    fail_on_collector_error: bool,
+
+    /// Child command and args (specified after --)
+    #[clap(last = true)]
+    command: Vec<String>,
 }
 
 /// Input data format selection for the send command
@@ -200,133 +227,185 @@ impl From<ParserSelection> for parsers::Config {
 }
 
 /// Embedded base configuration for send command
-const SEND_BASE_CONFIG: &str = r#"
-[sinks.debug]
-enabled = true
-type = "debug"
-
-[sinks.http]
-enabled = false
-type = "http"
-destination = "http://localhost:8080/webhook/000"
-total_duration_of_retries = "30s"
-
-[sources.cli]
-enabled = true
-[sources.cli.extractor]
-type = "cli"
-"#;
+const SEND_BASE_CONFIG: &str = include_str!("../assets/send.base.toml");
 
 pub(crate) async fn send(args: SendArgs, shutdown_token: CancellationToken) -> Result<bool> {
-    // Load configuration with CLI overrides using ConfigBuilder
-    let config = load_config(&args)?;
+    if let Some(run_type) = args.run.clone() {
+        send_run(args, &run_type, shutdown_token).await
+    } else {
+        let config = load_config(&args)?;
+        PipelineBuilder::new(config).run(false, shutdown_token).await
+    }
+}
 
-    // Create and run pipeline
-    let pipeline = PipelineBuilder::new(config);
+/// Handle `--run <type>` mode: wrap a subprocess and emit `CDEvents`.
+async fn send_run(
+    args: SendArgs,
+    run_type: &str,
+    shutdown_token: CancellationToken,
+) -> Result<bool> {
+    let exit_code_out = Arc::new(AtomicI32::new(0));
+    let config = load_run_config(&args, run_type, Arc::clone(&exit_code_out))?;
+    PipelineBuilder::new(config).run(false, shutdown_token).await?;
+    Ok(exit_code_out.load(Ordering::SeqCst) == 0)
+}
 
-    pipeline.run(false, shutdown_token).await
+/// Load configuration for `--run` mode.
+fn load_run_config(
+    args: &SendArgs,
+    run_type: &str,
+    exit_code_out: Arc<AtomicI32>,
+) -> Result<crate::config::Config> {
+    let cli_toml = convert_run_args_into_toml(args, run_type)?;
+    let mut config = Config::builder()
+        .with_base_config(SEND_BASE_CONFIG)
+        .with_config_file(args.config.clone())
+        .with_cli_overrides(if cli_toml.is_empty() { None } else { Some(cli_toml) })
+        .with_env_vars(true)
+        .build()?;
+    if let Some(source_config) = config.sources.get_mut(run_type) {
+        source_config.inject_subprocess_exit_code_out(exit_code_out);
+    }
+    Ok(config)
+}
+
+/// Build CLI override TOML for `--run` mode.
+fn convert_run_args_into_toml(args: &SendArgs, run_type: &str) -> Result<String> {
+    use std::fmt::Write as _;
+    let mut out = String::new();
+
+    writeln!(&mut out, "sources.{run_type}.enabled = true").into_diagnostic()?;
+    writeln!(&mut out, "sources.cli.enabled = false").into_diagnostic()?;
+
+    if !args.command.is_empty() {
+        let cmd_json = serde_json::to_string(&args.command).into_diagnostic()?;
+        writeln!(&mut out, "sources.{run_type}.extractor.command = {cmd_json}")
+            .into_diagnostic()?;
+    }
+    if args.no_data {
+        writeln!(&mut out, "sources.{run_type}.extractor.no_data = true").into_diagnostic()?;
+    }
+    if args.fail_on_collector_error {
+        writeln!(&mut out, "sources.{run_type}.extractor.fail_on_collector_error = true")
+            .into_diagnostic()?;
+    }
+    for kv in &args.metadata {
+        if let Some((key, value)) = kv.split_once('=') {
+            let escaped = escape_toml_string(value);
+            writeln!(
+                &mut out,
+                "sources.{run_type}.extractor.metadata.run.overrides.{} = \"{escaped}\"",
+                key.trim()
+            )
+            .into_diagnostic()?;
+        }
+    }
+    append_http_sink_toml(&mut out, args)?;
+    Ok(out)
 }
 
 /// Load configuration with CLI argument overrides (used by send command).
 fn load_config(args: &SendArgs) -> Result<Config> {
-    // Create CLI override configuration from command line arguments
     let cli_toml = convert_args_into_toml(args)?;
-
-    // Use ConfigBuilder with send-specific base config and CLI overrides
     Config::builder()
         .with_base_config(SEND_BASE_CONFIG)
         .with_config_file(args.config.clone())
         .with_cli_overrides(if cli_toml.is_empty() { None } else { Some(cli_toml) })
-        .with_env_vars(true) // Now environment variables are supported!
+        .with_env_vars(true)
         .build()
 }
 
-/// Create CLI override configuration from command line arguments.
-/// Returns an empty string if nothing to override.
+/// Create CLI override TOML from command line arguments.
 fn convert_args_into_toml(args: &SendArgs) -> Result<String> {
     use std::fmt::Write as _;
+    let mut out = String::new();
 
-    let mut cli_overrides = std::collections::HashMap::<String, String>::new();
+    // Use triple-quoted string to avoid escaping issues with JSON body
+    let data_str = args.data.join("\n");
+    writeln!(&mut out, "sources.cli.extractor.data = \"\"\"{data_str}\"\"\"").into_diagnostic()?;
 
-    // Always inject the CLI data
-    // Use triple-quoted string to avoid escaping issues with JSON
-    let data_toml = format!("\"\"\"{}\"\"\"", args.data);
-    cli_overrides.insert("sources.cli.extractor.data".to_string(), data_toml);
-
-    // Set the parser configuration
-    let parser_config: parsers::Config = args.parser.clone().into();
-    let parser_toml = match parser_config {
-        parsers::Config::Auto => "\"auto\"".to_string(),
-        parsers::Config::Json => "\"json\"".to_string(),
+    let parser_str = match args.parser.clone().into() {
+        parsers::Config::Auto => "auto",
+        parsers::Config::Json => "json",
         #[cfg(feature = "parser_xml")]
-        parsers::Config::Xml => "\"xml\"".to_string(),
+        parsers::Config::Xml => "xml",
         #[cfg(feature = "parser_yaml")]
-        parsers::Config::Yaml => "\"yaml\"".to_string(),
+        parsers::Config::Yaml => "yaml",
         #[cfg(feature = "parser_tap")]
-        parsers::Config::Tap => "\"tap\"".to_string(),
-        parsers::Config::Text => "\"text\"".to_string(),
-        parsers::Config::TextLine => "\"text_line\"".to_string(),
+        parsers::Config::Tap => "tap",
+        parsers::Config::Text => "text",
+        parsers::Config::TextLine => "text_line",
     };
-    cli_overrides.insert("sources.cli.extractor.parser".to_string(), parser_toml);
+    writeln!(&mut out, "sources.cli.extractor.parser = \"{parser_str}\"").into_diagnostic()?;
 
-    // Override the HTTP sink configuration
-    if let Some(url) = &args.url {
-        cli_overrides.insert("sinks.http.enabled".to_string(), "true".to_string());
-        cli_overrides.insert("sinks.http.destination".to_string(), url.to_string());
-        cli_overrides.insert("sinks.debug.enabled".to_string(), "false".to_string());
-        if let Some(duration) = &args.total_duration_of_retries {
-            cli_overrides
-                .insert("sinks.http.total_duration_of_retries".to_string(), duration.to_owned());
+    for kv in &args.metadata {
+        if let Some((key, value)) = kv.split_once('=') {
+            let escaped = escape_toml_string(value);
+            writeln!(&mut out, "sources.cli.extractor.metadata.{} = \"{escaped}\"", key.trim())
+                .into_diagnostic()?;
         }
+    }
+    append_http_sink_toml(&mut out, args)?;
+    Ok(out)
+}
 
-        // Add custom headers if provided
-        if !args.headers.is_empty() {
-            for header in &args.headers {
-                if let Some((key, value)) = header.split_once(':') {
-                    cli_overrides.insert(
-                        format!("sinks.http.headers.{}.type", key.trim()),
-                        "static".to_string(),
-                    );
-                    cli_overrides.insert(
-                        format!("sinks.http.headers.{}.value", key.trim()),
-                        value.trim().to_string(),
-                    );
-                }
+/// Append HTTP sink overrides to a TOML string when `--url` is provided.
+fn append_http_sink_toml(out: &mut String, args: &SendArgs) -> Result<()> {
+    use std::fmt::Write as _;
+    if let Some(url) = &args.url {
+        writeln!(out, "sinks.http.enabled = true").into_diagnostic()?;
+        writeln!(out, "sinks.http.destination = \"{url}\"").into_diagnostic()?;
+        writeln!(out, "sinks.debug.enabled = false").into_diagnostic()?;
+        if let Some(duration) = &args.total_duration_of_retries {
+            writeln!(out, "sinks.http.total_duration_of_retries = \"{duration}\"")
+                .into_diagnostic()?;
+        }
+        for header in &args.headers {
+            if let Some((key, value)) = header.split_once(':') {
+                let key = key.trim();
+                writeln!(out, "sinks.http.headers.{key}.type = \"static\"").into_diagnostic()?;
+                writeln!(out, "sinks.http.headers.{key}.value = \"{}\"", value.trim())
+                    .into_diagnostic()?;
             }
         }
     }
+    Ok(())
+}
 
-    // Create a TOML string from CLI overrides
-    let mut cli_toml = String::new();
-    for (key, value) in &cli_overrides {
-        // Handle boolean values without quotes
-        if value == "true" || value == "false" {
-            writeln!(&mut cli_toml, "{key} = {value}").into_diagnostic()?;
-        } else if key == "sources.cli.extractor.data" || key == "sources.cli.extractor.parser" {
-            // Data and parser are already formatted as TOML values (quoted strings)
-            writeln!(&mut cli_toml, "{key} = {value}").into_diagnostic()?;
-        } else {
-            writeln!(&mut cli_toml, "{key} = \"{value}\"").into_diagnostic()?;
-        }
-    }
-    Ok(cli_toml)
+/// Escape a string value for use inside a TOML double-quoted string.
+fn escape_toml_string(s: &str) -> String {
+    s.trim()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_load_config_with_base() {
-        let args = SendArgs {
-            data: "{}".to_string(),
+    fn default_args() -> SendArgs {
+        SendArgs {
+            data: vec!["{}".to_string()],
             url: None,
             config: None,
             directory: None,
             headers: vec![],
             total_duration_of_retries: None,
             parser: ParserSelection::Auto,
-        };
+            run: None,
+            no_data: false,
+            metadata: vec![],
+            fail_on_collector_error: false,
+            command: vec![],
+        }
+    }
+
+    #[tokio::test]
+    async fn test_load_config_with_base() {
+        let args = default_args();
 
         let config = load_config(&args).unwrap();
 
@@ -342,13 +421,10 @@ mod tests {
     #[tokio::test]
     async fn test_load_config_with_url_override() {
         let args = SendArgs {
-            data: "{}".to_string(),
+            data: vec!["{}".to_string()],
             url: Some("https://example.com/webhook".parse().unwrap()),
-            config: None,
-            directory: None,
             headers: vec!["X-API-Key: secret".to_string()],
-            total_duration_of_retries: None,
-            parser: ParserSelection::Auto,
+            ..default_args()
         };
 
         let config = load_config(&args).unwrap();
@@ -358,5 +434,24 @@ mod tests {
         assert!(config.sinks["http"].is_enabled());
         assert!(config.sinks.contains_key("debug"));
         assert!(!config.sinks["debug"].is_enabled());
+    }
+
+    #[test]
+    fn test_convert_args_with_metadata_generates_dotted_keys() {
+        let args = SendArgs {
+            metadata: vec!["my_key=my_value".to_string(), "other=42".to_string()],
+            ..default_args()
+        };
+
+        let toml = convert_args_into_toml(&args).unwrap();
+
+        assert!(
+            toml.contains(r#"sources.cli.extractor.metadata.my_key = "my_value""#),
+            "Expected metadata key in TOML, got:\n{toml}"
+        );
+        assert!(
+            toml.contains(r#"sources.cli.extractor.metadata.other = "42""#),
+            "Expected metadata key in TOML, got:\n{toml}"
+        );
     }
 }

@@ -1,0 +1,250 @@
+# ── Existing send infrastructure ────────────────────────────────────────
+
+[sinks.debug]
+enabled = true
+type = "debug"
+
+[sinks.http]
+enabled = false
+type = "http"
+destination = "http://localhost:8080/webhook/000"
+total_duration_of_retries = "30s"
+
+[sources.cli]
+enabled = true
+[sources.cli.extractor]
+type = "cli"
+
+# ── Shared transformer: CI environment detection ─────────────────────────
+# Reads CI env vars via VRL get_env_var(); enriches .metadata.run.*
+# Referenced by all run types via transformer_refs = ["ci_env_detection"]
+
+[transformers.ci_env_detection]
+type = "vrl"
+template = '''
+# Detect CI system and populate .metadata.run.* using environment variables
+# VRL get_env_var(name) returns Ok(value) or Err if unset.
+
+github_actions = get_env_var("GITHUB_ACTIONS") ?? ""
+gitlab_ci      = get_env_var("GITLAB_CI") ?? ""
+jenkins_url    = get_env_var("JENKINS_URL") ?? ""
+
+if github_actions == "true" {
+  repo      = get_env_var("GITHUB_REPOSITORY") ?? ""
+  run_id    = join!([get_env_var("GITHUB_RUN_ID") ?? "0", get_env_var("GITHUB_RUN_ATTEMPT") ?? "1"], "/")
+  job_name  = get_env_var("GITHUB_JOB") ?? "unknown"
+  workflow  = get_env_var("GITHUB_WORKFLOW") ?? ""
+  ref_name  = get_env_var("GITHUB_REF_NAME") ?? ""
+
+  .metadata.run.ci_system   = "github"
+  .metadata.run.ci_repo     = repo
+  .metadata.run.ci_run_id   = run_id
+  .metadata.run.ci_job_name = job_name
+  .metadata.run.ci_workflow = workflow
+  .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? job_name
+  .metadata.run.env_id      = "/ci/" + ref_name
+  .metadata.run.subject_id  = "https://github.com/" + repo + "/actions/runs/" + run_id + "/" + job_name
+
+} else if gitlab_ci == "true" {
+  repo      = get_env_var("CI_PROJECT_PATH") ?? ""
+  run_id    = get_env_var("CI_PIPELINE_ID") ?? "0"
+  job_name  = get_env_var("CI_JOB_NAME") ?? "unknown"
+  ref_name  = get_env_var("CI_COMMIT_REF_NAME") ?? ""
+
+  .metadata.run.ci_system   = "gitlab"
+  .metadata.run.ci_repo     = repo
+  .metadata.run.ci_run_id   = run_id
+  .metadata.run.ci_job_name = job_name
+  .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? job_name
+  .metadata.run.env_id      = "/ci/" + ref_name
+  .metadata.run.subject_id  = "https://gitlab.com/" + repo + "/-/pipelines/" + run_id + "/" + job_name
+
+} else if jenkins_url != "" {
+  job_name = get_env_var("JOB_BASE_NAME") ?? "unknown"
+  run_id   = get_env_var("BUILD_NUMBER") ?? "0"
+  job_full = get_env_var("JOB_NAME") ?? job_name
+
+  .metadata.run.ci_system   = "jenkins"
+  .metadata.run.ci_repo     = job_full
+  .metadata.run.ci_run_id   = run_id
+  .metadata.run.ci_job_name = job_name
+  .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? job_name
+  .metadata.run.env_id      = "/ci"
+  .metadata.run.subject_id  = jenkins_url + "job/" + job_full + "/" + run_id + "/" + job_name
+
+} else {
+  # Generic local fallback
+  suite = string(.metadata.run.suite_name) ?? "run"
+  .metadata.run.ci_system   = "local"
+  .metadata.run.ci_repo     = ""
+  .metadata.run.ci_job_name = ""
+  .metadata.run.env_id      = "/local"
+  .metadata.run.subject_id  = "cdviz-collector://local/" + suite
+}
+
+# Apply user --metadata overrides (injected as metadata.run.overrides by subprocess extractor)
+overrides = object(.metadata.run.overrides) ?? {}
+for_each(overrides) -> |k, v| {
+  .metadata.run = set!(.metadata.run, [k], v)
+}
+
+[.]
+'''
+
+# ── Built-in run types (all disabled; --run <name> enables one) ──────────
+
+[sources.testsuiterun-junit]
+enabled = false
+transformer_refs = ["ci_env_detection"]
+
+[sources.testsuiterun-junit.extractor]
+type = "subprocess"
+data_globs = ["**/TEST-*.xml", "**/*.xml"]
+parser = "xml"
+
+[[sources.testsuiterun-junit.transformers]]
+type = "vrl"
+template = '''
+# Converts subprocess EventSource to testSuiteRun CDEvent
+# At this point .metadata.run.* is populated by ci_env_detection
+
+suite_name = string(.metadata.run.suite_name) ?? "unknown"
+subject_id = string(.metadata.run.subject_id) ?? "unknown"
+source_url = string(.metadata.context.source) ?? "cdviz-collector://local"
+env_id     = string(.metadata.run.env_id) ?? "/local"
+started_at = string(.metadata.run.started_at) ?? ""
+
+if .metadata.run.status == "started" {
+  .body = {
+    "context": { "version": "0.4.1", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.started.0.2.0", "timestamp": started_at },
+    "subject": { "id": subject_id, "type": "testSuiteRun",
+      "content": { "trigger": {"type": "schedule"},
+        "environment": {"id": env_id},
+        "testSuite": {"id": suite_name, "version": ""} } }
+  }
+} else {
+  # Aggregate from array of XML-parsed JUnit files in .body
+  total_tests = 0; total_failed = 0; total_errors = 0; total_skipped = 0; total_time = 0.0
+  if is_array(.body) {
+    for_each(array!(.body)) -> |_i, file| {
+      suite = object(get(file, ["testsuite"]) ?? {}) ?? {}
+      total_tests   = total_tests   + (to_int(get(suite, ["@tests"])    ?? "0") ?? 0)
+      total_failed  = total_failed  + (to_int(get(suite, ["@failures"]) ?? "0") ?? 0)
+      total_errors  = total_errors  + (to_int(get(suite, ["@errors"])   ?? "0") ?? 0)
+      total_skipped = total_skipped + (to_int(get(suite, ["@skipped"])  ?? "0") ?? 0)
+      total_time    = total_time    + (to_float(get(suite, ["@time"])   ?? "0") ?? 0.0)
+    }
+  }
+  exit_code = to_int(.metadata.run.exit_code) ?? 0
+  outcome   = if total_failed + total_errors > 0 { "fail" } else if exit_code != 0 { "fail" } else { "pass" }
+  passed    = total_tests - total_failed - total_errors - total_skipped
+
+  .body = {
+    "context": { "version": "0.4.1", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.finished.0.2.0", "timestamp": started_at },
+    "subject": { "id": subject_id, "type": "testSuiteRun",
+      "content": { "outcome": outcome, "reason": "",
+        "environment": {"id": env_id},
+        "testSuite": {"id": suite_name, "version": ""},
+        "customData": { "tests_count": total_tests, "passed": passed,
+          "failed": total_failed, "skipped": total_skipped, "errored": total_errors,
+          "duration_ms": to_int(total_time * 1000) ?? 0, "exit_code": exit_code } } }
+  }
+}
+[.]
+'''
+
+[sources.testsuiterun-tap]
+enabled = false
+transformer_refs = ["ci_env_detection"]
+
+[sources.testsuiterun-tap.extractor]
+type = "subprocess"
+data_globs = ["**/*.tap"]
+parser = "tap"
+
+[[sources.testsuiterun-tap.transformers]]
+type = "vrl"
+template = '''
+suite_name = string(.metadata.run.suite_name) ?? "unknown"
+subject_id = string(.metadata.run.subject_id) ?? "unknown"
+source_url = string(.metadata.context.source) ?? "cdviz-collector://local"
+env_id     = string(.metadata.run.env_id) ?? "/local"
+started_at = string(.metadata.run.started_at) ?? ""
+
+if .metadata.run.status == "started" {
+  .body = {
+    "context": { "version": "0.4.1", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.started.0.2.0", "timestamp": started_at },
+    "subject": { "id": subject_id, "type": "testSuiteRun",
+      "content": { "trigger": {"type": "schedule"},
+        "environment": {"id": env_id},
+        "testSuite": {"id": suite_name, "version": ""} } }
+  }
+} else {
+  total_tests = 0; total_failed = 0
+  if is_array(.body) {
+    for_each(array!(.body)) -> |_i, result| {
+      tests = array(get(result, ["tests"]) ?? []) ?? []
+      total_tests = total_tests + length(tests)
+      for_each(tests) -> |_j, t| {
+        ok = bool(get(t, ["ok"]) ?? true) ?? true
+        if !ok { total_failed = total_failed + 1 }
+      }
+    }
+  }
+  exit_code = to_int(.metadata.run.exit_code) ?? 0
+  outcome   = if total_failed > 0 { "fail" } else if exit_code != 0 { "fail" } else { "pass" }
+  passed    = total_tests - total_failed
+
+  .body = {
+    "context": { "version": "0.4.1", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.finished.0.2.0", "timestamp": started_at },
+    "subject": { "id": subject_id, "type": "testSuiteRun",
+      "content": { "outcome": outcome, "reason": "",
+        "environment": {"id": env_id},
+        "testSuite": {"id": suite_name, "version": ""},
+        "customData": { "tests_count": total_tests, "passed": passed,
+          "failed": total_failed, "exit_code": exit_code } } }
+  }
+}
+[.]
+'''
+
+[sources.taskrun]
+enabled = false
+transformer_refs = ["ci_env_detection"]
+
+[sources.taskrun.extractor]
+type = "subprocess"
+no_data = true
+
+[[sources.taskrun.transformers]]
+type = "vrl"
+template = '''
+suite_name = string(.metadata.run.suite_name) ?? "unknown"
+subject_id = string(.metadata.run.subject_id) ?? "unknown"
+source_url = string(.metadata.context.source) ?? "cdviz-collector://local"
+env_id     = string(.metadata.run.env_id) ?? "/local"
+started_at = string(.metadata.run.started_at) ?? ""
+
+if .metadata.run.status == "started" {
+  .body = {
+    "context": { "version": "0.4.1", "id": "0", "source": source_url,
+      "type": "dev.cdevents.taskrun.started.0.2.0", "timestamp": started_at },
+    "subject": { "id": subject_id, "type": "taskRun",
+      "content": { "taskName": suite_name } }
+  }
+} else {
+  exit_code = to_int(.metadata.run.exit_code) ?? 0
+  outcome   = if exit_code != 0 { "failure" } else { "success" }
+  .body = {
+    "context": { "version": "0.4.1", "id": "0", "source": source_url,
+      "type": "dev.cdevents.taskrun.finished.0.2.0", "timestamp": started_at },
+    "subject": { "id": subject_id, "type": "taskRun",
+      "content": { "outcome": outcome, "taskName": suite_name } }
+  }
+}
+[.]
+'''
