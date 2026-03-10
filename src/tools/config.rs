@@ -1,19 +1,25 @@
 use std::io::Write as _;
-use std::path::PathBuf;
 
 use clap::Args;
 
 use crate::{
-    config::Config,
+    config::{Config, ConfigSource, resolve_config_source},
     errors::{IntoDiagnostic, Result},
 };
 
 #[derive(Debug, Clone, Args)]
 #[command(args_conflicts_with_subcommands = true, flatten_help = true)]
 pub(crate) struct ConfigArgs {
-    /// Configuration file path
+    /// Configuration file path or HTTP/HTTPS URL
     #[clap(long = "config", env("CDVIZ_COLLECTOR_CONFIG"))]
-    config: Option<PathBuf>,
+    config: Option<ConfigSource>,
+
+    /// HTTP headers to use when fetching config from a URL.
+    ///
+    /// Format: `"Header-Name: value"`. Can be repeated.
+    /// Example: `--config-header "Authorization: Bearer token"`
+    #[clap(long = "config-header")]
+    config_headers: Vec<String>,
 
     /// Print the resolved/consolidated configuration to stdout (TOML format),
     /// with `FileAdapter` and `RemoteFileAdapter` applied
@@ -29,27 +35,29 @@ pub(crate) struct ConfigArgs {
     check: bool,
 }
 
-pub(crate) fn config_cmd(args: ConfigArgs) -> Result<bool> {
+pub(crate) async fn config_cmd(args: ConfigArgs) -> Result<bool> {
     if !args.print && !args.check && !args.print_raw {
         miette::bail!("specify at least one of --print, --print-raw, or --check");
     }
 
+    let resolved = resolve_config_source(args.config, &args.config_headers).await?;
+
     if args.print_raw {
-        let figment = Config::builder().with_config_file(args.config.clone()).build_raw_figment();
+        let figment = Config::builder().with_resolved_source(resolved.clone()).build_raw_figment();
         let value: toml::Value = figment.extract().into_diagnostic()?;
         writeln!(std::io::stdout(), "{}", toml::to_string_pretty(&value).into_diagnostic()?)
             .into_diagnostic()?;
     }
 
     if args.print {
-        let figment = Config::builder().with_config_file(args.config.clone()).build_figment()?;
+        let figment = Config::builder().with_resolved_source(resolved.clone()).build_figment()?;
         let value: toml::Value = figment.extract().into_diagnostic()?;
         writeln!(std::io::stdout(), "{}", toml::to_string_pretty(&value).into_diagnostic()?)
             .into_diagnostic()?;
     }
 
     if args.check {
-        match Config::from_file(args.config) {
+        match Config::builder().with_resolved_source(resolved).build() {
             Ok(config) => {
                 let src_count = config.sources.len();
                 let sink_count = config.sinks.len();

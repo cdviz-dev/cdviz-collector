@@ -94,7 +94,7 @@ enum Command {
     /// running a full server. Useful for testing transformations, debugging sink
     /// configurations, or scripting event dispatch.
     #[command(arg_required_else_help = true)]
-    Send(tools::send::SendArgs),
+    Send(Box<tools::send::SendArgs>),
 
     /// Transform local JSON files using configured transformers.
     ///
@@ -173,9 +173,9 @@ pub(crate) async fn run(
         std::env::set_current_dir(dir).into_diagnostic()?;
     }
     match cli.command {
-        Command::Config(args) => tools::config::config_cmd(args),
+        Command::Config(args) => tools::config::config_cmd(args).await,
         Command::Connect(args) => tools::connect::connect(args, shutdown_token).await,
-        Command::Send(args) => tools::send::send(args, shutdown_token).await,
+        Command::Send(args) => tools::send::send(*args, shutdown_token).await,
         #[cfg(feature = "tool_transform")]
         Command::Transform(args) => tools::transform::transform(args).await,
     }

@@ -75,7 +75,7 @@
 //! is disabled to avoid duplicate output.
 
 use crate::{
-    config::Config,
+    config::{Config, ConfigSource, resolve_config_source},
     errors::{IntoDiagnostic, Result},
     pipeline::PipelineBuilder,
     sources::cli::parsers,
@@ -124,13 +124,20 @@ pub(crate) struct SendArgs {
     #[clap(long)]
     total_duration_of_retries: Option<String>,
 
-    /// Configuration file for advanced sink settings.
+    /// Configuration file path or HTTP/HTTPS URL for advanced sink settings.
     ///
-    /// Optional TOML configuration file for advanced sink configuration
+    /// Optional TOML configuration for advanced sink configuration
     /// such as authentication, headers generation, or custom sink types.
     /// Command line arguments will override configuration file settings.
     #[clap(long = "config", env("CDVIZ_COLLECTOR_CONFIG"))]
-    config: Option<PathBuf>,
+    config: Option<ConfigSource>,
+
+    /// HTTP headers to use when fetching config from a URL.
+    ///
+    /// Format: `"Header-Name: value"`. Can be repeated.
+    /// Example: `--config-header "Authorization: Bearer token"`
+    #[clap(long = "config-header")]
+    config_headers: Vec<String>,
 
     /// Working directory for relative paths.
     ///
@@ -233,7 +240,7 @@ pub(crate) async fn send(args: SendArgs, shutdown_token: CancellationToken) -> R
     if let Some(run_type) = args.run.clone() {
         send_run(args, &run_type, shutdown_token).await
     } else {
-        let config = load_config(&args)?;
+        let config = load_config(&args).await?;
         PipelineBuilder::new(config).run(false, shutdown_token).await
     }
 }
@@ -245,21 +252,22 @@ async fn send_run(
     shutdown_token: CancellationToken,
 ) -> Result<bool> {
     let exit_code_out = Arc::new(AtomicI32::new(0));
-    let config = load_run_config(&args, run_type, Arc::clone(&exit_code_out))?;
+    let config = load_run_config(&args, run_type, Arc::clone(&exit_code_out)).await?;
     PipelineBuilder::new(config).run(false, shutdown_token).await?;
     Ok(exit_code_out.load(Ordering::SeqCst) == 0)
 }
 
 /// Load configuration for `--run` mode.
-fn load_run_config(
+async fn load_run_config(
     args: &SendArgs,
     run_type: &str,
     exit_code_out: Arc<AtomicI32>,
 ) -> Result<crate::config::Config> {
+    let resolved = resolve_config_source(args.config.clone(), &args.config_headers).await?;
     let cli_toml = convert_run_args_into_toml(args, run_type)?;
     let mut config = Config::builder()
         .with_base_config(SEND_BASE_CONFIG)
-        .with_config_file(args.config.clone())
+        .with_resolved_source(resolved)
         .with_cli_overrides(if cli_toml.is_empty() { None } else { Some(cli_toml) })
         .with_env_vars(true)
         .build()?;
@@ -305,11 +313,12 @@ fn convert_run_args_into_toml(args: &SendArgs, run_type: &str) -> Result<String>
 }
 
 /// Load configuration with CLI argument overrides (used by send command).
-fn load_config(args: &SendArgs) -> Result<Config> {
+async fn load_config(args: &SendArgs) -> Result<Config> {
+    let resolved = resolve_config_source(args.config.clone(), &args.config_headers).await?;
     let cli_toml = convert_args_into_toml(args)?;
     Config::builder()
         .with_base_config(SEND_BASE_CONFIG)
-        .with_config_file(args.config.clone())
+        .with_resolved_source(resolved)
         .with_cli_overrides(if cli_toml.is_empty() { None } else { Some(cli_toml) })
         .with_env_vars(true)
         .build()
@@ -391,6 +400,7 @@ mod tests {
             data: vec!["{}".to_string()],
             url: None,
             config: None,
+            config_headers: vec![],
             directory: None,
             headers: vec![],
             total_duration_of_retries: None,
@@ -407,7 +417,7 @@ mod tests {
     async fn test_load_config_with_base() {
         let args = default_args();
 
-        let config = load_config(&args).unwrap();
+        let config = load_config(&args).await.unwrap();
 
         // Should have HTTP sink (disabled by default)
         assert!(config.sinks.contains_key("http"));
@@ -427,7 +437,7 @@ mod tests {
             ..default_args()
         };
 
-        let config = load_config(&args).unwrap();
+        let config = load_config(&args).await.unwrap();
 
         // Should have enabled HTTP sink and disabled debug sink
         assert!(config.sinks.contains_key("http"));

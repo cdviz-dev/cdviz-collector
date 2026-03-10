@@ -13,29 +13,41 @@
 //! SSE sinks to register their routes. The pipeline orchestrates the complete
 //! event collection and dispatch workflow.
 
-use crate::{config::Config, errors::Result, pipeline::PipelineBuilder};
+use crate::{
+    config::{Config, ConfigSource, resolve_config_source},
+    errors::Result,
+    pipeline::PipelineBuilder,
+};
 use clap::Args;
-use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone, Args)]
 #[command(args_conflicts_with_subcommands = true, flatten_help = true)]
 pub(crate) struct ConnectArgs {
-    /// Configuration file path for sources, sinks, and transformers.
+    /// Configuration file path or HTTP/HTTPS URL for sources, sinks, and transformers.
     ///
-    /// Specifies the TOML configuration file that defines the pipeline behavior.
+    /// Specifies the TOML configuration that defines the pipeline behavior.
     /// If not provided, the collector will use the base configuration with default
     /// settings. The configuration can also be specified via the `CDVIZ_COLLECTOR_CONFIG`
     /// environment variable.
     ///
     /// Example: `--config cdviz-collector.toml`
+    /// Example: `--config https://config.example.com/cdviz.toml`
     #[clap(long = "config", env("CDVIZ_COLLECTOR_CONFIG"))]
-    config: Option<PathBuf>,
+    config: Option<ConfigSource>,
+
+    /// HTTP headers to use when fetching config from a URL.
+    ///
+    /// Format: `"Header-Name: value"`. Can be repeated.
+    /// Example: `--config-header "Authorization: Bearer token"`
+    #[clap(long = "config-header")]
+    config_headers: Vec<String>,
 }
 
 /// Returns true if the connection service ran successfully
 pub(crate) async fn connect(args: ConnectArgs, shutdown_token: CancellationToken) -> Result<bool> {
-    let config = Config::from_file(args.config)?;
+    let resolved = resolve_config_source(args.config, &args.config_headers).await?;
+    let config = Config::builder().with_resolved_source(resolved).build()?;
     let pipeline = PipelineBuilder::new(config);
     pipeline.run(true, shutdown_token).await
 }

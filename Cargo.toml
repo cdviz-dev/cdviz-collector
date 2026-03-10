@@ -24,6 +24,7 @@ path = "src/main.rs"
 [features]
 ## default is "full" feature set
 default = [
+  "config_http",
   "config_remote",
   "parser_all",
   "sink_all",
@@ -32,7 +33,20 @@ default = [
   "transformer_vrl",
 ]
 #! ### Configuration
+config_http = ["http_client"]
 config_remote = ["dep:opendal"]
+#! ### Misc
+http_client = [
+  "dep:reqwest",
+  "dep:reqwest-middleware",
+  "dep:reqwest-retry",
+  "dep:reqwest-tracing",
+  # reqwest is also used as transitive dependencies
+  "reqwest/charset",
+  "reqwest/http2",
+  "reqwest/json",
+  "reqwest/rustls",
+]
 #! ### Parsers
 parser_all = ["parser_tap", "parser_xml", "parser_yaml"]
 parser_tap = ["dep:nom", "parser_yaml"]
@@ -62,17 +76,7 @@ sink_all = [
 sink_clickhouse = ["dep:clickhouse", "dep:retry-policies"]
 sink_db = ["dep:retry-policies", "dep:sqlx"]
 sink_folder = ["dep:opendal"]
-sink_http = [
-  "dep:reqwest",
-  "dep:reqwest-middleware",
-  "dep:reqwest-retry",
-  "dep:reqwest-tracing",
-  # reqwest is also used as transitive dependencies
-  "reqwest/charset",
-  "reqwest/http2",
-  "reqwest/json",
-  "reqwest/rustls",
-]
+sink_http = ["http_client"]
 sink_kafka = ["dep:rdkafka"]
 sink_nats = ["dep:async-nats"]
 sink_sse = ["dep:tokio-stream"]

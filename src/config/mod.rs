@@ -14,8 +14,37 @@ use figment_file_provider_adapter::FileAdapter;
 #[cfg(feature = "config_remote")]
 use remote_file_adapter::RemoteFileAdapter;
 use serde::Deserialize;
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 pub use toml_provider::Toml;
+
+/// A configuration source: either a local file path or an HTTP/HTTPS URL.
+#[derive(Debug, Clone)]
+pub(crate) enum ConfigSource {
+    File(PathBuf),
+    #[cfg(feature = "config_http")]
+    Url(url::Url),
+}
+
+impl FromStr for ConfigSource {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        if let Ok(url) = url::Url::parse(s) {
+            match url.scheme() {
+                "http" | "https" => {
+                    #[cfg(feature = "config_http")]
+                    return Ok(ConfigSource::Url(url));
+                    #[cfg(not(feature = "config_http"))]
+                    return Err(format!(
+                        "URL config sources require the `config_http` feature: {s}"
+                    ));
+                }
+                _ => {}
+            }
+        }
+        Ok(ConfigSource::File(PathBuf::from(s)))
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Default)]
 pub(crate) struct Config {
@@ -38,6 +67,7 @@ pub(crate) struct Config {
 pub(crate) struct ConfigBuilder {
     base_config: Option<String>,
     config_file: Option<PathBuf>,
+    config_content: Option<String>,
     cli_overrides: Option<String>,
     enable_env_vars: bool,
 }
@@ -48,6 +78,7 @@ impl ConfigBuilder {
         Self {
             base_config: Some(include_str!("../assets/cdviz-collector.base.toml").to_string()),
             config_file: None,
+            config_content: None,
             cli_overrides: None,
             enable_env_vars: true,
         }
@@ -63,6 +94,24 @@ impl ConfigBuilder {
     pub fn with_config_file(mut self, config_file: Option<PathBuf>) -> Self {
         self.config_file = config_file;
         self
+    }
+
+    /// Add pre-fetched TOML text (used for URL config sources)
+    pub fn with_config_text(mut self, content: Option<String>) -> Self {
+        self.config_content = content;
+        self
+    }
+
+    /// Apply a resolved config source (file path or pre-fetched content).
+    ///
+    /// Prefer this over calling `with_config_file` + `with_config_text` separately,
+    /// as it enforces the XOR invariant enforced by [`ResolvedConfigSource`].
+    pub fn with_resolved_source(self, source: ResolvedConfigSource) -> Self {
+        match source {
+            ResolvedConfigSource::None => self,
+            ResolvedConfigSource::File(path) => self.with_config_file(Some(path)),
+            ResolvedConfigSource::Content(content) => self.with_config_text(Some(content)),
+        }
     }
 
     /// Add CLI overrides as TOML string
@@ -86,7 +135,9 @@ impl ConfigBuilder {
             figment = figment.merge(Toml::string(&base_config));
         }
 
-        if let Some(config_file) = self.config_file {
+        if let Some(content) = self.config_content {
+            figment = figment.merge(Toml::string(&content));
+        } else if let Some(config_file) = self.config_file {
             figment = figment.merge(Toml::file(config_file.as_path()));
         }
 
@@ -188,6 +239,83 @@ impl Config {
     }
 }
 
+/// The result of resolving a [`ConfigSource`]: either a local file path or pre-fetched TOML.
+///
+/// Exactly one variant is populated — the enum enforces the XOR invariant that
+/// `ConfigBuilder::with_config_file` and `with_config_text` cannot both be used.
+#[derive(Debug, Clone)]
+pub(crate) enum ResolvedConfigSource {
+    /// No user config was provided.
+    None,
+    /// A local file path to read at build time.
+    File(PathBuf),
+    /// Pre-fetched TOML text (e.g. from an HTTP/HTTPS URL).
+    Content(String),
+}
+
+/// Parse `"Name: value"` header strings into key/value pairs.
+pub(crate) fn parse_config_headers(raw: &[String]) -> Result<Vec<(String, String)>> {
+    raw.iter()
+        .map(|h| {
+            h.split_once(':').map(|(k, v)| (k.trim().to_string(), v.trim().to_string())).ok_or_else(
+                || miette::miette!("invalid --config-header '{h}': expected 'Name: value' format"),
+            )
+        })
+        .collect()
+}
+
+/// Fetch a TOML configuration string from an HTTP/HTTPS URL.
+#[cfg(feature = "config_http")]
+pub(crate) async fn fetch_url_config(
+    url: &url::Url,
+    headers: &[(String, String)],
+) -> Result<String> {
+    use reqwest::header::{HeaderName, HeaderValue};
+    let mut req = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .into_diagnostic()?
+        .get(url.as_str());
+    for (name, value) in headers {
+        let header_name = HeaderName::from_bytes(name.as_bytes()).into_diagnostic()?;
+        let header_value = HeaderValue::from_str(value).into_diagnostic()?;
+        req = req.header(header_name, header_value);
+    }
+    let response = req.send().await.into_diagnostic()?;
+    let status = response.status();
+    if !status.is_success() {
+        miette::bail!("Failed to fetch config from {url}: HTTP {status}");
+    }
+    response.text().await.into_diagnostic()
+}
+
+/// Resolve a [`ConfigSource`] into a [`ResolvedConfigSource`], fetching content if needed.
+///
+/// When `--config-header` values are provided for a file source, a warning is emitted
+/// since headers have no effect on local file loading.
+pub(crate) async fn resolve_config_source(
+    source: Option<ConfigSource>,
+    raw_headers: &[String],
+) -> Result<ResolvedConfigSource> {
+    match source {
+        None => Ok(ResolvedConfigSource::None),
+        Some(ConfigSource::File(path)) => {
+            if !raw_headers.is_empty() {
+                tracing::warn!(
+                    "--config-header flags are ignored when --config is a local file path"
+                );
+            }
+            Ok(ResolvedConfigSource::File(path))
+        }
+        #[cfg(feature = "config_http")]
+        Some(ConfigSource::Url(url)) => {
+            let headers = parse_config_headers(raw_headers)?;
+            let content = fetch_url_config(&url, &headers).await?;
+            Ok(ResolvedConfigSource::Content(content))
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::result_large_err)]
 mod tests {
@@ -265,5 +393,95 @@ enabled = true
             let _config: Config = Config::from_file(Some(path)).unwrap();
             Ok(())
         });
+    }
+
+    #[cfg(feature = "config_http")]
+    #[tokio::test]
+    async fn fetch_url_config_returns_toml_body() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+        let toml_content = "[sinks.debug]\nenabled = true\n";
+
+        Mock::given(method("GET"))
+            .and(path("/config.toml"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(toml_content))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let url: url::Url = format!("{}/config.toml", mock_server.uri()).parse().unwrap();
+        let content = fetch_url_config(&url, &[]).await.unwrap();
+        assert_eq!(content, toml_content);
+    }
+
+    #[cfg(feature = "config_http")]
+    #[tokio::test]
+    async fn fetch_url_config_sends_auth_header() {
+        use wiremock::matchers::{header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+        let toml_content = "[sinks.debug]\nenabled = true\n";
+
+        Mock::given(method("GET"))
+            .and(path("/config.toml"))
+            .and(header("Authorization", "Bearer mytoken"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(toml_content))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let url: url::Url = format!("{}/config.toml", mock_server.uri()).parse().unwrap();
+        let headers = vec![("Authorization".to_string(), "Bearer mytoken".to_string())];
+        let content = fetch_url_config(&url, &headers).await.unwrap();
+        assert_eq!(content, toml_content);
+    }
+
+    #[cfg(feature = "config_http")]
+    #[tokio::test]
+    async fn fetch_url_config_errors_on_non_200() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/config.toml"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&mock_server)
+            .await;
+
+        let url: url::Url = format!("{}/config.toml", mock_server.uri()).parse().unwrap();
+        assert!(fetch_url_config(&url, &[]).await.is_err());
+    }
+
+    #[cfg(feature = "config_http")]
+    #[tokio::test]
+    async fn resolve_config_source_url_loads_and_parses_config() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+        let toml_content = "[sinks.debug]\nenabled = true\n";
+
+        Mock::given(method("GET"))
+            .and(path("/config.toml"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(toml_content))
+            .mount(&mock_server)
+            .await;
+
+        let url_str = format!("{}/config.toml", mock_server.uri());
+        let source: ConfigSource = url_str.parse().unwrap();
+        let resolved = resolve_config_source(Some(source), &[]).await.unwrap();
+        assert!(matches!(resolved, ResolvedConfigSource::Content(_)));
+        // Should be parseable and override the debug sink
+        let config = ConfigBuilder::new()
+            .with_env_vars(false)
+            .with_resolved_source(resolved)
+            .build()
+            .unwrap();
+        assert!(config.sinks.get("debug").unwrap().is_enabled());
     }
 }
