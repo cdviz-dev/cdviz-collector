@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.28.0...0.29.0) - 2026-03-10
+
+### Added
+
+- accept config file defined with http(s) url
+- add `--run` to subcommand `send` to wrap an external process (like running test)
+- sources can persist state (eg. latest pull)
+
 ## [0.28.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.27.0...0.28.0) - 2026-03-06
 
 ### Added
