@@ -4,7 +4,7 @@ mod toml_provider;
 
 use crate::{
     errors::{Error, IntoDiagnostic, Result},
-    http, pipeline, sinks, sources, transformers,
+    http, pipeline, sinks, sources, state, transformers,
 };
 use figment::{
     Figment,
@@ -30,6 +30,8 @@ pub(crate) struct Config {
     pub(crate) http: http::Config,
     #[serde(default)]
     pub(crate) pipeline: pipeline::PipelineConfig,
+    #[serde(default)]
+    pub(crate) state: state::Config,
 }
 
 /// Builder for Config with flexible configuration loading options

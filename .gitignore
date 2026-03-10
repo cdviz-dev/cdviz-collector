@@ -416,3 +416,4 @@ megalinter-reports/
 .aider*
 proptest-regressions/
 build/
+.cdviz-collector/

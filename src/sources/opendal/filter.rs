@@ -43,6 +43,14 @@ impl Filter {
         self.ts_after = self.ts_before;
         self.ts_before = Timestamp::now() - TIME_MARGIN;
     }
+
+    pub(crate) fn set_ts_after(&mut self, ts: Timestamp) {
+        self.ts_after = ts;
+    }
+
+    pub(crate) fn ts_after(&self) -> Timestamp {
+        self.ts_after
+    }
 }
 
 #[derive(Debug, Clone)]

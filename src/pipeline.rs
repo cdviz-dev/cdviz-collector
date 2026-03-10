@@ -122,6 +122,7 @@ impl PipelineBuilder {
             self.config.sources.clone(),
             &self.tx,
             shutdown_token,
+            Some(&self.config.state),
         )?;
 
         if source_handles.is_empty() && (!enable_http_server || source_routes.is_empty()) {

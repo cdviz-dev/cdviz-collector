@@ -6,6 +6,12 @@ root_url = "http://cdviz-collector.example.com"
 [pipeline]
 queue_capacity = 1024
 
+[state]
+kind = "fs"
+
+[state.parameters]
+root = "./.cdviz-collector/state"
+
 [sinks.debug]
 enabled = false
 type = "debug"

@@ -101,6 +101,7 @@ pub(crate) fn make(
     config: &Config,
     tx: Sender<Message>,
     cancel_token: CancellationToken,
+    state_config: Option<&crate::state::Config>,
 ) -> Result<extractors::Extractor> {
     let mut pipe: EventSourcePipe = Box::new(send_cdevents::Processor::new(tx));
     let mut tconfigs = config.transformers.clone();
@@ -108,7 +109,7 @@ pub(crate) fn make(
     for tconfig in tconfigs {
         pipe = tconfig.make_transformer(pipe)?;
     }
-    config.extractor.make_extractor(name, pipe, cancel_token)
+    config.extractor.make_extractor(name, pipe, cancel_token, state_config)
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
@@ -207,12 +208,13 @@ pub(crate) fn create_sources_and_routes(
     source_configs: impl IntoIterator<Item = (String, Config)>,
     tx: &tokio::sync::broadcast::Sender<Message>,
     cancel_token: &CancellationToken,
+    state_config: Option<&crate::state::Config>,
 ) -> Result<SourceHandlesAndRoutes> {
     let sources = source_configs
         .into_iter()
         .filter(|(_name, config)| config.is_enabled())
         .inspect(|(name, _config)| tracing::info!(kind = "source", name, "starting"))
-        .map(|(name, config)| make(&name, &config, tx.clone(), cancel_token.clone()))
+        .map(|(name, config)| make(&name, &config, tx.clone(), cancel_token.clone(), state_config))
         .collect::<Result<Vec<_>>>()?;
 
     let mut join_handles = vec![];

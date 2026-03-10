@@ -1,5 +1,3 @@
-//TODO add persistence for state (time window to not reprocess same file after restart)
-
 mod filter;
 pub(crate) mod parsers;
 mod resource;
@@ -46,10 +44,17 @@ pub(crate) struct OpendalExtractor {
     filter: Filter,
     parser: ParserEnum,
     try_read_headers_json: bool,
+    state_op: Option<Operator>,
+    source_name: String,
 }
 
 impl OpendalExtractor {
-    pub(crate) fn try_from(config: &Config, next: EventSourcePipe) -> Result<Self> {
+    pub(crate) fn try_from(
+        config: &Config,
+        next: EventSourcePipe,
+        state_op: Option<Operator>,
+        source_name: String,
+    ) -> Result<Self> {
         let op: Operator =
             Operator::via_iter(config.kind, config.parameters.clone()).into_diagnostic()?;
         let filter = Filter::from_patterns(FilePatternMatcher::from(&config.path_patterns)?);
@@ -62,6 +67,8 @@ impl OpendalExtractor {
             filter,
             parser,
             try_read_headers_json,
+            state_op,
+            source_name,
         })
     }
 
@@ -92,6 +99,11 @@ impl OpendalExtractor {
     }
 
     pub(crate) async fn run(&mut self, cancel_token: CancellationToken) -> Result<()> {
+        if let Some(state_op) = &self.state_op
+            && let Some(ts) = crate::state::load_ts_after(state_op, &self.source_name).await
+        {
+            self.filter.set_ts_after(ts);
+        }
         while !cancel_token.is_cancelled() {
             if let Err(err) = self.run_once().await {
                 tracing::warn!(?err, scheme =? self.op.info().scheme(), root =? self.op.info().root(), "fail during scanning");
@@ -101,6 +113,13 @@ impl OpendalExtractor {
                 () = cancel_token.cancelled() => {},
             }
             self.filter.jump_to_next_ts_window();
+            if let Some(state_op) = &self.state_op
+                && let Err(err) =
+                    crate::state::save_ts_after(state_op, &self.source_name, self.filter.ts_after())
+                        .await
+            {
+                tracing::warn!(?err, source = %self.source_name, "failed to save checkpoint");
+            }
         }
         Ok(())
     }

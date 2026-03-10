@@ -47,6 +47,7 @@ impl Config {
         name: &str,
         next: EventSourcePipe,
         cancel_token: CancellationToken,
+        state_config: Option<&crate::state::Config>,
     ) -> Result<Extractor> {
         let name = name.to_string();
         let out = match self {
@@ -85,7 +86,13 @@ impl Config {
             }
             #[cfg(feature = "source_opendal")]
             Config::Opendal(config) => {
-                let mut extractor = opendal::OpendalExtractor::try_from(config, next)?;
+                let state_op = state_config.and_then(|sc| {
+                    sc.make_operator()
+                        .map_err(|err| tracing::warn!(?err, "failed to create state operator"))
+                        .ok()
+                });
+                let mut extractor =
+                    opendal::OpendalExtractor::try_from(config, next, state_op, name.clone())?;
                 Extractor::Task(tokio::spawn(async move {
                     extractor.run(cancel_token).await?;
                     tracing::info!(name, kind = "source", "exiting");
@@ -124,7 +131,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         assert2::assert!(let
-            Ok(Extractor::Task(handle)) = config.make_extractor("test", pipe, cancel_token.clone())
+            Ok(Extractor::Task(handle)) = config.make_extractor("test", pipe, cancel_token.clone(), None)
         );
 
         // Cancel the token and verify task completes
@@ -144,7 +151,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         assert2::assert!(let
-            Ok(Extractor::Webhook(_router)) = config.make_extractor("test", pipe, cancel_token)
+            Ok(Extractor::Webhook(_router)) = config.make_extractor("test", pipe, cancel_token, None)
         );
     }
 
@@ -168,7 +175,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         // Should fail with invalid configuration
-        assert2::assert!(let Err(_) = config.make_extractor("test", pipe, cancel_token));
+        assert2::assert!(let Err(_) = config.make_extractor("test", pipe, cancel_token, None));
     }
 
     #[test]
@@ -221,7 +228,7 @@ mod security_tests {
             let cancel_token = CancellationToken::new();
 
             // Should not panic or fail due to name content
-            let result = config.make_extractor(name, pipe, cancel_token);
+            let result = config.make_extractor(name, pipe, cancel_token, None);
             assert!(result.is_ok(), "Failed for name: {name}");
         }
     }

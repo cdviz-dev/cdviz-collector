@@ -12,6 +12,7 @@ mod pipes;
 mod reqwest_eventsource;
 mod security;
 mod sinks;
+mod state;
 mod sources;
 mod tools;
 mod transformers;
