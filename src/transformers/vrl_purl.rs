@@ -31,6 +31,9 @@ use std::collections::BTreeMap;
 use vrl::compiler::prelude::*;
 use vrl::value::KeyString;
 
+/// Qualifier key used by the OCI PURL spec for the registry + repository path.
+const REPOSITORY_URL: &str = "repository_url";
+
 // ============================================================================
 // Core Logic
 // ============================================================================
@@ -102,7 +105,7 @@ fn parse_oci_image_to_purl(image_str: &str) -> Value {
 
     // Build qualifiers
     let mut qualifiers = BTreeMap::new();
-    qualifiers.insert(KeyString::from("repository_url"), Value::from(repository_url));
+    qualifiers.insert(KeyString::from(REPOSITORY_URL), Value::from(repository_url));
     if !tag.is_empty() {
         qualifiers.insert(KeyString::from("tag"), Value::from(tag));
     }
@@ -134,24 +137,38 @@ fn is_oci_registry(repo_url: &str) -> bool {
 /// Handles both OCI and HTTP Helm repositories:
 /// - OCI registries → `pkg:oci/...`
 /// - HTTP repositories → `pkg:generic/...?type=helm`
+///
+/// For OCI registries, if `chart` contains path separators (e.g. `charts/my-app`),
+/// the path prefix is appended to `repo_url` and only the final component is used as the
+/// PURL name. This matches the OCI PURL spec which forbids a namespace in the path and
+/// requires the full registry + path prefix in the `repository_url` qualifier.
+///
+/// Example: `repo_url = "ghcr.io/myorg"`, `chart = "charts/my-app"`
+/// → `name = "my-app"`, `repository_url = "ghcr.io/myorg/charts"`
 fn parse_argocd_helm_to_purl(repo_url: &str, chart: &str, target_revision: &str) -> Value {
     let mut qualifiers = BTreeMap::new();
-    let pkg_type;
 
-    if is_oci_registry(repo_url) {
-        // OCI registry
-        pkg_type = "oci";
-        qualifiers.insert(KeyString::from("repository_url"), Value::from(repo_url));
+    let (pkg_type, name) = if is_oci_registry(repo_url) {
+        // OCI registry.
+        // ArgoCD may encode a sub-path inside the chart field (e.g. "charts/my-app").
+        // Per the OCI PURL spec the path prefix must be part of `repository_url`, not the name.
+        let (name, repository_url) = if let Some((prefix, base)) = chart.rsplit_once('/') {
+            (base, format!("{repo_url}/{prefix}"))
+        } else {
+            (chart, repo_url.to_string())
+        };
+        qualifiers.insert(KeyString::from(REPOSITORY_URL), Value::from(repository_url));
+        ("oci", name)
     } else {
         // HTTP Helm repository
-        pkg_type = "generic";
         qualifiers.insert(KeyString::from("download_url"), Value::from(repo_url));
         qualifiers.insert(KeyString::from("type"), Value::from("helm"));
-    }
+        ("generic", chart)
+    };
 
     let mut purl_obj = BTreeMap::new();
     purl_obj.insert(KeyString::from("type"), Value::from(pkg_type));
-    purl_obj.insert(KeyString::from("name"), Value::from(chart));
+    purl_obj.insert(KeyString::from("name"), Value::from(name));
     purl_obj.insert(KeyString::from("version"), Value::from(target_revision));
     purl_obj.insert(KeyString::from("qualifiers"), Value::from(qualifiers));
     purl_obj.insert(KeyString::from("subpath"), Value::Null);
@@ -264,7 +281,16 @@ fn parse_argocd_git_source_to_purl(
 
 /// Convert a PURL object to a spec-compliant PURL string
 ///
-/// Uses the packageurl crate to ensure proper encoding and formatting
+/// Uses the packageurl crate to ensure proper encoding and formatting.
+///
+/// For OCI packages, enforces the OCI PURL spec rule: the `name` field must be
+/// the final path component only (no slashes). If the name contains slashes, the
+/// prefix is moved into the `repository_url` qualifier. This normalises objects
+/// created by any caller — `ArgoCD`, GHCR webhooks, Harbor, GitLab registry, etc. —
+/// that may pass a multi-segment path as the name.
+///
+/// Example: `name = "charts/my-app"`, `repository_url = "ghcr.io/myorg"`
+/// → `name = "my-app"`, `repository_url = "ghcr.io/myorg/charts"`
 fn purl_object_to_string(purl_obj: &Value) -> Result<String, ExpressionError> {
     let obj = purl_obj.as_object().ok_or("purl_to_string requires an object")?;
 
@@ -272,7 +298,7 @@ fn purl_object_to_string(purl_obj: &Value) -> Result<String, ExpressionError> {
     let pkg_type =
         obj.get("type").and_then(Value::as_str).ok_or("PURL object must have a 'type' field")?;
 
-    let name =
+    let raw_name =
         obj.get("name").and_then(Value::as_str).ok_or("PURL object must have a 'name' field")?;
 
     // Extract optional fields (convert Cow to owned String to avoid lifetime issues)
@@ -287,7 +313,7 @@ fn purl_object_to_string(purl_obj: &Value) -> Result<String, ExpressionError> {
     let subpath = obj.get("subpath").and_then(Value::as_str).map(|s| s.to_string());
 
     // Extract qualifiers
-    let qualifiers: Vec<(String, String)> = obj
+    let mut qualifiers: Vec<(String, String)> = obj
         .get("qualifiers")
         .and_then(|v| v.as_object())
         .map(|q| {
@@ -296,6 +322,25 @@ fn purl_object_to_string(purl_obj: &Value) -> Result<String, ExpressionError> {
                 .collect()
         })
         .unwrap_or_default();
+
+    // OCI spec: name must not contain '/' — path prefix belongs in repository_url.
+    // Any registry (GHCR, Docker Hub, Harbor, GitLab, ...) may supply a multi-segment
+    // image path; normalise it here so all callers are covered automatically.
+    let name = if pkg_type == "oci" {
+        if let Some((prefix, base)) = raw_name.rsplit_once('/') {
+            // Append the path prefix to the existing repository_url qualifier (if any).
+            if let Some((_, value)) = qualifiers.iter_mut().find(|(k, _)| k == REPOSITORY_URL) {
+                *value = format!("{value}/{prefix}");
+            } else {
+                qualifiers.push((REPOSITORY_URL.to_string(), prefix.to_string()));
+            }
+            base
+        } else {
+            &raw_name
+        }
+    } else {
+        &raw_name
+    };
 
     // Build PackageUrl
     let mut purl =
@@ -529,10 +574,17 @@ impl Function for PurlFromArgoCdHelm {
     fn examples(&self) -> &'static [Example] {
         &[
             example!(
-                title: "parse OCI Helm chart",
+                title: "parse OCI Helm chart (simple name)",
                 source: r#"purl_from_argocd_helm("ghcr.io/owner", "nginx", "1.0.0")"#,
                 result: Ok(
                     r#"{"type": "oci", "name": "nginx", "version": "1.0.0", "qualifiers": {"repository_url": "ghcr.io/owner"}, "subpath": null}"#,
+                ),
+            ),
+            example!(
+                title: "parse OCI Helm chart with path prefix in chart name",
+                source: r#"purl_from_argocd_helm("ghcr.io/cdviz-dev", "charts/cdviz-grafana", "0.1.0")"#,
+                result: Ok(
+                    r#"{"type": "oci", "name": "cdviz-grafana", "version": "0.1.0", "qualifiers": {"repository_url": "ghcr.io/cdviz-dev/charts"}, "subpath": null}"#,
                 ),
             ),
             example!(
@@ -813,6 +865,66 @@ mod tests {
         assert!(result.contains("tag=1.21"));
     }
 
+    // purl_to_string OCI normalisation: slashes in name must be moved into repository_url.
+    // This covers manual PURL object construction from any registry (GHCR, Docker Hub,
+    // Harbor, GitLab, ...) that uses a multi-segment image name.
+    #[rstest]
+    // Regression: GHCR webhook with package name "charts/cdviz-grafana" and namespace "cdviz-dev"
+    // Previously produced: pkg:oci/charts%2Fcdviz-grafana?repository_url=ghcr.io/cdviz-dev
+    #[case(
+        "charts/cdviz-grafana",
+        "ghcr.io/cdviz-dev",
+        "sha256:abc",
+        "v0.1.0",
+        "pkg:oci/cdviz-grafana@sha256:abc?repository_url=ghcr.io/cdviz-dev/charts&tag=v0.1.0"
+    )]
+    // Deep path prefix
+    #[case(
+        "a/b/my-image",
+        "registry.example.com/org",
+        "sha256:def",
+        "latest",
+        "pkg:oci/my-image@sha256:def?repository_url=registry.example.com/org/a/b&tag=latest"
+    )]
+    // No slash in name — repository_url unchanged
+    #[case(
+        "my-image",
+        "ghcr.io/myorg",
+        "sha256:abc",
+        "v1.0",
+        "pkg:oci/my-image@sha256:abc?repository_url=ghcr.io/myorg&tag=v1.0"
+    )]
+    // Slash in name, no existing repository_url — prefix becomes the repository_url
+    #[case(
+        "myorg/my-image",
+        "",
+        "sha256:abc",
+        "v1.0",
+        "pkg:oci/my-image@sha256:abc?repository_url=myorg&tag=v1.0"
+    )]
+    fn test_purl_to_string_oci_name_normalization(
+        #[case] name: &str,
+        #[case] repository_url: &str,
+        #[case] version: &str,
+        #[case] tag: &str,
+        #[case] expected: &str,
+    ) {
+        let mut qualifiers = BTreeMap::new();
+        if !repository_url.is_empty() {
+            qualifiers.insert(KeyString::from("repository_url"), Value::from(repository_url));
+        }
+        qualifiers.insert(KeyString::from("tag"), Value::from(tag));
+
+        let mut purl_obj = BTreeMap::new();
+        purl_obj.insert(KeyString::from("type"), Value::from("oci"));
+        purl_obj.insert(KeyString::from("name"), Value::from(name));
+        purl_obj.insert(KeyString::from("version"), Value::from(version));
+        purl_obj.insert(KeyString::from("qualifiers"), Value::from(qualifiers));
+
+        let result = purl_object_to_string(&Value::from(purl_obj)).unwrap();
+        assert_eq!(result, expected);
+    }
+
     #[test]
     fn test_purl_object_to_string_helm() {
         let mut qualifiers = BTreeMap::new();
@@ -861,6 +973,28 @@ mod tests {
         "wordpress",
         "15.2.35",
         "pkg:generic/wordpress@15.2.35?download_url=https://charts.bitnami.com/bitnami&type=helm"
+    )]
+    // OCI: chart name contains a path prefix — prefix must move into repository_url, not name
+    // Regression: previously produced pkg:oci/charts%2Fcdviz-grafana?repository_url=ghcr.io/cdviz-dev
+    #[case(
+        "ghcr.io/cdviz-dev",
+        "charts/cdviz-grafana",
+        "0.1.0",
+        "pkg:oci/cdviz-grafana@0.1.0?repository_url=ghcr.io/cdviz-dev/charts"
+    )]
+    // OCI: deeper path prefix (e.g. "a/b/c" → name="c", prefix="a/b")
+    #[case(
+        "ghcr.io/myorg",
+        "a/b/my-chart",
+        "2.0.0",
+        "pkg:oci/my-chart@2.0.0?repository_url=ghcr.io/myorg/a/b"
+    )]
+    // OCI: no slash in chart name — repo_url unchanged
+    #[case(
+        "ghcr.io/cdviz-dev",
+        "cdviz-grafana",
+        "0.1.0",
+        "pkg:oci/cdviz-grafana@0.1.0?repository_url=ghcr.io/cdviz-dev"
     )]
     fn test_argocd_helm_to_purl_string(
         #[case] repo_url: &str,
