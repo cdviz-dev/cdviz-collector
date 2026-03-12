@@ -30,6 +30,9 @@ fn default_pool_max_lifetime() -> Duration {
 fn default_pool_test_before_acquire() -> bool {
     true
 }
+fn default_lazy_connection() -> bool {
+    false
+}
 use retry::default_total_duration_of_retries;
 
 /// The database client config
@@ -82,6 +85,12 @@ pub(crate) struct Config {
     /// Set to `0s` to disable retries.
     #[serde(default = "default_total_duration_of_retries", with = "humantime_serde")]
     total_duration_of_retries: Duration,
+
+    /// If `false` (default), establish a connection to the database eagerly at sink creation time.
+    /// An error is raised immediately if the database is unreachable, preventing the service
+    /// from starting. If `true`, connections are established lazily on first use.
+    #[serde(default = "default_lazy_connection")]
+    lazy_connection: bool,
 }
 
 /// Build database connections pool
@@ -92,7 +101,7 @@ pub(crate) struct Config {
 impl TryFrom<Config> for DbSink {
     type Error = Report;
 
-    fn try_from(config: Config) -> Result<Self> {
+    fn try_from(mut config: Config) -> Result<Self> {
         if config.pool_connections_min > config.pool_connections_max {
             miette::bail!(
                 "pool_connections_min ({}) must be <= pool_connections_max ({})",
@@ -117,10 +126,18 @@ impl TryFrom<Config> for DbSink {
             "Using the database"
         );
 
-        let pool = pool_options.connect_lazy(config.url.expose_secret()).into_diagnostic()?;
+        let url = config.url.expose_secret().to_owned();
+        let lazy_connection = config.lazy_connection;
         let total_duration_of_retries = config.total_duration_of_retries;
-        let mut config = config;
         config.url.zeroize();
+        let pool = if lazy_connection {
+            pool_options.connect_lazy(&url).into_diagnostic()?
+        } else {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(pool_options.connect(&url))
+            })
+            .into_diagnostic()?
+        };
         Ok(Self { pool, total_duration_of_retries })
     }
 }
@@ -264,6 +281,7 @@ mod tests {
             pool_max_lifetime: default_pool_max_lifetime(),
             pool_test_before_acquire: default_pool_test_before_acquire(),
             total_duration_of_retries: default_total_duration_of_retries(),
+            lazy_connection: true,
         };
         let dbsink = DbSink::try_from(config).unwrap();
         //Basic initialize the db schema
