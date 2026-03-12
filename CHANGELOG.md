@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.29.0...0.30.0) - 2026-03-12
+
+### Added
+
+- *(sink/db)* add lazy_connection option, default to eager ([#295](https://github.com/cdviz-dev/cdviz-collector/pull/295))
+
+### Fixed
+
+- building of PURL for oci without namespace (direct or percent encoded) in the name ([#294](https://github.com/cdviz-dev/cdviz-collector/pull/294))
+
 ## [0.29.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.28.0...0.29.0) - 2026-03-10
 
 ### Added
