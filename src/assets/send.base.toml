@@ -12,13 +12,177 @@ total_duration_of_retries = "30s"
 
 [sources.cli]
 enabled = true
+
 [sources.cli.extractor]
 type = "cli"
 
+# ── Built-in run types (all disabled; --run <name> enables one) ──────────
+[sources.testsuiterun_junit]
+enabled = false
+transformer_refs = ["ci_env_detection", "to_testsuiterun_junit"]
+
+[sources.testsuiterun_junit.extractor]
+type = "subprocess"
+data_globs = ["**/TEST-*.xml", "**/*.xml"]
+parser = "xml"
+
+[sources.testsuiterun_tap]
+enabled = false
+transformer_refs = ["ci_env_detection", "to_testsuiterun_tap"]
+
+[sources.testsuiterun_tap.extractor]
+type = "subprocess"
+data_globs = ["**/*.tap"]
+parser = "tap"
+
+[sources.taskrun]
+enabled = false
+transformer_refs = ["ci_env_detection", "to_taskrun"]
+
+[sources.taskrun.extractor]
+type = "subprocess"
+no_data = true
+
+# ── CDEvent builders (named so custom configs can reference or override) ──
+
+[transformers.to_testsuiterun_junit]
+type = "vrl"
+template = '''
+# Converts subprocess EventSource to testSuiteRun CDEvent (JUnit XML variant)
+# At this point .metadata.run.* is populated by ci_env_detection
+
+suite_name = string(.metadata.run.suite_name) ?? "unknown"
+subject_id = string(.metadata.run.subject_id) ?? "unknown"
+source_url = string(.metadata.context.source) ?? "cdviz-collector://local"
+env_id     = string(.metadata.run.env_id) ?? "/local"
+started_at = string(.metadata.run.started_at) ?? ""
+
+if .metadata.run.status == "started" {
+  .body = {
+    "context": { "version": "0.4.1", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.started.0.2.0", "timestamp": started_at },
+    "subject": { "id": subject_id, "type": "testSuiteRun",
+      "content": { "trigger": {"type": "schedule"},
+        "environment": {"id": env_id},
+        "testSuite": {"id": suite_name, "version": ""} } }
+  }
+} else {
+  # Aggregate from array of XML-parsed JUnit files in .body
+  total_tests = 0; total_failed = 0; total_errors = 0; total_skipped = 0; total_time = 0.0
+  if is_array(.body) {
+    for_each(array!(.body)) -> |_i, file| {
+      suite = object(get(file, ["testsuite"]) ?? {}) ?? {}
+      total_tests   = total_tests   + (to_int(get(suite, ["@tests"])    ?? "0") ?? 0)
+      total_failed  = total_failed  + (to_int(get(suite, ["@failures"]) ?? "0") ?? 0)
+      total_errors  = total_errors  + (to_int(get(suite, ["@errors"])   ?? "0") ?? 0)
+      total_skipped = total_skipped + (to_int(get(suite, ["@skipped"])  ?? "0") ?? 0)
+      total_time    = total_time    + (to_float(get(suite, ["@time"])   ?? "0") ?? 0.0)
+    }
+  }
+  exit_code = to_int(.metadata.run.exit_code) ?? 0
+  outcome   = if total_failed + total_errors > 0 { "fail" } else if exit_code != 0 { "fail" } else { "pass" }
+  passed    = total_tests - total_failed - total_errors - total_skipped
+
+  .body = {
+    "context": { "version": "0.4.1", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.finished.0.2.0", "timestamp": started_at },
+    "subject": { "id": subject_id, "type": "testSuiteRun",
+      "content": { "outcome": outcome, "reason": "",
+        "environment": {"id": env_id},
+        "testSuite": {"id": suite_name, "version": ""},
+        "customData": { "tests_count": total_tests, "passed": passed,
+          "failed": total_failed, "skipped": total_skipped, "errored": total_errors,
+          "duration_ms": to_int(total_time * 1000) ?? 0, "exit_code": exit_code } } }
+  }
+}
+[.]
+'''
+
+[transformers.to_testsuiterun_tap]
+type = "vrl"
+template = '''
+# Converts subprocess EventSource to testSuiteRun CDEvent (TAP variant)
+# At this point .metadata.run.* is populated by ci_env_detection
+
+suite_name = string(.metadata.run.suite_name) ?? "unknown"
+subject_id = string(.metadata.run.subject_id) ?? "unknown"
+source_url = string(.metadata.context.source) ?? "cdviz-collector://local"
+env_id     = string(.metadata.run.env_id) ?? "/local"
+started_at = string(.metadata.run.started_at) ?? ""
+
+if .metadata.run.status == "started" {
+  .body = {
+    "context": { "version": "0.4.1", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.started.0.2.0", "timestamp": started_at },
+    "subject": { "id": subject_id, "type": "testSuiteRun",
+      "content": { "trigger": {"type": "schedule"},
+        "environment": {"id": env_id},
+        "testSuite": {"id": suite_name, "version": ""} } }
+  }
+} else {
+  total_tests = 0; total_failed = 0
+  if is_array(.body) {
+    for_each(array!(.body)) -> |_i, result| {
+      tests = array(get(result, ["tests"]) ?? []) ?? []
+      total_tests = total_tests + length(tests)
+      for_each(tests) -> |_j, t| {
+        ok = bool(get(t, ["ok"]) ?? true) ?? true
+        if !ok { total_failed = total_failed + 1 }
+      }
+    }
+  }
+  exit_code = to_int(.metadata.run.exit_code) ?? 0
+  outcome   = if total_failed > 0 { "fail" } else if exit_code != 0 { "fail" } else { "pass" }
+  passed    = total_tests - total_failed
+
+  .body = {
+    "context": { "version": "0.4.1", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.finished.0.2.0", "timestamp": started_at },
+    "subject": { "id": subject_id, "type": "testSuiteRun",
+      "content": { "outcome": outcome, "reason": "",
+        "environment": {"id": env_id},
+        "testSuite": {"id": suite_name, "version": ""},
+        "customData": { "tests_count": total_tests, "passed": passed,
+          "failed": total_failed, "exit_code": exit_code } } }
+  }
+}
+[.]
+'''
+
+[transformers.to_taskrun]
+type = "vrl"
+template = '''
+# Converts subprocess EventSource to taskRun CDEvent (exit-code only)
+# At this point .metadata.run.* is populated by ci_env_detection
+
+suite_name = string(.metadata.run.suite_name) ?? "unknown"
+subject_id = string(.metadata.run.subject_id) ?? "unknown"
+source_url = string(.metadata.context.source) ?? "cdviz-collector://local"
+started_at = string(.metadata.run.started_at) ?? ""
+
+if .metadata.run.status == "started" {
+  .body = {
+    "context": { "version": "0.4.1", "id": "0", "source": source_url,
+      "type": "dev.cdevents.taskrun.started.0.2.0", "timestamp": started_at },
+    "subject": { "id": subject_id, "type": "taskRun",
+      "content": { "taskName": suite_name } }
+  }
+} else {
+  exit_code = to_int(.metadata.run.exit_code) ?? 0
+  outcome   = if exit_code != 0 { "failure" } else { "success" }
+  .body = {
+    "context": { "version": "0.4.1", "id": "0", "source": source_url,
+      "type": "dev.cdevents.taskrun.finished.0.2.0", "timestamp": started_at },
+    "subject": { "id": subject_id, "type": "taskRun",
+      "content": { "outcome": outcome, "taskName": suite_name } }
+  }
+}
+[.]
+'''
+
 # ── Shared transformer: CI environment detection ─────────────────────────
 # Reads CI env vars via VRL get_env_var(); enriches .metadata.run.*
-# Referenced by all run types via transformer_refs = ["ci_env_detection"]
-
+# Referenced by all run types via transformer_refs = ["ci_env_detection", ...]
 [transformers.ci_env_detection]
 type = "vrl"
 template = '''
@@ -88,163 +252,5 @@ for_each(overrides) -> |k, v| {
   .metadata.run = set!(.metadata.run, [k], v)
 }
 
-[.]
-'''
-
-# ── Built-in run types (all disabled; --run <name> enables one) ──────────
-
-[sources.testsuiterun-junit]
-enabled = false
-transformer_refs = ["ci_env_detection"]
-
-[sources.testsuiterun-junit.extractor]
-type = "subprocess"
-data_globs = ["**/TEST-*.xml", "**/*.xml"]
-parser = "xml"
-
-[[sources.testsuiterun-junit.transformers]]
-type = "vrl"
-template = '''
-# Converts subprocess EventSource to testSuiteRun CDEvent
-# At this point .metadata.run.* is populated by ci_env_detection
-
-suite_name = string(.metadata.run.suite_name) ?? "unknown"
-subject_id = string(.metadata.run.subject_id) ?? "unknown"
-source_url = string(.metadata.context.source) ?? "cdviz-collector://local"
-env_id     = string(.metadata.run.env_id) ?? "/local"
-started_at = string(.metadata.run.started_at) ?? ""
-
-if .metadata.run.status == "started" {
-  .body = {
-    "context": { "version": "0.4.1", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.started.0.2.0", "timestamp": started_at },
-    "subject": { "id": subject_id, "type": "testSuiteRun",
-      "content": { "trigger": {"type": "schedule"},
-        "environment": {"id": env_id},
-        "testSuite": {"id": suite_name, "version": ""} } }
-  }
-} else {
-  # Aggregate from array of XML-parsed JUnit files in .body
-  total_tests = 0; total_failed = 0; total_errors = 0; total_skipped = 0; total_time = 0.0
-  if is_array(.body) {
-    for_each(array!(.body)) -> |_i, file| {
-      suite = object(get(file, ["testsuite"]) ?? {}) ?? {}
-      total_tests   = total_tests   + (to_int(get(suite, ["@tests"])    ?? "0") ?? 0)
-      total_failed  = total_failed  + (to_int(get(suite, ["@failures"]) ?? "0") ?? 0)
-      total_errors  = total_errors  + (to_int(get(suite, ["@errors"])   ?? "0") ?? 0)
-      total_skipped = total_skipped + (to_int(get(suite, ["@skipped"])  ?? "0") ?? 0)
-      total_time    = total_time    + (to_float(get(suite, ["@time"])   ?? "0") ?? 0.0)
-    }
-  }
-  exit_code = to_int(.metadata.run.exit_code) ?? 0
-  outcome   = if total_failed + total_errors > 0 { "fail" } else if exit_code != 0 { "fail" } else { "pass" }
-  passed    = total_tests - total_failed - total_errors - total_skipped
-
-  .body = {
-    "context": { "version": "0.4.1", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.finished.0.2.0", "timestamp": started_at },
-    "subject": { "id": subject_id, "type": "testSuiteRun",
-      "content": { "outcome": outcome, "reason": "",
-        "environment": {"id": env_id},
-        "testSuite": {"id": suite_name, "version": ""},
-        "customData": { "tests_count": total_tests, "passed": passed,
-          "failed": total_failed, "skipped": total_skipped, "errored": total_errors,
-          "duration_ms": to_int(total_time * 1000) ?? 0, "exit_code": exit_code } } }
-  }
-}
-[.]
-'''
-
-[sources.testsuiterun-tap]
-enabled = false
-transformer_refs = ["ci_env_detection"]
-
-[sources.testsuiterun-tap.extractor]
-type = "subprocess"
-data_globs = ["**/*.tap"]
-parser = "tap"
-
-[[sources.testsuiterun-tap.transformers]]
-type = "vrl"
-template = '''
-suite_name = string(.metadata.run.suite_name) ?? "unknown"
-subject_id = string(.metadata.run.subject_id) ?? "unknown"
-source_url = string(.metadata.context.source) ?? "cdviz-collector://local"
-env_id     = string(.metadata.run.env_id) ?? "/local"
-started_at = string(.metadata.run.started_at) ?? ""
-
-if .metadata.run.status == "started" {
-  .body = {
-    "context": { "version": "0.4.1", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.started.0.2.0", "timestamp": started_at },
-    "subject": { "id": subject_id, "type": "testSuiteRun",
-      "content": { "trigger": {"type": "schedule"},
-        "environment": {"id": env_id},
-        "testSuite": {"id": suite_name, "version": ""} } }
-  }
-} else {
-  total_tests = 0; total_failed = 0
-  if is_array(.body) {
-    for_each(array!(.body)) -> |_i, result| {
-      tests = array(get(result, ["tests"]) ?? []) ?? []
-      total_tests = total_tests + length(tests)
-      for_each(tests) -> |_j, t| {
-        ok = bool(get(t, ["ok"]) ?? true) ?? true
-        if !ok { total_failed = total_failed + 1 }
-      }
-    }
-  }
-  exit_code = to_int(.metadata.run.exit_code) ?? 0
-  outcome   = if total_failed > 0 { "fail" } else if exit_code != 0 { "fail" } else { "pass" }
-  passed    = total_tests - total_failed
-
-  .body = {
-    "context": { "version": "0.4.1", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.finished.0.2.0", "timestamp": started_at },
-    "subject": { "id": subject_id, "type": "testSuiteRun",
-      "content": { "outcome": outcome, "reason": "",
-        "environment": {"id": env_id},
-        "testSuite": {"id": suite_name, "version": ""},
-        "customData": { "tests_count": total_tests, "passed": passed,
-          "failed": total_failed, "exit_code": exit_code } } }
-  }
-}
-[.]
-'''
-
-[sources.taskrun]
-enabled = false
-transformer_refs = ["ci_env_detection"]
-
-[sources.taskrun.extractor]
-type = "subprocess"
-no_data = true
-
-[[sources.taskrun.transformers]]
-type = "vrl"
-template = '''
-suite_name = string(.metadata.run.suite_name) ?? "unknown"
-subject_id = string(.metadata.run.subject_id) ?? "unknown"
-source_url = string(.metadata.context.source) ?? "cdviz-collector://local"
-env_id     = string(.metadata.run.env_id) ?? "/local"
-started_at = string(.metadata.run.started_at) ?? ""
-
-if .metadata.run.status == "started" {
-  .body = {
-    "context": { "version": "0.4.1", "id": "0", "source": source_url,
-      "type": "dev.cdevents.taskrun.started.0.2.0", "timestamp": started_at },
-    "subject": { "id": subject_id, "type": "taskRun",
-      "content": { "taskName": suite_name } }
-  }
-} else {
-  exit_code = to_int(.metadata.run.exit_code) ?? 0
-  outcome   = if exit_code != 0 { "failure" } else { "success" }
-  .body = {
-    "context": { "version": "0.4.1", "id": "0", "source": source_url,
-      "type": "dev.cdevents.taskrun.finished.0.2.0", "timestamp": started_at },
-    "subject": { "id": subject_id, "type": "taskRun",
-      "content": { "outcome": outcome, "taskName": suite_name } }
-  }
-}
 [.]
 '''
