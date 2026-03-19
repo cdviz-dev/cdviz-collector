@@ -219,13 +219,22 @@ sink_kafka = ["dep:rdkafka"]
 sink_nats = ["dep:async-nats"]
 sink_sse = ["dep:tokio-stream"]
 #! ### Sources
-source_all = ["source_kafka", "source_nats", "source_opendal", "source_sse"]
+source_all = [
+  "source_http_polling",
+  "source_kafka",
+  "source_nats",
+  "source_opendal",
+  "source_sse",
+]
+source_http_polling = ["http_client", "transformer_vrl"]
 source_kafka = ["dep:rdkafka"]
 source_nats = ["dep:async-nats"]
-source_opendal = ["dep:bytes", "dep:csv", "dep:opendal"]
+source_opendal = ["dep:bytes", "dep:csv", "dep:opendal", "state"]
 source_sse = ["dep:uuid", "reqwest-eventsource"]
-tool_transform = ["source_opendal", "tool_ui", "transformer_vrl"]
+#! ### Persist state (for sources,...)
+state = ["dep:opendal"]
 #! ### Tools
+tool_transform = ["source_opendal", "tool_ui", "transformer_vrl"]
 tool_ui = ["dep:cliclack", "dep:console", "dep:similar"]
 #! ### Transformers
 transformer_vrl = ["dep:vrl"]

@@ -1,6 +1,8 @@
 pub(crate) mod cli;
 pub(crate) mod extractors;
 pub(crate) mod format_converters;
+#[cfg(feature = "source_http_polling")]
+pub(crate) mod http_polling;
 #[cfg(feature = "source_kafka")]
 pub(crate) mod kafka;
 #[cfg(feature = "source_nats")]
@@ -85,6 +87,8 @@ impl Config {
             #[cfg(feature = "source_sse")]
             extractors::Config::Sse(config) => &mut config.metadata,
             extractors::Config::Subprocess(config) => &mut config.metadata,
+            #[cfg(feature = "source_http_polling")]
+            extractors::Config::HttpPolling(config) => &mut config.metadata,
             extractors::Config::Sleep => return, // No metadata for Sleep
         };
 
