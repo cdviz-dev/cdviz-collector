@@ -59,9 +59,9 @@ started_at = string(.metadata.run.started_at) ?? ""
 
 if .metadata.run.status == "started" {
   .body = {
-    "context": { "version": "0.4.1", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.started.0.2.0", "timestamp": started_at },
-    "subject": { "id": subject_id, "type": "testSuiteRun",
+    "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.started.0.3.0", "timestamp": started_at },
+    "subject": { "id": subject_id,
       "content": { "trigger": {"type": "schedule"},
         "environment": {"id": env_id},
         "testSuite": {"id": suite_name, "version": ""} } }
@@ -80,19 +80,19 @@ if .metadata.run.status == "started" {
     }
   }
   exit_code = to_int(.metadata.run.exit_code) ?? 0
-  outcome   = if total_failed + total_errors > 0 { "fail" } else if exit_code != 0 { "fail" } else { "pass" }
+  outcome   = if total_failed + total_errors > 0 { "failure" } else if exit_code != 0 { "failure" } else { "success" }
   passed    = total_tests - total_failed - total_errors - total_skipped
 
   .body = {
-    "context": { "version": "0.4.1", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.finished.0.2.0", "timestamp": started_at },
-    "subject": { "id": subject_id, "type": "testSuiteRun",
+    "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.finished.0.3.0", "timestamp": started_at },
+    "subject": { "id": subject_id,
       "content": { "outcome": outcome, "reason": "",
         "environment": {"id": env_id},
-        "testSuite": {"id": suite_name, "version": ""},
-        "customData": { "tests_count": total_tests, "passed": passed,
-          "failed": total_failed, "skipped": total_skipped, "errored": total_errors,
-          "duration_ms": to_int(total_time * 1000) ?? 0, "exit_code": exit_code } } }
+        "testSuite": {"id": suite_name, "version": ""} } },
+    "customData": { "tests_count": total_tests, "passed": passed,
+      "failed": total_failed, "skipped": total_skipped, "errored": total_errors,
+      "duration_ms": to_int(total_time * 1000), "exit_code": exit_code }
   }
 }
 [.]
@@ -112,9 +112,9 @@ started_at = string(.metadata.run.started_at) ?? ""
 
 if .metadata.run.status == "started" {
   .body = {
-    "context": { "version": "0.4.1", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.started.0.2.0", "timestamp": started_at },
-    "subject": { "id": subject_id, "type": "testSuiteRun",
+    "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.started.0.3.0", "timestamp": started_at },
+    "subject": { "id": subject_id,
       "content": { "trigger": {"type": "schedule"},
         "environment": {"id": env_id},
         "testSuite": {"id": suite_name, "version": ""} } }
@@ -126,24 +126,24 @@ if .metadata.run.status == "started" {
       tests = array(get(result, ["tests"]) ?? []) ?? []
       total_tests = total_tests + length(tests)
       for_each(tests) -> |_j, t| {
-        ok = bool(get(t, ["ok"]) ?? true) ?? true
-        if !ok { total_failed = total_failed + 1 }
+        status = string(get(t, ["status"]) ?? "ok") ?? "ok"
+        if status == "not_ok" { total_failed = total_failed + 1 }
       }
     }
   }
   exit_code = to_int(.metadata.run.exit_code) ?? 0
-  outcome   = if total_failed > 0 { "fail" } else if exit_code != 0 { "fail" } else { "pass" }
+  outcome   = if total_failed > 0 { "failure" } else if exit_code != 0 { "failure" } else { "success" }
   passed    = total_tests - total_failed
 
   .body = {
-    "context": { "version": "0.4.1", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.finished.0.2.0", "timestamp": started_at },
-    "subject": { "id": subject_id, "type": "testSuiteRun",
+    "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.finished.0.3.0", "timestamp": started_at },
+    "subject": { "id": subject_id,
       "content": { "outcome": outcome, "reason": "",
         "environment": {"id": env_id},
-        "testSuite": {"id": suite_name, "version": ""},
-        "customData": { "tests_count": total_tests, "passed": passed,
-          "failed": total_failed, "exit_code": exit_code } } }
+        "testSuite": {"id": suite_name, "version": ""} } },
+    "customData": { "tests_count": total_tests, "passed": passed,
+      "failed": total_failed, "exit_code": exit_code }
   }
 }
 [.]
@@ -162,18 +162,18 @@ started_at = string(.metadata.run.started_at) ?? ""
 
 if .metadata.run.status == "started" {
   .body = {
-    "context": { "version": "0.4.1", "id": "0", "source": source_url,
-      "type": "dev.cdevents.taskrun.started.0.2.0", "timestamp": started_at },
-    "subject": { "id": subject_id, "type": "taskRun",
+    "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
+      "type": "dev.cdevents.taskrun.started.0.3.0", "timestamp": started_at },
+    "subject": { "id": subject_id,
       "content": { "taskName": suite_name } }
   }
 } else {
   exit_code = to_int(.metadata.run.exit_code) ?? 0
   outcome   = if exit_code != 0 { "failure" } else { "success" }
   .body = {
-    "context": { "version": "0.4.1", "id": "0", "source": source_url,
-      "type": "dev.cdevents.taskrun.finished.0.2.0", "timestamp": started_at },
-    "subject": { "id": subject_id, "type": "taskRun",
+    "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
+      "type": "dev.cdevents.taskrun.finished.0.3.0", "timestamp": started_at },
+    "subject": { "id": subject_id,
       "content": { "outcome": outcome, "taskName": suite_name } }
   }
   # TODO if result_url then send a testoutput.published event
@@ -235,7 +235,7 @@ if results_url != "" {
 }
 
 if length(links) > 0 {
-  .body.subject.content.customData.links = append(array(.body.subject.content.customData.links) ?? [], links)
+  .body.customData.links = append(array(.body.customData.links) ?? [], links)
 }
 [.]
 '''
