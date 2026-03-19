@@ -106,7 +106,7 @@ clickhouse = { version = "0.14", default-features = false, features = [
   "lz4",
   "rustls-tls",
 ], optional = true }
-cliclack = { version = "0.4", optional = true }
+cliclack = { version = "0.5", optional = true }
 cloudevents-sdk = { version = "0.9", features = ["http-binding"] }
 console = { version = "0.16", optional = true }  # compatible version with cliclack
 csv = { version = "1", optional = true }
