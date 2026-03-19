@@ -19,7 +19,7 @@ impl Default for Config {
     }
 }
 
-#[cfg(feature = "source_opendal")]
+#[cfg(feature = "state")]
 impl Config {
     pub(crate) fn make_operator(&self) -> crate::errors::Result<opendal::Operator> {
         use crate::errors::IntoDiagnostic;
@@ -29,7 +29,7 @@ impl Config {
     }
 }
 
-#[cfg(feature = "source_opendal")]
+#[cfg(feature = "state")]
 pub(crate) async fn load_ts_after(
     op: &opendal::Operator,
     source_name: &str,
@@ -41,7 +41,7 @@ pub(crate) async fn load_ts_after(
     ts_str.parse().ok()
 }
 
-#[cfg(feature = "source_opendal")]
+#[cfg(feature = "state")]
 pub(crate) async fn save_ts_after(
     op: &opendal::Operator,
     source_name: &str,

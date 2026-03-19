@@ -1,3 +1,5 @@
+#[cfg(feature = "source_http_polling")]
+use super::http_polling;
 #[cfg(feature = "source_kafka")]
 use super::kafka;
 #[cfg(feature = "source_nats")]
@@ -35,6 +37,9 @@ pub(crate) enum Config {
     Sse(sse::Config),
     #[serde(alias = "subprocess")]
     Subprocess(subprocess::Config),
+    #[cfg(feature = "source_http_polling")]
+    #[serde(alias = "http_polling")]
+    HttpPolling(http_polling::Config),
 }
 
 pub enum Extractor {
@@ -117,6 +122,21 @@ impl Config {
                 Extractor::Task(tokio::spawn(async move {
                     extractor.run(cancel_token).await?;
                     tracing::info!(name, kind = "source", "exiting");
+                    Ok(())
+                }))
+            }
+            #[cfg(feature = "source_http_polling")]
+            Config::HttpPolling(config) => {
+                let mut extractor = http_polling::HttpPollingExtractor::try_from(
+                    config,
+                    next,
+                    state_config,
+                    name.clone(),
+                )?;
+                Extractor::Task(tokio::spawn(async move {
+                    extractor.run(cancel_token).await?;
+                    tracing::info!(name, kind = "source", "exiting");
+                    drop(extractor);
                     Ok(())
                 }))
             }
