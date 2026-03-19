@@ -19,7 +19,7 @@ type = "cli"
 # ── Built-in run types (all disabled; --run <name> enables one) ──────────
 [sources.testsuiterun_junit]
 enabled = false
-transformer_refs = ["ci_env_detection", "to_testsuiterun_junit"]
+transformer_refs = ["ci_env_detection", "to_testsuiterun_junit", "ci_links"]
 
 [sources.testsuiterun_junit.extractor]
 type = "subprocess"
@@ -28,7 +28,7 @@ parser = "xml"
 
 [sources.testsuiterun_tap]
 enabled = false
-transformer_refs = ["ci_env_detection", "to_testsuiterun_tap"]
+transformer_refs = ["ci_env_detection", "to_testsuiterun_tap", "ci_links"]
 
 [sources.testsuiterun_tap.extractor]
 type = "subprocess"
@@ -37,7 +37,7 @@ parser = "tap"
 
 [sources.taskrun]
 enabled = false
-transformer_refs = ["ci_env_detection", "to_taskrun"]
+transformer_refs = ["ci_env_detection", "to_taskrun", "ci_links"]
 
 [sources.taskrun.extractor]
 type = "subprocess"
@@ -176,6 +176,66 @@ if .metadata.run.status == "started" {
     "subject": { "id": subject_id, "type": "taskRun",
       "content": { "outcome": outcome, "taskName": suite_name } }
   }
+  # TODO if result_url then send a testoutput.published event
+}
+[.]
+'''
+
+# ── Shared transformer: cross-reference links ─────────────────────────────
+# Runs AFTER the CDEvent body is built; reads .metadata.run.* link keys
+# set via --metadata overrides and injects them into the emitted CDEvent.
+#
+# Currently writes to customData.links (CDEvents ≤ 0.5 workaround).
+# When CDEvents 0.6+ makes context.links stable for subject references,
+# update this single transformer to write to .body.context.links instead.
+#
+# Referenced by testsuiterun_* sources. Custom configs can also add
+# "ci_links" to any transformer_refs list, or to pipeline.transformer_refs.
+#
+# Supported --metadata keys:
+#   tested_artifact_id   → testedAgainst artifact  (e.g. pkg:oci/my-app@sha256:...)
+#   tested_env_id        → testedAgainst environment (e.g. /cluster/staging)
+#   tested_repo_id       → testedAgainst repository  (e.g. https://github.com/org/repo)
+#   results_url          → storedAt repository        (e.g. https://ci.example.com/results/42)
+[transformers.ci_links]
+type = "vrl"
+template = '''
+links = []
+
+artifact_id = string(.metadata.run.tested_artifact_id) ?? ""
+if artifact_id != "" {
+  links = push(links, {
+    "linkKind": "testedAgainst",
+    "target": { "subject": { "type": "artifact", "id": artifact_id } }
+  })
+}
+
+env_id = string(.metadata.run.tested_env_id) ?? ""
+if env_id != "" {
+  links = push(links, {
+    "linkKind": "testedAgainst",
+    "target": { "subject": { "type": "environment", "id": env_id } }
+  })
+}
+
+repo_id = string(.metadata.run.tested_repo_id) ?? ""
+if repo_id != "" {
+  links = push(links, {
+    "linkKind": "testedAgainst",
+    "target": { "subject": { "type": "repository", "id": repo_id } }
+  })
+}
+
+results_url = string(.metadata.run.results_url) ?? ""
+if results_url != "" {
+  links = push(links, {
+    "linkKind": "storedAt",
+    "target": { "subject": { "type": "testoutput", "id": results_url } }
+  })
+}
+
+if length(links) > 0 {
+  .body.subject.content.customData.links = append(array(.body.subject.content.customData.links) ?? [], links)
 }
 [.]
 '''
