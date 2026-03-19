@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.30.0...0.30.1) - 2026-03-19
+
+### Fixed
+
+- *(deps)* update dependencies & security alert on dependencies ([#302](https://github.com/cdviz-dev/cdviz-collector/pull/302))
+
+### Other
+
+- *(deps)* update rust crate serde_with to v3.18.0 ([#298](https://github.com/cdviz-dev/cdviz-collector/pull/298))
+- *(deps)* update actions/create-github-app-token action to v3 ([#299](https://github.com/cdviz-dev/cdviz-collector/pull/299))
+- *(deps)* update jdx/mise-action action to v4 ([#300](https://github.com/cdviz-dev/cdviz-collector/pull/300))
+
 ## [0.30.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.29.0...0.30.0) - 2026-03-12
 
 ### Added
