@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.30.1...0.31.0) - 2026-03-20
+
+### Added
+
+- `send --run` can be combined with `--data` to override the data_glob (aka) filepattern to process
+- `send run` can automaticaly sent `testoutput.published` if testresult_url is defined
+- add links from CI env when send run
+- *(source)* add http_polling source ([#303](https://github.com/cdviz-dev/cdviz-collector/pull/303))
+
+### Fixed
+
+- use `task_name` metadata to define the name for build-in `send` config
+- *(deps)* built-in send transformers emit cdevent v0.5
+
+### Other
+
+- split integration_send_command.rs
+- disable `cargo sort` (conflict with some editor formater like tombi)
+- add integration tests for `send --run testsuiterun_xxx`
+- restructure send.base.toml to allow override of transformer chain + format
+
 ## [0.30.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.30.0...0.30.1) - 2026-03-19
 
 ### Fixed
