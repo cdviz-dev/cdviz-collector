@@ -155,7 +155,7 @@ template = '''
 # Converts subprocess EventSource to taskRun CDEvent (exit-code only)
 # At this point .metadata.run.* is populated by ci_env_detection
 
-suite_name = string(.metadata.run.suite_name) ?? "unknown"
+task_name = string(.metadata.run.task_name) ?? "unknown"
 subject_id = string(.metadata.run.subject_id) ?? "unknown"
 source_url = string(.metadata.context.source) ?? "cdviz-collector://local"
 started_at = string(.metadata.run.started_at) ?? ""
@@ -165,7 +165,7 @@ if .metadata.run.status == "started" {
     "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
       "type": "dev.cdevents.taskrun.started.0.3.0", "timestamp": started_at },
     "subject": { "id": subject_id,
-      "content": { "taskName": suite_name } }
+      "content": { "taskName": task_name } }
   }
 } else {
   exit_code = to_int(.metadata.run.exit_code) ?? 0
@@ -174,9 +174,8 @@ if .metadata.run.status == "started" {
     "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
       "type": "dev.cdevents.taskrun.finished.0.3.0", "timestamp": started_at },
     "subject": { "id": subject_id,
-      "content": { "outcome": outcome, "taskName": suite_name } }
+      "content": { "outcome": outcome, "taskName": task_name } }
   }
-  # TODO if result_url then send a testoutput.published event
 }
 [.]
 '''
@@ -266,6 +265,7 @@ if github_actions == "true" {
   .metadata.run.ci_job_name = job_name
   .metadata.run.ci_workflow = workflow
   .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? job_name
+  .metadata.run.task_name   = string(.metadata.run.task_name) ?? job_name
   .metadata.run.env_id      = "/ci/" + ref_name
   .metadata.run.subject_id  = "https://github.com/" + repo + "/actions/runs/" + run_id + "/" + job_name
 
@@ -280,6 +280,7 @@ if github_actions == "true" {
   .metadata.run.ci_run_id   = run_id
   .metadata.run.ci_job_name = job_name
   .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? job_name
+  .metadata.run.task_name   = string(.metadata.run.task_name) ?? job_name
   .metadata.run.env_id      = "/ci/" + ref_name
   .metadata.run.subject_id  = "https://gitlab.com/" + repo + "/-/pipelines/" + run_id + "/" + job_name
 
@@ -293,6 +294,7 @@ if github_actions == "true" {
   .metadata.run.ci_run_id   = run_id
   .metadata.run.ci_job_name = job_name
   .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? job_name
+  .metadata.run.task_name   = string(.metadata.run.task_name) ?? job_name
   .metadata.run.env_id      = "/ci"
   .metadata.run.subject_id  = jenkins_url + "job/" + job_full + "/" + run_id + "/" + job_name
 
