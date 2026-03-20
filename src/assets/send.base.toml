@@ -19,7 +19,12 @@ type = "cli"
 # ── Built-in run types (all disabled; --run <name> enables one) ──────────
 [sources.testsuiterun_junit]
 enabled = false
-transformer_refs = ["ci_env_detection", "to_testsuiterun_junit", "ci_links"]
+transformer_refs = [
+  "ci_env_detection",
+  "to_testsuiterun_junit",
+  "testoutput_from_testsuiterun",
+  "ci_links"
+]
 
 [sources.testsuiterun_junit.extractor]
 type = "subprocess"
@@ -28,7 +33,12 @@ parser = "xml"
 
 [sources.testsuiterun_tap]
 enabled = false
-transformer_refs = ["ci_env_detection", "to_testsuiterun_tap", "ci_links"]
+transformer_refs = [
+  "ci_env_detection",
+  "to_testsuiterun_tap",
+  "testoutput_from_testsuiterun",
+  "ci_links"
+]
 
 [sources.testsuiterun_tap.extractor]
 type = "subprocess"
@@ -178,6 +188,34 @@ if .metadata.run.status == "started" {
   }
 }
 [.]
+'''
+
+# ── Shared transformer: testoutput.published emission ────────────────────
+# Runs AFTER ci_links; emits a testoutput.published event alongside the
+# testsuiterun.finished event when .metadata.run.results_url is set.
+# Returns [testsuiterun_event, testoutput_event] when results_url is present,
+# or [testsuiterun_event] otherwise.
+[transformers.testoutput_from_testsuiterun]
+type = "vrl"
+template = '''
+results_url = string(.metadata.run.results_url) ?? ""
+event_type  = string(.body.context.type) ?? ""
+
+if event_type == "dev.cdevents.testsuiterun.finished.0.3.0" && results_url != "" {
+  source_url = string(.metadata.context.source) ?? "cdviz-collector://local"
+  started_at = string(.metadata.run.started_at) ?? ""
+
+  testoutput_event = .
+  testoutput_event.body = {
+    "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testoutput.published.0.3.0", "timestamp": started_at },
+    "subject": { "id": results_url,
+      "content": { "outputType": "report", "format": "text/html", "uri": results_url } }
+  }
+  [., testoutput_event]
+} else {
+  [.]
+}
 '''
 
 # ── Shared transformer: cross-reference links ─────────────────────────────
