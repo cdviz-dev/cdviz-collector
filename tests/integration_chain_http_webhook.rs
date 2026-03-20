@@ -49,3 +49,51 @@ async fn test_chain_simple() {
     .await
     .unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_chain_simple_with_signature() {
+    // Get free port for connector A's HTTP server (webhook endpoint)
+    let webhook_port = get_free_port().await;
+
+    let input_events = generate_random_cdevents(2).unwrap();
+    test_connector_chain(
+        // Connector A config
+        ConnectorSetup {
+            config: &formatdoc!(
+                r#"
+                [sinks.link]
+                enabled = true
+                type = "http"
+                destination = "http://127.0.0.1:{}/webhook/link"
+
+                [sinks.link.headers]
+                "x-signature" = {{ type = "signature", signature_encoding = "hex", signature_on = "body", signature_prefix = "sha256=", token = "changeme123456" }}
+                "#,
+                webhook_port
+            ),
+            ..Default::default()
+        },
+        // Connector B config
+        ConnectorSetup {
+            http_port: webhook_port,
+            config: &formatdoc!(
+                r#"
+                [sources.link]
+                enabled = true
+
+                [sources.link.extractor]
+                type = "webhook"
+                id = "link"
+
+                [sources.link.extractor.headers]
+                "x-signature" = {{ type = "signature", signature_encoding = "hex", signature_on = "body", signature_prefix = "sha256=", token = "changeme123456" }}
+                "#
+            ),
+            //..Default::default()
+        },
+        &input_events,
+        Duration::from_secs(15), // Allow max time for both connectors to process
+    )
+    .await
+    .unwrap();
+}

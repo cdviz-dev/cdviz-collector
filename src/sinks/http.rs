@@ -7,12 +7,12 @@ use crate::security::header::{
     OutgoingHeaderMap, generate_headers, outgoing_header_map_to_configs,
 };
 use cdevents_sdk::cloudevents::BuilderExt;
-use cloudevents::{EventBuilder, EventBuilderV10};
-use http_cloudevents::RequestBuilderExt;
+use cloudevents::{Data, EventBuilder, EventBuilderV10};
 use opentelemetry::propagation::Injector;
 use opentelemetry::trace::TraceContextExt;
 use opentelemetry::{Context, global};
 use reqwest::Url;
+use reqwest::header::CONTENT_TYPE;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use reqwest_tracing::TracingMiddleware;
@@ -82,6 +82,16 @@ impl HttpSink {
             }
         }
     }
+}
+
+/// Set `CloudEvent` binary HTTP binding headers on `req`.
+/// Per spec: `datacontenttype` → `content-type`; all other attributes → `ce-{name}`.
+fn add_ce_headers(mut req: RequestBuilder, event: &cloudevents::Event) -> RequestBuilder {
+    use cloudevents::binding::http::header_prefix;
+    for (name, value) in event.iter() {
+        req = req.header(header_prefix(name), value.to_string());
+    }
+    req
 }
 
 /// Add source headers from the message to the request
@@ -158,52 +168,51 @@ impl Sink for HttpSink {
     #[tracing::instrument(skip(self, msg), fields(cdevent_id = %msg.cdevent.id()))]
     async fn send(&self, msg: &Message) -> Result<()> {
         let cd_event = msg.cdevent.clone();
-        // convert  CdEvent to cloudevents
         let event_result = EventBuilderV10::new().with_cdevent(cd_event.clone());
 
         let mut req = self.client.post(self.dest.clone());
 
-        // Determine the body content for signature generation
-        let body_bytes = match &event_result {
-            Ok(event_builder) => {
-                let event = event_builder.clone().build().into_diagnostic()?;
-                serde_json::to_vec(&event).into_diagnostic()?
-            }
-            Err(_) => {
-                // In error case, use the original event
-                serde_json::to_vec(&cd_event).into_diagnostic()?
-            }
-        };
-
-        // Add source headers first
+        // Add source headers and trace context first.
         req = add_source_headers(req, &msg.headers);
-
-        // Add trace context headers for distributed tracing
         req = add_trace_context_headers(req, msg.trace_context.as_ref());
 
-        // Add configured headers (including signatures based on body)
-        // These can override source headers if there are conflicts
-        req = self.add_headers(req, &body_bytes)?;
-
-        req = match event_result {
+        let (mut req, body_bytes) = match event_result {
             Ok(event_builder) => {
-                let event_result = event_builder.build();
-                let value = event_result.into_diagnostic()?;
-                req.event(value).into_diagnostic()?
+                let event = event_builder.build().into_diagnostic()?;
+                // Extract body bytes exactly as the binary CloudEvents wire format does
+                // (Data::Json → serde_json::to_vec, Data::Binary → clone, Data::String →
+                // into_bytes). Reading event.data() directly avoids the BinaryDeserializer
+                // machinery and any intermediate Value round-trips that could change the
+                // serialization. The HMAC signature is then computed over the same bytes
+                // that will appear in the HTTP body.
+                let body_bytes: Vec<u8> = match event.data() {
+                    None => vec![],
+                    Some(Data::Binary(b)) => b.clone(),
+                    Some(Data::String(s)) => s.as_bytes().to_vec(),
+                    Some(Data::Json(v)) => serde_json::to_vec(v).into_diagnostic()?,
+                };
+                // Set CloudEvent binary HTTP binding headers then body.
+                (add_ce_headers(req, &event), body_bytes)
             }
             Err(err) => {
                 tracing::warn!(error = ?err, "Failed to convert to cloudevents");
-                // In error case, send the original event
-                req.json(&cd_event)
+                // Fallback: send the raw CDEvent as plain JSON.
+                let body_bytes = serde_json::to_vec(&cd_event).into_diagnostic()?;
+                (req.header(CONTENT_TYPE, "application/json"), body_bytes)
             }
         };
+        req = self.add_headers(req, &body_bytes)?.body(body_bytes);
+
         let response = req.send().await.into_diagnostic()?;
         // TODO: non-success HTTP responses (4xx/5xx) are only logged; transient errors are
         // retried by reqwest_middleware but persistent failures (e.g. 400, 404) are silently ignored.
         if !response.status().is_success() {
+            let http_status = response.status().as_u16();
+            let http_body = response.text().await.unwrap_or_default();
             tracing::warn!(
                 cdevent_id = msg.cdevent.id().as_str(),
-                http_status = response.status().as_u16(),
+                http_status,
+                http_body,
                 "Failed to send event",
             );
         }
@@ -567,66 +576,103 @@ mod tests {
 
         assert2::assert!(let Ok(()) = sink.send(&message).await);
     }
-}
 
-//
+    /// Verify that the HMAC signature header computed by the sink matches the actual HTTP body
+    /// bytes received by a server.  This is the end-to-end unit-level check that guards against
+    /// mismatches between what is signed and what is sent (e.g. full `CloudEvent` JSON vs the binary
+    /// binding's data-only body).
+    #[tokio::test]
+    async fn test_http_sink_signature_matches_body() {
+        use crate::security::signature::{Encoding, SignatureConfig, SignatureOn, build_signature};
+        use crate::sources::EventSource;
+        use cdevents_sdk::CDEvent;
+        use serde_json::json;
 
-mod http_cloudevents {
-    use cloudevents::Event;
-    use cloudevents::binding::http::SPEC_VERSION_HEADER;
-    use cloudevents::binding::http::header_prefix;
-    use cloudevents::event::SpecVersion;
-    use cloudevents::message::BinaryDeserializer;
-    use cloudevents::message::BinarySerializer;
-    use cloudevents::message::MessageAttributeValue;
-    use cloudevents::message::Result;
-    use reqwest_middleware::RequestBuilder;
+        let mock_server = MockServer::start().await;
+        // Accept every POST — we verify the signature manually from the captured request.
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&mock_server)
+            .await;
 
-    pub trait RequestBuilderExt {
-        /// Write in this [`RequestBuilder`] the provided [`Event`]. Similar to invoking [`Event`].
-        fn event(self, event: Event) -> Result<RequestBuilder>;
-    }
+        let token = "test-signing-secret";
+        let config = Config {
+            enabled: true,
+            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+            headers: {
+                let mut map = OutgoingHeaderMap::new();
+                map.insert(
+                    "x-signature".to_string(),
+                    HeaderSource::Signature {
+                        token: token.into(),
+                        token_encoding: None,
+                        signature_prefix: Some("sha256=".to_string()),
+                        signature_on: crate::security::signature::SignatureOn::Body,
+                        signature_encoding: crate::security::signature::Encoding::Hex,
+                    },
+                );
+                map
+            },
+            total_duration_of_retries: Duration::from_secs(1),
+        };
+        let sink = HttpSink::try_from(config).unwrap();
 
-    impl RequestBuilderExt for RequestBuilder {
-        fn event(self, event: Event) -> Result<RequestBuilder> {
-            BinaryDeserializer::deserialize_binary(event, RequestSerializer::new(self))
-        }
-    }
-    /// Wrapper for [`RequestBuilder`] that implements [`StructuredSerializer`] & [`BinarySerializer`] traits.
-    pub struct RequestSerializer {
-        req: RequestBuilder,
-    }
+        let event_source = EventSource {
+            metadata: json!({}),
+            headers: std::collections::HashMap::new(),
+            body: json!({
+                "context": {
+                    "version": "0.4.0",
+                    "id": "test-sig-check",
+                    "source": "test-source",
+                    "type": "dev.cdevents.service.deployed.0.1.1",
+                    "timestamp": "2024-03-14T10:30:00Z"
+                },
+                "subject": {
+                    "id": "test-subject",
+                    "source": "test-source",
+                    "type": "service",
+                    "content": {
+                        "environment": { "id": "test-env" },
+                        "artifactId": "pkg:test/artifact@1.0.0"
+                    }
+                }
+            }),
+        };
+        let cdevent = CDEvent::try_from(event_source).unwrap();
+        let message =
+            Message { cdevent, headers: std::collections::HashMap::new(), trace_context: None };
 
-    impl RequestSerializer {
-        pub fn new(req: RequestBuilder) -> RequestSerializer {
-            RequestSerializer { req }
-        }
-    }
+        assert2::assert!(let Ok(()) = sink.send(&message).await);
 
-    impl BinarySerializer<RequestBuilder> for RequestSerializer {
-        fn set_spec_version(mut self, spec_ver: SpecVersion) -> Result<Self> {
-            self.req = self.req.header(SPEC_VERSION_HEADER, spec_ver.to_string());
-            Ok(self)
-        }
+        let received =
+            mock_server.received_requests().await.expect("request recording must be enabled");
+        assert_eq!(received.len(), 1, "expected exactly one request");
+        let req = &received[0];
 
-        fn set_attribute(mut self, name: &str, value: MessageAttributeValue) -> Result<Self> {
-            let key = &header_prefix(name);
-            self.req = self.req.header(key, value.to_string());
-            Ok(self)
-        }
+        let body_bytes = &req.body;
+        let signature_header = req
+            .headers
+            .get("x-signature")
+            .and_then(|v| v.to_str().ok())
+            .expect("x-signature header must be present");
 
-        fn set_extension(mut self, name: &str, value: MessageAttributeValue) -> Result<Self> {
-            let key = &header_prefix(name);
-            self.req = self.req.header(key, value.to_string());
-            Ok(self)
-        }
+        // Recompute the expected signature from the bytes the server actually received.
+        let sig_config = SignatureConfig {
+            header: "x-signature".to_string(),
+            token: token.into(),
+            token_encoding: None,
+            signature_prefix: Some("sha256=".to_string()),
+            signature_on: SignatureOn::Body,
+            signature_encoding: Encoding::Hex,
+        };
+        let expected =
+            build_signature(&sig_config, &axum::http::HeaderMap::new(), body_bytes).unwrap();
 
-        fn end_with_data(self, bytes: Vec<u8>) -> Result<RequestBuilder> {
-            Ok(self.req.body(bytes))
-        }
-
-        fn end(self) -> Result<RequestBuilder> {
-            Ok(self.req)
-        }
+        assert_eq!(
+            signature_header, expected,
+            "x-signature header must be HMAC of the actual request body bytes"
+        );
     }
 }
