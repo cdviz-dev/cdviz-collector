@@ -161,11 +161,17 @@ impl SubprocessExtractor {
     }
 }
 
-/// Collect all files under the current directory that match `pattern`.
+/// Collect all files that match `pattern`.
 ///
-/// Uses `globset` for pattern matching and a recursive `std::fs` walk.
-/// Paths are collected relative to the current working directory.
+/// If `pattern` is an absolute path with no glob metacharacters, it is treated
+/// as a literal file path and returned directly (if the file exists).
+/// Otherwise, uses `globset` for pattern matching with a recursive `std::fs`
+/// walk starting from the current working directory.
 fn collect_glob_matches(pattern: &str) -> Vec<std::path::PathBuf> {
+    let path = std::path::Path::new(pattern);
+    if path.is_absolute() && !pattern.contains(['*', '?', '[', '{']) {
+        return if path.is_file() { vec![path.to_path_buf()] } else { vec![] };
+    }
     let matcher = match globset::Glob::new(pattern).and_then(|g| {
         let mut b = globset::GlobSetBuilder::new();
         b.add(g);

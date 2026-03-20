@@ -290,6 +290,11 @@ fn convert_run_args_into_toml(args: &SendArgs, run_type: &str) -> Result<String>
         writeln!(&mut out, "sources.{run_type}.extractor.command = {cmd_json}")
             .into_diagnostic()?;
     }
+    if !args.data.is_empty() {
+        let globs_json = serde_json::to_string(&args.data).into_diagnostic()?;
+        writeln!(&mut out, "sources.{run_type}.extractor.data_globs = {globs_json}")
+            .into_diagnostic()?;
+    }
     if args.no_data {
         writeln!(&mut out, "sources.{run_type}.extractor.no_data = true").into_diagnostic()?;
     }
