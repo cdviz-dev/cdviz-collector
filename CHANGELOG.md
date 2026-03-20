@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.31.0...0.32.0) - 2026-03-20
+
+### Added
+
+- support multiple --metadata tested_artifact_id values
+- add `send --run testsuiterun_sarif` built-in configuration
+
+### Fixed
+
+- *(sink/http)* compute HMAC signature over the actual wire body
+- *(deps)* update
+
+### Other
+
+- eat our own dog-food, use `cdviz-collector send` as part of its own ci
+
 ## [0.31.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.30.1...0.31.0) - 2026-03-20
 
 ### Added
