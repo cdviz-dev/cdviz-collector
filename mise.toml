@@ -19,7 +19,6 @@ rust = { version = "1.94.0", profile = "minimal", components = "rustfmt,clippy,l
 "aqua:cargo-bins/cargo-binstall" = "1"  # do not use cargo-binstall (it's a special name used by mise)
 "ubi:mozilla/grcov" = "0.10.5"
 "cargo:cargo-hack" = "latest"
-"cargo:cargo-sort" = "latest"
 "cargo:cargo-machete" = "latest"
 "cargo:cargo-deny" = "latest"
 "cargo:cargo-nextest" = "latest"
@@ -45,10 +44,9 @@ run = "cargo --locked build"
 
 [tasks."format"]
 alias = "fmt"
-description = "Format the code and sort dependencies"
+description = "Format the code, json, yaml,..."
 run = [
   "cargo --locked fmt",
-  "cargo --locked sort --grouped",
   "dprint fmt",
 ]
 
@@ -75,7 +73,6 @@ description = "Lint all the code (lint_rust)"
 wait_for = ["build:cli"]
 run = [
   # "cargo --locked fmt --all -- --check",
-  # "cargo --locked sort --grouped --check",
   # using the profile 'test' to reduce the number of compilation when running with test
   # => faster CI, less space used (and network for remote cache)
   "cargo --locked clippy --workspace --all-features --all-targets --no-deps --profile test",
