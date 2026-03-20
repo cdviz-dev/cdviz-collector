@@ -1,0 +1,27 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "ExampleLinter",
+          "version": "1.0.0"
+        }
+      },
+      "results": [
+        {
+          "ruleId": "security/sql-injection",
+          "level": "error",
+          "message": { "text": "Potential SQL injection vulnerability" },
+          "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "src/db.rs" } } }]
+        },
+        {
+          "ruleId": "style/line-length",
+          "level": "warning",
+          "message": { "text": "Line exceeds 100 characters" },
+          "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "src/main.rs" } } }]
+        }
+      ]
+    }
+  ]
+}

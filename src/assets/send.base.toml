@@ -45,6 +45,20 @@ type = "subprocess"
 data_globs = ["**/*.tap"]
 parser = "tap"
 
+[sources.testsuiterun_sarif]
+enabled = false
+transformer_refs = [
+  "ci_env_detection",
+  "to_testsuiterun_sarif",
+  "testoutput_from_testsuiterun",
+  "ci_links"
+]
+
+[sources.testsuiterun_sarif.extractor]
+type = "subprocess"
+data_globs = ["**/*.sarif", "**/*.sarif.json"]
+parser = "json"
+
 [sources.taskrun]
 enabled = false
 transformer_refs = ["ci_env_detection", "to_taskrun", "ci_links"]
@@ -154,6 +168,91 @@ if .metadata.run.status == "started" {
         "testSuite": {"id": suite_name, "version": ""} } },
     "customData": { "tests_count": total_tests, "passed": passed,
       "failed": total_failed, "exit_code": exit_code }
+  }
+}
+[.]
+'''
+
+[transformers.to_testsuiterun_sarif]
+type = "vrl"
+template = '''
+# Converts subprocess EventSource to testSuiteRun CDEvent (SARIF JSON variant)
+# At this point .metadata.run.* is populated by ci_env_detection
+
+suite_name = string(.metadata.run.suite_name) ?? "unknown"
+subject_id = string(.metadata.run.subject_id) ?? "unknown"
+source_url = string(.metadata.context.source) ?? "cdviz-collector://local"
+env_id     = string(.metadata.run.env_id) ?? "/local"
+started_at = string(.metadata.run.started_at) ?? ""
+
+if .metadata.run.status == "started" {
+  .body = {
+    "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.started.0.3.0", "timestamp": started_at },
+    "subject": { "id": subject_id,
+      "content": { "trigger": {"type": "schedule"},
+        "environment": {"id": env_id},
+        "testSuite": {"id": suite_name, "version": ""} } }
+  }
+} else {
+  # Extract tool name/version from first run of first SARIF file
+  tool_name = suite_name; tool_version = ""
+  if is_array(.body) && length(array!(.body)) > 0 {
+    first_doc = object(array!(.body)[0]) ?? {}
+    first_runs = array(get(first_doc, ["runs"]) ?? []) ?? []
+    if length(first_runs) > 0 {
+      driver = object(get(first_runs[0], ["tool", "driver"]) ?? {}) ?? {}
+      d_name = string(get(driver, ["name"]) ?? "") ?? ""
+      if d_name != "" {
+        tool_name    = d_name
+        tool_version = string(get(driver, ["version"]) ?? "") ?? ""
+      }
+    }
+  }
+
+  # Aggregate results across all SARIF files and runs
+  total_results = 0; total_errors = 0; total_warnings = 0; total_notes = 0
+  if is_array(.body) {
+    for_each(array!(.body)) -> |_i, doc| {
+      runs = array(get(doc, ["runs"]) ?? []) ?? []
+      for_each(runs) -> |_j, run| {
+        results = array(get(run, ["results"]) ?? []) ?? []
+        total_results = total_results + length(results)
+        for_each(results) -> |_k, result| {
+          level = string(get(result, ["level"]) ?? "warning") ?? "warning"
+          if level == "error" {
+            total_errors   = total_errors   + 1
+          } else if level == "warning" {
+            total_warnings = total_warnings + 1
+          } else if level == "note" {
+            total_notes    = total_notes    + 1
+          }
+        }
+      }
+    }
+  }
+
+  exit_code = to_int(.metadata.run.exit_code) ?? 0
+  outcome   = if total_errors > 0 { "failure" } else if exit_code != 0 { "failure" } else { "success" }
+
+  .body = {
+    "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
+      "type": "dev.cdevents.testsuiterun.finished.0.3.0", "timestamp": started_at },
+    "subject": { "id": subject_id,
+      "content": { "outcome": outcome, "reason": "",
+        "environment": {"id": env_id},
+        "testSuite": {"id": suite_name, "version": ""} } },
+    "customData": {
+      "sarif": { "summary": {
+        "results_count": total_results,
+        "errors": total_errors,
+        "warnings": total_warnings,
+        "notes": total_notes,
+        "tool": tool_name,
+        "tool_version": tool_version
+      }},
+      "exit_code": exit_code
+    }
   }
 }
 [.]

@@ -1,0 +1,27 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "ExampleLinter",
+          "version": "1.0.0"
+        }
+      },
+      "results": [
+        {
+          "ruleId": "style/line-length",
+          "level": "warning",
+          "message": { "text": "Line exceeds 100 characters" },
+          "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "src/main.rs" } } }]
+        },
+        {
+          "ruleId": "style/naming",
+          "level": "note",
+          "message": { "text": "Consider renaming variable for clarity" },
+          "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "src/lib.rs" } } }]
+        }
+      ]
+    }
+  ]
+}

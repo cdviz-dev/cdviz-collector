@@ -145,8 +145,8 @@ async fn test_send_run_taskrun_metadata_override() {
 
 // ── --run testsuiterun integration tests ─────────────────────────────────
 
-/// Parametrized integration test for `send --run testsuiterun_tap` and
-/// `send --run testsuiterun_junit`.
+/// Parametrized integration test for `send --run testsuiterun_tap`,
+/// `send --run testsuiterun_junit`, and `send --run testsuiterun_sarif`
 ///
 /// # Parameters
 /// - `run_type`: the `--run` argument (`testsuiterun_tap` or `testsuiterun_junit`)
@@ -180,6 +180,17 @@ async fn test_send_run_taskrun_metadata_override() {
     "testsuiterun_junit",
     "junit/failing.xml",
     Some("https://ci.example.com/results/junit"),
+    "failure"
+)]
+// SARIF: no error-level results → outcome "success"
+#[case("testsuiterun_sarif", "sarif/passing.sarif", None, "success")]
+// SARIF: one error-level result → outcome "failure"
+#[case("testsuiterun_sarif", "sarif/failing.sarif", None, "failure")]
+// SARIF: failing with results_url → extra testoutput.published event
+#[case(
+    "testsuiterun_sarif",
+    "sarif/failing.sarif",
+    Some("https://ci.example.com/results/sarif"),
     "failure"
 )]
 #[tokio::test(flavor = "multi_thread")]
