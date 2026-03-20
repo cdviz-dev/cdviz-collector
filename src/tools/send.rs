@@ -302,13 +302,34 @@ fn convert_run_args_into_toml(args: &SendArgs, run_type: &str) -> Result<String>
         writeln!(&mut out, "sources.{run_type}.extractor.fail_on_collector_error = true")
             .into_diagnostic()?;
     }
+    // Collect metadata grouped by key (preserving insertion order)
+    let mut meta_map: Vec<(String, Vec<String>)> = Vec::new();
     for kv in &args.metadata {
         if let Some((key, value)) = kv.split_once('=') {
-            let escaped = escape_toml_string(value);
+            let key = key.trim().to_string();
+            let value = value.to_string();
+            if let Some(entry) = meta_map.iter_mut().find(|(k, _)| k == &key) {
+                entry.1.push(value);
+            } else {
+                meta_map.push((key, vec![value]));
+            }
+        }
+    }
+    for (key, values) in &meta_map {
+        if values.len() == 1 {
+            let escaped = escape_toml_string(&values[0]);
             writeln!(
                 &mut out,
-                "sources.{run_type}.extractor.metadata.run.overrides.{} = \"{escaped}\"",
-                key.trim()
+                "sources.{run_type}.extractor.metadata.run.overrides.{key} = \"{escaped}\""
+            )
+            .into_diagnostic()?;
+        } else {
+            let arr: Vec<String> =
+                values.iter().map(|v| format!("\"{}\"", escape_toml_string(v))).collect();
+            writeln!(
+                &mut out,
+                "sources.{run_type}.extractor.metadata.run.overrides.{key} = [{}]",
+                arr.join(", ")
             )
             .into_diagnostic()?;
         }
@@ -449,6 +470,45 @@ mod tests {
         assert!(config.sinks["http"].is_enabled());
         assert!(config.sinks.contains_key("debug"));
         assert!(!config.sinks["debug"].is_enabled());
+    }
+
+    #[test]
+    fn test_convert_run_args_single_metadata_stays_string() {
+        let args = SendArgs {
+            run: Some("taskrun".to_string()),
+            metadata: vec!["tested_artifact_id=pkg:oci/my-app".to_string()],
+            ..default_args()
+        };
+
+        let toml = convert_run_args_into_toml(&args, "taskrun").unwrap();
+
+        assert!(
+            toml.contains(
+                r#"sources.taskrun.extractor.metadata.run.overrides.tested_artifact_id = "pkg:oci/my-app""#
+            ),
+            "Expected single string value in TOML, got:\n{toml}"
+        );
+    }
+
+    #[test]
+    fn test_convert_run_args_duplicate_metadata_generates_array() {
+        let args = SendArgs {
+            run: Some("taskrun".to_string()),
+            metadata: vec![
+                "tested_artifact_id=pkg:oci/my-app".to_string(),
+                "tested_artifact_id=pkg:maven/com.example:lib".to_string(),
+            ],
+            ..default_args()
+        };
+
+        let toml = convert_run_args_into_toml(&args, "taskrun").unwrap();
+
+        assert!(
+            toml.contains(
+                r#"sources.taskrun.extractor.metadata.run.overrides.tested_artifact_id = ["pkg:oci/my-app", "pkg:maven/com.example:lib"]"#
+            ),
+            "Expected inline array in TOML, got:\n{toml}"
+        );
     }
 
     #[test]

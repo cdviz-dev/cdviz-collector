@@ -291,3 +291,85 @@ async fn test_send_run_testsuiterun(
         );
     }
 }
+
+/// Test that repeating `--metadata tested_artifact_id=…` produces two `testedAgainst` links
+/// in the `taskrun.finished` event's `customData.links`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_send_run_multiple_artifact_links() {
+    use std::sync::{Arc, Mutex};
+
+    let mock_server = MockServer::start().await;
+    let sink_url = mock_server.uri();
+    let received_bodies: Arc<Mutex<Vec<(String, serde_json::Value)>>> =
+        Arc::new(Mutex::new(vec![]));
+    let received_bodies_clone = Arc::clone(&received_bodies);
+
+    let mock = Mock::given(method("POST"))
+        .and(path("/events"))
+        .respond_with(move |req: &wiremock::Request| {
+            let ce_type =
+                req.headers.get("ce-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+            let body = serde_json::from_slice::<serde_json::Value>(&req.body)
+                .unwrap_or(serde_json::Value::Null);
+            if let Ok(mut bodies) = received_bodies_clone.lock() {
+                bodies.push((ce_type, body));
+            }
+            ResponseTemplate::new(200)
+        })
+        .expect(2);
+    mock_server.register(mock).await;
+
+    let result = cdviz_collector::run_with_args(vec![
+        "--disable-otel",
+        "send",
+        "--run",
+        "taskrun",
+        "--metadata",
+        "tested_artifact_id=pkg:oci/app",
+        "--metadata",
+        "tested_artifact_id=pkg:maven/com.example:lib",
+        "-u",
+        &format!("{sink_url}/events"),
+        "--",
+        "true",
+    ])
+    .await;
+
+    sleep(Duration::from_millis(200)).await;
+    mock_server.verify().await;
+
+    assert!(matches!(result, Ok(true)), "Expected Ok(true), got: {result:?}");
+
+    let bodies = received_bodies.lock().unwrap();
+    let finished_body = bodies
+        .iter()
+        .find(|(t, _)| t.contains("taskrun.finished"))
+        .map(|(_, b)| b)
+        .expect("Expected taskrun.finished event");
+
+    let links = finished_body["customData"]["links"]
+        .as_array()
+        .expect("Expected customData.links array in finished event");
+
+    let artifact_links: Vec<&serde_json::Value> = links
+        .iter()
+        .filter(|l| {
+            l["linkKind"] == "testedAgainst" && l["target"]["subject"]["type"] == "artifact"
+        })
+        .collect();
+
+    assert_eq!(
+        artifact_links.len(),
+        2,
+        "Expected 2 testedAgainst artifact links, got {}: {links:?}",
+        artifact_links.len()
+    );
+
+    let ids: Vec<&str> =
+        artifact_links.iter().filter_map(|l| l["target"]["subject"]["id"].as_str()).collect();
+    assert!(ids.contains(&"pkg:oci/app"), "Missing pkg:oci/app in links: {ids:?}");
+    assert!(
+        ids.contains(&"pkg:maven/com.example:lib"),
+        "Missing pkg:maven/com.example:lib in links: {ids:?}"
+    );
+}

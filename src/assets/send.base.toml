@@ -329,7 +329,8 @@ if event_type == "dev.cdevents.testsuiterun.finished.0.3.0" && results_url != ""
 # "ci_links" to any transformer_refs list, or to pipeline.transformer_refs.
 #
 # Supported --metadata keys:
-#   tested_artifact_id   → testedAgainst artifact  (e.g. pkg:oci/my-app@sha256:...)
+#   tested_artifact_id   → testedAgainst artifact  (repeatable: one link per value)
+#                          e.g. pkg:oci/my-app@sha256:... or pkg:maven/com.example:lib
 #   tested_env_id        → testedAgainst environment (e.g. /cluster/staging)
 #   tested_repo_id       → testedAgainst repository  (e.g. https://github.com/org/repo)
 #   results_url          → storedAt repository        (e.g. https://ci.example.com/results/42)
@@ -338,12 +339,21 @@ type = "vrl"
 template = '''
 links = []
 
-artifact_id = string(.metadata.run.tested_artifact_id) ?? ""
-if artifact_id != "" {
-  links = push(links, {
-    "linkKind": "testedAgainst",
-    "target": { "subject": { "type": "artifact", "id": artifact_id } }
-  })
+# tested_artifact_id may be a string (single, backward compat) or array (multiple)
+artifact_ids = if is_array(.metadata.run.tested_artifact_id) {
+  array!(.metadata.run.tested_artifact_id)
+} else {
+  s = string(.metadata.run.tested_artifact_id) ?? ""
+  if s != "" { [s] } else { [] }
+}
+for_each(artifact_ids) -> |_i, aid| {
+  aid_str = string(aid) ?? ""
+  if aid_str != "" {
+    links = push(links, {
+      "linkKind": "testedAgainst",
+      "target": { "subject": { "type": "artifact", "id": aid_str } }
+    })
+  }
 }
 
 env_id = string(.metadata.run.tested_env_id) ?? ""
