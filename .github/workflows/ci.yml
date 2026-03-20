@@ -46,5 +46,24 @@ jobs:
           cache: false
           cache_save: false
           experimental: true
-      - run: mise run --jobs 1 ci
+      - name: install cdviz-collector
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/cdviz-dev/cdviz-collector/releases/latest/download/cdviz-collector-installer.sh \
+            | sh
         shell: bash
+      - name: run CI and report test results
+        run: |
+          cdviz-collector send --run testsuiterun_junit \
+            --data "target/nextest/default/junit.xml" \
+            --metadata "suite_name=/cdviz-collector/ci" \
+            --metadata "tested_artifact_id=pkg:oci/cdviz-collector" \
+            -u "${CDVIZ_COLLECTOR_URL}" \
+            -- mise run --jobs 1 ci
+        shell: bash
+        env:
+          CDVIZ_COLLECTOR_URL: ${{ secrets.CDVIZ_COLLECTOR_URL }}
+          CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__TYPE: "signature"
+          CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__TOKEN: ${{ secrets.CDVIZ_COLLECTOR_TOKEN }}
+          CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__SIGNATURE_PREFIX: "sha256="
+          CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__SIGNATURE_ENCODING: "hex"

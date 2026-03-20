@@ -83,10 +83,18 @@ impl SubprocessExtractor {
         let (program, args) =
             self.config.command.split_first().ok_or_else(|| miette::miette!("command is empty"))?;
 
-        let mut child = tokio::process::Command::new(program)
-            .args(args)
-            .spawn()
-            .map_err(|e| miette::miette!("failed to spawn child process: {e}"))?;
+        let cdviz_keys: Vec<String> = std::env::vars()
+            .map(|(k, _)| k)
+            .filter(|k| k.starts_with("CDVIZ_COLLECTOR__"))
+            .collect();
+
+        let mut cmd = tokio::process::Command::new(program);
+        cmd.args(args);
+        for key in &cdviz_keys {
+            cmd.env_remove(key);
+        }
+        let mut child =
+            cmd.spawn().map_err(|e| miette::miette!("failed to spawn child process: {e}"))?;
 
         // Step 4: wait for child or cancellation
         let exit_code: i32 = tokio::select! {
