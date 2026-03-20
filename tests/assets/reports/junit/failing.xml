@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="FailingSuite" tests="4" failures="1" errors="0" skipped="1" time="0.200">
+    <testcase name="test_alpha" classname="UnitTests" time="0.040"/>
+    <testcase name="test_beta" classname="UnitTests" time="0.043">
+        <failure message="Expected true but got false" type="AssertionError">
+AssertionError: Expected true but got false
+    at UnitTests.test_beta (lib_tests.rs:21)
+        </failure>
+    </testcase>
+    <testcase name="test_gamma" classname="UnitTests" time="0.040"/>
+    <testcase name="test_delta" classname="UnitTests" time="0.000">
+        <skipped message="Not yet implemented"/>
+    </testcase>
+</testsuite>

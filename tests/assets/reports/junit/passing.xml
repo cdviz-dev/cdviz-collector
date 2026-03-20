@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="PassingSuite" tests="3" failures="0" errors="0" skipped="0" time="0.123">
+    <testcase name="test_alpha" classname="UnitTests" time="0.040"/>
+    <testcase name="test_beta" classname="UnitTests" time="0.043"/>
+    <testcase name="test_gamma" classname="UnitTests" time="0.040"/>
+</testsuite>

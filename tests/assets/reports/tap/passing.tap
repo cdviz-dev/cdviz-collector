@@ -1,0 +1,5 @@
+TAP version 14
+1..3
+ok 1 - setup passes
+ok 2 - core logic works
+ok 3 - teardown succeeds
