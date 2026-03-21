@@ -8,17 +8,27 @@ use tokio::sync::broadcast::Sender;
 
 pub(crate) struct Processor {
     next: Sender<Message>,
+    default_source_url: String,
 }
 
 impl Processor {
-    pub(crate) fn new(next: Sender<Message>) -> Self {
-        Self { next }
+    pub(crate) fn new(next: Sender<Message>, default_source_url: String) -> Self {
+        Self { next, default_source_url }
     }
 }
 
 impl Pipe for Processor {
     type Input = EventSource;
-    fn send(&mut self, input: Self::Input) -> Result<()> {
+    fn send(&mut self, mut input: Self::Input) -> Result<()> {
+        let is_source_empty = |v: &serde_json::Value| {
+            v.get("context")
+                .and_then(|c| c.get("source"))
+                .and_then(|s| s.as_str())
+                .is_none_or(str::is_empty)
+        };
+        if is_source_empty(&input.body) && is_source_empty(&input.metadata) {
+            input.metadata["context"]["source"] = serde_json::json!(self.default_source_url);
+        }
         let cdevent = CDEvent::try_from(input.clone())?;
 
         // Include headers from EventSource into the message and capture trace context
@@ -39,7 +49,8 @@ mod tests {
     #[test]
     fn test_header_passthrough() {
         let (tx, mut rx) = tokio::sync::broadcast::channel(10);
-        let mut processor = Processor::new(tx.clone());
+        let mut processor =
+            Processor::new(tx.clone(), "http://test.example.com/?source=test".to_string());
 
         // Create an EventSource with headers
         let mut headers = HashMap::new();
