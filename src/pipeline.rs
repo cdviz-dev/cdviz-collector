@@ -123,6 +123,7 @@ impl PipelineBuilder {
             &self.tx,
             shutdown_token,
             Some(&self.config.state),
+            &self.config.http.root_url,
         )?;
 
         if source_handles.is_empty() && (!enable_http_server || source_routes.is_empty()) {

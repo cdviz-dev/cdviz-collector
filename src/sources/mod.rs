@@ -71,45 +71,6 @@ impl Config {
         }
     }
 
-    /// Inject `context.source` into extractor metadata if not already set.
-    /// This is called during config loading to populate the source URL.
-    pub(crate) fn inject_context_source(&mut self, source_name: &str, root_url: &url::Url) {
-        // Get mutable reference to the extractor's metadata
-        let metadata = match &mut self.extractor {
-            extractors::Config::Cli(config) => &mut config.metadata,
-            extractors::Config::Webhook(config) => &mut config.metadata,
-            #[cfg(feature = "source_opendal")]
-            extractors::Config::Opendal(config) => &mut config.metadata,
-            #[cfg(feature = "source_kafka")]
-            extractors::Config::Kafka(config) => &mut config.metadata,
-            #[cfg(feature = "source_nats")]
-            extractors::Config::Nats(config) => &mut config.metadata,
-            #[cfg(feature = "source_sse")]
-            extractors::Config::Sse(config) => &mut config.metadata,
-            extractors::Config::Subprocess(config) => &mut config.metadata,
-            #[cfg(feature = "source_http_polling")]
-            extractors::Config::HttpPolling(config) => &mut config.metadata,
-            extractors::Config::Sleep => return, // No metadata for Sleep
-        };
-
-        // Check if context.source already exists
-        if metadata.get("context").and_then(|c| c.get("source")).is_some() {
-            // Already set, don't override
-            return;
-        }
-
-        // Build URL with proper encoding using url crate
-        let mut source_url = root_url.clone();
-        source_url.query_pairs_mut().append_pair("source", source_name);
-
-        // Ensure metadata is an object
-        if !metadata.is_object() {
-            *metadata = serde_json::json!({});
-        }
-
-        // Set context.source
-        metadata["context"]["source"] = serde_json::json!(source_url.as_str());
-    }
 }
 
 pub(crate) fn make(
@@ -118,8 +79,12 @@ pub(crate) fn make(
     tx: Sender<Message>,
     cancel_token: CancellationToken,
     state_config: Option<&crate::state::Config>,
+    root_url: &url::Url,
 ) -> Result<extractors::Extractor> {
-    let mut pipe: EventSourcePipe = Box::new(send_cdevents::Processor::new(tx));
+    let mut default_source = root_url.clone();
+    default_source.query_pairs_mut().append_pair("source", name);
+    let mut pipe: EventSourcePipe =
+        Box::new(send_cdevents::Processor::new(tx, default_source.to_string()));
     let mut tconfigs = config.transformers.clone();
     tconfigs.reverse();
     for tconfig in tconfigs {
@@ -225,12 +190,15 @@ pub(crate) fn create_sources_and_routes(
     tx: &tokio::sync::broadcast::Sender<Message>,
     cancel_token: &CancellationToken,
     state_config: Option<&crate::state::Config>,
+    root_url: &url::Url,
 ) -> Result<SourceHandlesAndRoutes> {
     let sources = source_configs
         .into_iter()
         .filter(|(_name, config)| config.is_enabled())
         .inspect(|(name, _config)| tracing::info!(kind = "source", name, "starting"))
-        .map(|(name, config)| make(&name, &config, tx.clone(), cancel_token.clone(), state_config))
+        .map(|(name, config)| {
+            make(&name, &config, tx.clone(), cancel_token.clone(), state_config, root_url)
+        })
         .collect::<Result<Vec<_>>>()?;
 
     let mut join_handles = vec![];
@@ -249,106 +217,6 @@ mod tests {
     use super::*;
     use assert2::assert;
     use serde_json::json;
-
-    #[test]
-    fn test_inject_context_source_with_valid_url() {
-        let mut config = Config {
-            enabled: true,
-            extractor: extractors::Config::Webhook(webhook::Config {
-                id: "test".to_string(),
-                metadata: json!({}),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-
-        let root_url = url::Url::parse("http://example.com").unwrap();
-        config.inject_context_source("my-webhook", &root_url);
-
-        if let extractors::Config::Webhook(webhook_config) = &config.extractor {
-            assert_eq!(
-                webhook_config.metadata["context"]["source"],
-                json!("http://example.com/?source=my-webhook")
-            );
-        } else {
-            panic!("Expected Webhook config");
-        }
-    }
-
-    #[test]
-    fn test_inject_context_source_preserves_existing() {
-        let mut config = Config {
-            enabled: true,
-            extractor: extractors::Config::Webhook(webhook::Config {
-                id: "test".to_string(),
-                metadata: json!({"context": {"source": "http://custom.com/hook"}}),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-
-        let root_url = url::Url::parse("http://example.com").unwrap();
-        config.inject_context_source("my-webhook", &root_url);
-
-        if let extractors::Config::Webhook(webhook_config) = &config.extractor {
-            assert_eq!(
-                webhook_config.metadata["context"]["source"],
-                json!("http://custom.com/hook")
-            );
-        } else {
-            panic!("Expected Webhook config");
-        }
-    }
-
-    #[test]
-    fn test_inject_context_source_encodes_special_chars() {
-        let mut config = Config {
-            enabled: true,
-            extractor: extractors::Config::Webhook(webhook::Config {
-                id: "test".to_string(),
-                metadata: json!({}),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-
-        let root_url = url::Url::parse("http://example.com").unwrap();
-        config.inject_context_source("my webhook/source", &root_url);
-
-        if let extractors::Config::Webhook(webhook_config) = &config.extractor {
-            assert_eq!(
-                webhook_config.metadata["context"]["source"],
-                json!("http://example.com/?source=my+webhook%2Fsource")
-            );
-        } else {
-            panic!("Expected Webhook config");
-        }
-    }
-
-    #[test]
-    fn test_inject_context_source_with_existing_query_params() {
-        let mut config = Config {
-            enabled: true,
-            extractor: extractors::Config::Webhook(webhook::Config {
-                id: "test".to_string(),
-                metadata: json!({}),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-
-        let root_url = url::Url::parse("http://example.com/path?existing=param").unwrap();
-        config.inject_context_source("my-webhook", &root_url);
-
-        if let extractors::Config::Webhook(webhook_config) = &config.extractor {
-            let source_url = webhook_config.metadata["context"]["source"].as_str().unwrap();
-            // URL crate should append to existing query params
-            assert!(source_url.contains("existing=param"));
-            assert!(source_url.contains("source=my-webhook"));
-        } else {
-            panic!("Expected Webhook config");
-        }
-    }
 
     #[test]
     fn test_set_id_preserve_non_zero_id() {
