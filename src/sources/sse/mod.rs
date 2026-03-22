@@ -47,11 +47,17 @@ impl SseExtractor {
 pub struct SseSourceState {
     pub config: Config,
     pub next: EventSourcePipe,
+    client: reqwest::Client,
 }
 
 impl SseSourceState {
+    #[allow(clippy::expect_used)]
     pub fn new(config: Config, next: EventSourcePipe) -> Self {
-        Self { config, next }
+        let client = reqwest::Client::builder()
+            .user_agent(&config.user_agent)
+            .build()
+            .expect("failed to build HTTP client");
+        Self { config, next, client }
     }
 
     pub async fn run(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -89,7 +95,7 @@ impl SseSourceState {
     async fn connect_and_stream(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("Connecting to SSE endpoint: {}", self.config.url);
 
-        let mut request_builder = reqwest::Client::new().get(&self.config.url);
+        let mut request_builder = self.client.get(&self.config.url);
 
         // Generate and add configured headers
         match crate::security::header::generate_headers(&self.config.headers_as_configs(), None) {
@@ -205,6 +211,7 @@ mod tests {
             max_retries: Some(5),
             enabled: true,
             metadata: serde_json::json!({}),
+            ..Default::default()
         };
 
         let serialized = toml::to_string(&config).unwrap();
@@ -308,6 +315,7 @@ mod integration_tests {
             max_retries: Some(3),
             enabled: true,
             metadata: serde_json::json!({}),
+            ..Default::default()
         };
 
         // Setup SSE source
@@ -335,6 +343,7 @@ mod integration_tests {
             max_retries: Some(1),
             enabled: true,
             metadata: serde_json::json!({}),
+            ..Default::default()
         };
 
         let collector = Collector::<EventSource>::new();

@@ -21,6 +21,9 @@ mod utils;
 // re-export
 pub mod cdevent_utils;
 
+pub(crate) const DEFAULT_USER_AGENT: &str =
+    concat!("cdviz-collector/", env!("CARGO_PKG_VERSION"));
+
 use std::{ffi::OsString, path::PathBuf};
 
 use clap::{Parser, Subcommand};

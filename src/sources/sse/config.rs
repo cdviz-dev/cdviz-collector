@@ -23,6 +23,14 @@ pub struct Config {
     /// The `context.source` field will be automatically populated if not set.
     #[serde(default)]
     pub metadata: serde_json::Value,
+    /// `User-Agent` header sent with the SSE connection request.
+    /// Defaults to `cdviz-collector/<version>`.
+    #[serde(default = "default_user_agent")]
+    pub user_agent: String,
+}
+
+fn default_user_agent() -> String {
+    crate::DEFAULT_USER_AGENT.to_string()
 }
 
 impl Config {
@@ -44,6 +52,7 @@ impl Default for Config {
             max_retries: Some(10),
             enabled: true,
             metadata: serde_json::Value::default(),
+            user_agent: default_user_agent(),
         }
     }
 }
@@ -78,6 +87,7 @@ mod tests {
             max_retries: Some(5),
             enabled: true,
             metadata: serde_json::json!({}),
+            user_agent: "test-agent/1.0".to_string(),
         };
 
         let serialized = toml::to_string(&config).unwrap();

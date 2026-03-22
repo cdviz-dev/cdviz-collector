@@ -33,6 +33,14 @@ pub(crate) struct Config {
     /// Useful for debugging in CI; defaults to false.
     #[serde(default)]
     log_full_response_on_error: bool,
+    /// `User-Agent` header sent with every request.
+    /// Defaults to `cdviz-collector/<version>`.
+    #[serde(default = "default_user_agent")]
+    user_agent: String,
+}
+
+fn default_user_agent() -> String {
+    crate::DEFAULT_USER_AGENT.to_string()
 }
 
 fn default_total_duration_of_retries() -> Duration {
@@ -43,12 +51,13 @@ impl TryFrom<Config> for HttpSink {
     type Error = Report;
 
     fn try_from(value: Config) -> Result<Self> {
-        Ok(HttpSink::new(
+        HttpSink::new(
             value.destination,
             value.headers,
             value.total_duration_of_retries,
             value.log_full_response_on_error,
-        ))
+            value.user_agent,
+        )
     }
 }
 
@@ -66,17 +75,20 @@ impl HttpSink {
         headers: OutgoingHeaderMap,
         total_duration_of_retries: Duration,
         log_full_response_on_error: bool,
-    ) -> Self {
+        user_agent: String,
+    ) -> Result<Self> {
         // Retry up to 3 times with increasing intervals between attempts.
         let retry_policy = ExponentialBackoff::builder()
             .build_with_total_retry_duration_and_limit_retries(total_duration_of_retries);
-        let client = ClientBuilder::new(reqwest::Client::new())
-            // Trace HTTP requests. See the tracing crate to make use of these traces.
-            .with(TracingMiddleware::default())
-            // Retry failed requests.
-            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .build();
-        Self { dest: url, client, headers, log_full_response_on_error }
+        let client = ClientBuilder::new(
+            reqwest::Client::builder().user_agent(user_agent).build().into_diagnostic()?,
+        )
+        // Trace HTTP requests. See the tracing crate to make use of these traces.
+        .with(TracingMiddleware::default())
+        // Retry failed requests.
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build();
+        Ok(Self { dest: url, client, headers, log_full_response_on_error })
     }
 
     /// Generate and add configured headers to the request
@@ -271,6 +283,7 @@ mod tests {
             headers: OutgoingHeaderMap::new(),
             total_duration_of_retries: Duration::from_secs(1),
             log_full_response_on_error: false,
+            user_agent: default_user_agent(),
         }
     }
 
@@ -462,6 +475,7 @@ mod tests {
             },
             total_duration_of_retries: Duration::from_secs(1),
             log_full_response_on_error: false,
+            user_agent: default_user_agent(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -576,6 +590,7 @@ mod tests {
             },
             total_duration_of_retries: Duration::from_secs(1),
             log_full_response_on_error: false,
+            user_agent: default_user_agent(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -654,6 +669,7 @@ mod tests {
             },
             total_duration_of_retries: Duration::from_secs(1),
             log_full_response_on_error: false,
+            user_agent: default_user_agent(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 

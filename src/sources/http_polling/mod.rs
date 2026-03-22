@@ -59,6 +59,14 @@ pub(crate) struct Config {
     /// auto-populated during config loading if not already set.
     #[serde(default)]
     pub(crate) metadata: serde_json::Value,
+    /// `User-Agent` header sent with every request.
+    /// Defaults to `cdviz-collector/<version>`.
+    #[serde(default = "default_user_agent")]
+    pub(crate) user_agent: String,
+}
+
+fn default_user_agent() -> String {
+    crate::DEFAULT_USER_AGENT.to_string()
 }
 
 /// Controls how the HTTP response body is split into [`EventSource`] instances.
@@ -169,10 +177,15 @@ impl HttpPollingExtractor {
 
         let retry_policy = ExponentialBackoff::builder()
             .build_with_total_retry_duration_and_limit_retries(config.total_duration_of_retries);
-        let client = ClientBuilder::new(reqwest::Client::new())
-            .with(TracingMiddleware::default())
-            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .build();
+        let client = ClientBuilder::new(
+            reqwest::Client::builder()
+                .user_agent(&config.user_agent)
+                .build()
+                .into_diagnostic()?,
+        )
+        .with(TracingMiddleware::default())
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build();
 
         #[cfg(feature = "state")]
         let state_op = state_config.and_then(|sc| {
@@ -433,6 +446,7 @@ mod tests {
             total_duration_of_retries: Duration::from_millis(100),
             parser: ParserConfig::Json,
             metadata: serde_json::json!({}),
+            user_agent: default_user_agent(),
         }
     }
 
@@ -576,6 +590,7 @@ mod tests {
             total_duration_of_retries: Duration::from_millis(100),
             parser: ParserConfig::Json,
             metadata: serde_json::json!({}),
+            user_agent: default_user_agent(),
         };
         let (mut extractor, _collector) = make_extractor(&config);
 
@@ -650,6 +665,7 @@ mod tests {
             total_duration_of_retries: Duration::from_millis(100),
             parser: ParserConfig::Json,
             metadata: serde_json::json!({}),
+            user_agent: default_user_agent(),
         };
         let cancel_token = CancellationToken::new();
         let (mut extractor, _collector) = make_extractor(&config);
