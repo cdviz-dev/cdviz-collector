@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.32.0...0.33.0) - 2026-03-22
+
+### Added
+
+- add user-agent to http request (default `cdviz-collector/x.y.z`) overridable by config
+- allow to log full response on http sink to ease debug
+- *(send)* derive context.source from CI env instead of config-time default ([#308](https://github.com/cdviz-dev/cdviz-collector/pull/308))
+
+### Fixed
+
+- normalize customData.testsuiterun.summary
+
 ## [0.32.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.31.0...0.32.0) - 2026-03-20
 
 ### Added
