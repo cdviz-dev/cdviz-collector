@@ -188,6 +188,14 @@ pub(crate) struct SendArgs {
     #[clap(long = "fail-on-collector-error")]
     fail_on_collector_error: bool,
 
+    /// Log the full HTTP response (headers + body) on non-2xx errors.
+    ///
+    /// When set, the response headers and body are included in the warning log
+    /// entry for failed HTTP sink requests. Useful for debugging in CI.
+    /// Overrides the `log_full_response_on_error` config field.
+    #[clap(long = "log-full-response-on-error")]
+    log_full_response_on_error: bool,
+
     /// Child command and args (specified after --)
     #[clap(last = true)]
     command: Vec<String>,
@@ -404,6 +412,9 @@ fn append_http_sink_toml(out: &mut String, args: &SendArgs) -> Result<()> {
             }
         }
     }
+    if args.log_full_response_on_error {
+        writeln!(out, "sinks.http.log_full_response_on_error = true").into_diagnostic()?;
+    }
     Ok(())
 }
 
@@ -435,6 +446,7 @@ mod tests {
             no_data: false,
             metadata: vec![],
             fail_on_collector_error: false,
+            log_full_response_on_error: false,
             command: vec![],
         }
     }
@@ -508,6 +520,28 @@ mod tests {
                 r#"sources.taskrun.extractor.metadata.run.overrides.tested_artifact_id = ["pkg:oci/my-app", "pkg:maven/com.example:lib"]"#
             ),
             "Expected inline array in TOML, got:\n{toml}"
+        );
+    }
+
+    #[test]
+    fn test_append_http_sink_toml_log_full_response_on_error() {
+        let args_with_flag = SendArgs {
+            log_full_response_on_error: true,
+            ..default_args()
+        };
+        let mut out = String::new();
+        append_http_sink_toml(&mut out, &args_with_flag).unwrap();
+        assert!(
+            out.contains("sinks.http.log_full_response_on_error = true"),
+            "Expected flag in TOML, got:\n{out}"
+        );
+
+        let args_without_flag = default_args();
+        let mut out = String::new();
+        append_http_sink_toml(&mut out, &args_without_flag).unwrap();
+        assert!(
+            !out.contains("log_full_response_on_error"),
+            "Flag should be absent when not set, got:\n{out}"
         );
     }
 

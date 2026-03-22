@@ -29,6 +29,10 @@ pub(crate) struct Config {
     /// Timeout for message production (default 30m)
     #[serde(with = "humantime_serde", default = "default_total_duration_of_retries")]
     pub(crate) total_duration_of_retries: Duration,
+    /// Log the full HTTP response (headers + body) when the server returns a non-2xx status.
+    /// Useful for debugging in CI; defaults to false.
+    #[serde(default)]
+    log_full_response_on_error: bool,
 }
 
 fn default_total_duration_of_retries() -> Duration {
@@ -39,7 +43,12 @@ impl TryFrom<Config> for HttpSink {
     type Error = Report;
 
     fn try_from(value: Config) -> Result<Self> {
-        Ok(HttpSink::new(value.destination, value.headers, value.total_duration_of_retries))
+        Ok(HttpSink::new(
+            value.destination,
+            value.headers,
+            value.total_duration_of_retries,
+            value.log_full_response_on_error,
+        ))
     }
 }
 
@@ -48,6 +57,7 @@ pub(crate) struct HttpSink {
     client: ClientWithMiddleware,
     dest: Url,
     headers: OutgoingHeaderMap,
+    log_full_response_on_error: bool,
 }
 
 impl HttpSink {
@@ -55,6 +65,7 @@ impl HttpSink {
         url: Url,
         headers: OutgoingHeaderMap,
         total_duration_of_retries: Duration,
+        log_full_response_on_error: bool,
     ) -> Self {
         // Retry up to 3 times with increasing intervals between attempts.
         let retry_policy = ExponentialBackoff::builder()
@@ -65,7 +76,7 @@ impl HttpSink {
             // Retry failed requests.
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
-        Self { dest: url, client, headers }
+        Self { dest: url, client, headers, log_full_response_on_error }
     }
 
     /// Generate and add configured headers to the request
@@ -208,13 +219,37 @@ impl Sink for HttpSink {
         // retried by reqwest_middleware but persistent failures (e.g. 400, 404) are silently ignored.
         if !response.status().is_success() {
             let http_status = response.status().as_u16();
-            let http_body = response.text().await.unwrap_or_default();
-            tracing::warn!(
-                cdevent_id = msg.cdevent.id().as_str(),
-                http_status,
-                http_body,
-                "Failed to send event",
-            );
+            let destination = self.dest.as_str();
+            if self.log_full_response_on_error {
+                let resp_headers: serde_json::Map<String, serde_json::Value> = response
+                    .headers()
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            k.as_str().to_owned(),
+                            serde_json::Value::String(
+                                v.to_str().unwrap_or("<non-utf8>").to_owned(),
+                            ),
+                        )
+                    })
+                    .collect();
+                let http_body = response.text().await.unwrap_or_default();
+                tracing::warn!(
+                    cdevent_id = msg.cdevent.id().as_str(),
+                    http_status,
+                    destination,
+                    http_headers = %serde_json::Value::Object(resp_headers),
+                    http_body,
+                    "Failed to send event",
+                );
+            } else {
+                tracing::warn!(
+                    cdevent_id = msg.cdevent.id().as_str(),
+                    http_status,
+                    destination,
+                    "Failed to send event",
+                );
+            }
         }
         Ok(())
     }
@@ -235,6 +270,7 @@ mod tests {
             destination: Url::parse(url).unwrap(),
             headers: OutgoingHeaderMap::new(),
             total_duration_of_retries: Duration::from_secs(1),
+            log_full_response_on_error: false,
         }
     }
 
@@ -425,6 +461,7 @@ mod tests {
                 map
             },
             total_duration_of_retries: Duration::from_secs(1),
+            log_full_response_on_error: false,
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -538,6 +575,7 @@ mod tests {
                 map
             },
             total_duration_of_retries: Duration::from_secs(1),
+            log_full_response_on_error: false,
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -615,6 +653,7 @@ mod tests {
                 map
             },
             total_duration_of_retries: Duration::from_secs(1),
+            log_full_response_on_error: false,
         };
         let sink = HttpSink::try_from(config).unwrap();
 

@@ -58,8 +58,9 @@ jobs:
             --data "target/nextest/default/junit.xml" \
             --metadata "suite_name=/cdviz-collector/ci" \
             --metadata "tested_artifact_id=pkg:oci/cdviz-collector" \
-            -u "${CDVIZ_COLLECTOR_URL}" \
+            --url "${CDVIZ_COLLECTOR_URL}" \
             -- mise run --jobs 1 ci
+          # --log-full-response-on-error \
         shell: bash
         env:
           CDVIZ_COLLECTOR_URL: ${{ secrets.CDVIZ_COLLECTOR_URL }}
