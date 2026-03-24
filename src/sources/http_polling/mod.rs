@@ -178,10 +178,7 @@ impl HttpPollingExtractor {
         let retry_policy = ExponentialBackoff::builder()
             .build_with_total_retry_duration_and_limit_retries(config.total_duration_of_retries);
         let client = ClientBuilder::new(
-            reqwest::Client::builder()
-                .user_agent(&config.user_agent)
-                .build()
-                .into_diagnostic()?,
+            reqwest::Client::builder().user_agent(&config.user_agent).build().into_diagnostic()?,
         )
         .with(TracingMiddleware::default())
         .with(RetryTransientMiddleware::new_with_policy(retry_policy))

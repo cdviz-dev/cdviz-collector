@@ -525,10 +525,7 @@ mod tests {
 
     #[test]
     fn test_append_http_sink_toml_log_full_response_on_error() {
-        let args_with_flag = SendArgs {
-            log_full_response_on_error: true,
-            ..default_args()
-        };
+        let args_with_flag = SendArgs { log_full_response_on_error: true, ..default_args() };
         let mut out = String::new();
         append_http_sink_toml(&mut out, &args_with_flag).unwrap();
         assert!(

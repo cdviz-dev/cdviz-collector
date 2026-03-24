@@ -70,7 +70,6 @@ impl Config {
             sub.exit_code_out = exit_code_out;
         }
     }
-
 }
 
 pub(crate) fn make(
