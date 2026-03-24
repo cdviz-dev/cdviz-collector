@@ -212,7 +212,7 @@ skip = [
   "getrandom",
   "hashbrown",
   "heck",
-  "itertools",
+  # "itertools",
   "nom",
   # "num_enum",
   # "num_enum_derive",
