@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.33.0...0.33.1) - 2026-03-25
+
+### Fixed
+
+- *(deps)* update
+
+### Other
+
+- generate linux binary compatible with glibc 2.28 ([#314](https://github.com/cdviz-dev/cdviz-collector/pull/314))
+- format
+
 ## [0.33.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.32.0...0.33.0) - 2026-03-22
 
 ### Added
