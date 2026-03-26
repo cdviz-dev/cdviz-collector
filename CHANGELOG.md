@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.33.2...0.34.0) - 2026-03-26
+
+### Added
+
+- *(config)* allow to define config override via `--set` ([#317](https://github.com/cdviz-dev/cdviz-collector/pull/317))
+
 ## [0.33.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.33.1...0.33.2) - 2026-03-26
 
 ### Other
