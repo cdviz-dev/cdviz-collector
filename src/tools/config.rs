@@ -21,6 +21,16 @@ pub(crate) struct ConfigArgs {
     #[clap(long = "config-header")]
     config_headers: Vec<String>,
 
+    /// Override individual config key/value pairs.
+    ///
+    /// Format: `key=value`. Can be repeated.
+    /// Values are auto-typed: `true`/`false` → bool, integers → int, decimals → float,
+    /// everything else → quoted string.
+    ///
+    /// Example: `--set sources.my-source.enabled=true`
+    #[clap(long = "set")]
+    set: Vec<String>,
+
     /// Print the resolved/consolidated configuration to stdout (TOML format),
     /// with `FileAdapter` and `RemoteFileAdapter` applied
     #[clap(long)]
@@ -43,21 +53,27 @@ pub(crate) async fn config_cmd(args: ConfigArgs) -> Result<bool> {
     let resolved = resolve_config_source(args.config, &args.config_headers).await?;
 
     if args.print_raw {
-        let figment = Config::builder().with_resolved_source(resolved.clone()).build_raw_figment();
+        let figment = Config::builder()
+            .with_resolved_source(resolved.clone())
+            .with_keyvalue(&args.set)?
+            .build_raw_figment();
         let value: toml::Value = figment.extract().into_diagnostic()?;
         writeln!(std::io::stdout(), "{}", toml::to_string_pretty(&value).into_diagnostic()?)
             .into_diagnostic()?;
     }
 
     if args.print {
-        let figment = Config::builder().with_resolved_source(resolved.clone()).build_figment()?;
+        let figment = Config::builder()
+            .with_resolved_source(resolved.clone())
+            .with_keyvalue(&args.set)?
+            .build_figment()?;
         let value: toml::Value = figment.extract().into_diagnostic()?;
         writeln!(std::io::stdout(), "{}", toml::to_string_pretty(&value).into_diagnostic()?)
             .into_diagnostic()?;
     }
 
     if args.check {
-        match Config::builder().with_resolved_source(resolved).build() {
+        match Config::builder().with_resolved_source(resolved).with_keyvalue(&args.set)?.build() {
             Ok(config) => {
                 let src_count = config.sources.len();
                 let sink_count = config.sinks.len();

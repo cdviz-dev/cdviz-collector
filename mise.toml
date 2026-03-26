@@ -54,7 +54,7 @@ run = [
 description = "Automatically fix some linting issues & format code"
 depends_post = ["format"]
 run = [
-  "cargo fix --workspace",
+  "cargo fix --workspace --allow-dirty",
   "cargo clippy --all-features --fix --allow-dirty",
 ]
 

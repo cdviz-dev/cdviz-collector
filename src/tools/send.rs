@@ -139,6 +139,16 @@ pub(crate) struct SendArgs {
     #[clap(long = "config-header")]
     config_headers: Vec<String>,
 
+    /// Override individual config key/value pairs.
+    ///
+    /// Format: `key=value`. Can be repeated.
+    /// Values are auto-typed: `true`/`false` → bool, integers → int, decimals → float,
+    /// everything else → quoted string.
+    ///
+    /// Example: `--set sinks.http.enabled=true --set sinks.http.destination=http://...`
+    #[clap(long = "set")]
+    set: Vec<String>,
+
     /// Working directory for relative paths.
     ///
     /// Changes the working directory before processing. This affects
@@ -277,6 +287,7 @@ async fn load_run_config(
         .with_base_config(SEND_BASE_CONFIG)
         .with_resolved_source(resolved)
         .with_cli_overrides(if cli_toml.is_empty() { None } else { Some(cli_toml) })
+        .with_keyvalue(&args.set)?
         .with_env_vars(true)
         .build()?;
     if let Some(source_config) = config.sources.get_mut(run_type) {
@@ -354,6 +365,7 @@ async fn load_config(args: &SendArgs) -> Result<Config> {
         .with_base_config(SEND_BASE_CONFIG)
         .with_resolved_source(resolved)
         .with_cli_overrides(if cli_toml.is_empty() { None } else { Some(cli_toml) })
+        .with_keyvalue(&args.set)?
         .with_env_vars(true)
         .build()
 }
@@ -447,6 +459,7 @@ mod tests {
             metadata: vec![],
             fail_on_collector_error: false,
             log_full_response_on_error: false,
+            set: vec![],
             command: vec![],
         }
     }
