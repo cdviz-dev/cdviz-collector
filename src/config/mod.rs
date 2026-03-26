@@ -69,6 +69,7 @@ pub(crate) struct ConfigBuilder {
     config_file: Option<PathBuf>,
     config_content: Option<String>,
     cli_overrides: Option<String>,
+    key_value_overrides: Option<String>,
     enable_env_vars: bool,
 }
 
@@ -80,6 +81,7 @@ impl ConfigBuilder {
             config_file: None,
             config_content: None,
             cli_overrides: None,
+            key_value_overrides: None,
             enable_env_vars: true,
         }
     }
@@ -120,6 +122,19 @@ impl ConfigBuilder {
         self
     }
 
+    /// Override individual config values from `key=value` pairs.
+    ///
+    /// Values are auto-typed in order: `true`/`false` → bool, integers → `i64`,
+    /// decimals → `f64`, everything else → quoted string.
+    /// Only the first `=` is treated as separator, so values like URLs are safe.
+    /// These overrides are applied after `with_cli_overrides` and take highest priority.
+    pub fn with_keyvalue(mut self, kvs: &[String]) -> Result<Self> {
+        if !kvs.is_empty() {
+            self.key_value_overrides = Some(keyvalue_to_toml(kvs)?);
+        }
+        Ok(self)
+    }
+
     /// Enable or disable environment variable support
     pub fn with_env_vars(mut self, enable_env_vars: bool) -> Self {
         self.enable_env_vars = enable_env_vars;
@@ -147,6 +162,10 @@ impl ConfigBuilder {
 
         if let Some(cli_overrides) = self.cli_overrides {
             figment = figment.merge(Toml::string(&cli_overrides));
+        }
+
+        if let Some(kv_overrides) = self.key_value_overrides {
+            figment = figment.merge(Toml::string(&kv_overrides));
         }
 
         figment
@@ -310,12 +329,93 @@ pub(crate) async fn resolve_config_source(
     }
 }
 
+/// Convert `key=value` pairs into TOML dotted-key lines.
+fn keyvalue_to_toml(kvs: &[String]) -> Result<String> {
+    use std::fmt::Write as _;
+    let mut out = String::new();
+    for kv in kvs {
+        let (key, raw) = kv
+            .split_once('=')
+            .ok_or_else(|| miette::miette!("invalid --set '{kv}': expected 'key=value' format"))?;
+        let toml_val = infer_toml_value(raw);
+        writeln!(&mut out, "{} = {}", key.trim(), toml_val).into_diagnostic()?;
+    }
+    Ok(out)
+}
+
+fn infer_toml_value(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.eq_ignore_ascii_case("true") {
+        "true".to_string()
+    } else if trimmed.eq_ignore_ascii_case("false") {
+        "false".to_string()
+    } else if trimmed.parse::<i64>().is_ok() || trimmed.parse::<f64>().is_ok() {
+        trimmed.to_string()
+    } else {
+        format!("\"{}\"", escape_toml_string(raw))
+    }
+}
+
+fn escape_toml_string(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
+}
+
 #[cfg(test)]
 #[allow(clippy::result_large_err)]
 mod tests {
     use super::*;
     use figment::Jail;
     use rstest::*;
+
+    #[test]
+    fn with_keyvalue_bool_detection() {
+        let config = ConfigBuilder::new()
+            .with_env_vars(false)
+            .with_keyvalue(&["sinks.debug.enabled=true".to_string()])
+            .unwrap()
+            .build()
+            .unwrap();
+        assert!(config.sinks.get("debug").unwrap().is_enabled());
+    }
+
+    #[test]
+    fn with_keyvalue_dashed_key() {
+        // Keys with dashes are the primary motivation: env vars can't express them.
+        // We only verify parsing succeeds (config won't have a "my-source" unless defined).
+        let toml = keyvalue_to_toml(&["sources.my-source.enabled=false".to_string()]).unwrap();
+        assert!(toml.contains("sources.my-source.enabled = false"));
+    }
+
+    #[test]
+    fn keyvalue_to_toml_int_and_float() {
+        let toml = keyvalue_to_toml(&[
+            "pipeline.max_retries=5".to_string(),
+            "http.timeout=2.5".to_string(),
+        ])
+        .unwrap();
+        assert!(toml.contains("pipeline.max_retries = 5"));
+        assert!(toml.contains("http.timeout = 2.5"));
+    }
+
+    #[test]
+    fn keyvalue_to_toml_string_with_equals_in_value() {
+        let toml = keyvalue_to_toml(&["sources.foo.url=http://x.com?a=1&b=2".to_string()]).unwrap();
+        assert!(toml.contains(r#"sources.foo.url = "http://x.com?a=1&b=2""#));
+    }
+
+    #[test]
+    fn keyvalue_to_toml_empty_list() {
+        assert!(keyvalue_to_toml(&[]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn keyvalue_to_toml_missing_equals_is_error() {
+        assert!(keyvalue_to_toml(&["no-equals-sign".to_string()]).is_err());
+    }
 
     #[rstest]
     fn read_base_config_only() {

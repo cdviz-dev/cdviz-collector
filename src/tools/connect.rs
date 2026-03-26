@@ -42,12 +42,23 @@ pub(crate) struct ConnectArgs {
     /// Example: `--config-header "Authorization: Bearer token"`
     #[clap(long = "config-header")]
     config_headers: Vec<String>,
+
+    /// Override individual config key/value pairs.
+    ///
+    /// Format: `key=value`. Can be repeated.
+    /// Values are auto-typed: `true`/`false` → bool, integers → int, decimals → float,
+    /// everything else → quoted string.
+    ///
+    /// Example: `--set sources.my-source.enabled=true`
+    #[clap(long = "set")]
+    set: Vec<String>,
 }
 
 /// Returns true if the connection service ran successfully
 pub(crate) async fn connect(args: ConnectArgs, shutdown_token: CancellationToken) -> Result<bool> {
     let resolved = resolve_config_source(args.config, &args.config_headers).await?;
-    let config = Config::builder().with_resolved_source(resolved).build()?;
+    let config =
+        Config::builder().with_resolved_source(resolved).with_keyvalue(&args.set)?.build()?;
     let pipeline = PipelineBuilder::new(config);
     pipeline.run(true, shutdown_token).await
 }
