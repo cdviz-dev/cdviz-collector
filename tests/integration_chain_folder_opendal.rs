@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-
+#![cfg(all(feature = "source_opendal", feature = "sink_folder"))]
 use cdviz_collector_testkit as testkit;
 
 use indoc::formatdoc;

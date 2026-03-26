@@ -160,13 +160,13 @@ wiremock = "0.6"
 version = "0.5"
 
 [features]
-## default is "full" feature set
+## default is "full" feature set minus kafka (require native tools)
 default = [
   "config_http",
   "config_remote",
   "parser_all",
-  "sink_all",
-  "source_all",
+  "sink_default",
+  "source_default",
   "tool_transform",
   "transformer_vrl",
 ]
@@ -211,6 +211,15 @@ sink_all = [
   "sink_nats",
   "sink_sse",
 ]
+sink_default = [
+  "sink_clickhouse",
+  "sink_db",
+  "sink_folder",
+  "sink_http",
+  # "sink_kafka",
+  "sink_nats",
+  "sink_sse",
+]
 sink_clickhouse = ["dep:clickhouse", "dep:retry-policies"]
 sink_db = ["dep:retry-policies", "dep:sqlx"]
 sink_folder = ["dep:opendal"]
@@ -222,6 +231,13 @@ sink_sse = ["dep:tokio-stream"]
 source_all = [
   "source_http_polling",
   "source_kafka",
+  "source_nats",
+  "source_opendal",
+  "source_sse",
+]
+source_default = [
+  "source_http_polling",
+  # "source_kafka",
   "source_nats",
   "source_opendal",
   "source_sse",

@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
-
+#![cfg(all(feature = "source_kafka", feature = "sink_kafka"))]
 use cdviz_collector_testkit as testkit;
 
 use indoc::formatdoc;

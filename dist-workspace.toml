@@ -14,7 +14,7 @@ installers = ["shell", "homebrew"]
 # A GitHub repo to push Homebrew formulas to
 tap = "cdviz-dev/homebrew-tap"
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl"]
 github-build-setup = "release-build-setup.yml.part"
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
@@ -38,8 +38,8 @@ dispatch-releases = false
 global = "ubuntu-latest"
 
 # Use GitHub's native ARM64 runners instead of buildjet for cost-free native compilation
-aarch64-unknown-linux-gnu = "ubuntu-24.04-arm"
-aarch64-unknown-linux-musl = "ubuntu-24.04-arm" # "buildjet-8vcpu-ubuntu-2204-arm" #
+aarch64-unknown-linux-gnu = "ubuntu-22.04-arm"
+aarch64-unknown-linux-musl = "ubuntu-22.04-arm" # "buildjet-8vcpu-ubuntu-2204-arm" #
 x86_64-unknown-linux-musl = "ubuntu-latest"
 
 [dist.github-custom-runners.aarch64-apple-darwin]
@@ -53,8 +53,7 @@ runner = "macos-14"
 # # The container `host` uses MUSL because dist itself may require a newer glibc than we are locked to.
 # # Runs on ubuntu-latest, dist defaults to oldest possible runner, but container usage means we can use latest
 # # and not have to worry about it being EOL-ed.
-runner = "ubuntu-latest"
-# to be compatible with an old version of glibc
+runner = "ubuntu-22.04"
 container = { image = "quay.io/pypa/manylinux_2_28_x86_64", host = "x86_64-unknown-linux-musl" }
 
 # [dist.github-custom-runners.aarch64-unknown-linux-gnu]

@@ -21,8 +21,8 @@ jobs:
     strategy:
       matrix:
         runner:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
+          - ubuntu-22.04
+          # - ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     env:
       CARGO_TERM_COLOR: always
