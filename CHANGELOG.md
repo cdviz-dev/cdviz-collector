@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.34.0...0.35.0) - 2026-03-30
+
+### Added
+
+- `config --check` also compile template (vrl) and can use the base config of every other subcommands ([#326](https://github.com/cdviz-dev/cdviz-collector/pull/326))
+
+### Fixed
+
+- *(send)* enrich testSuiteRun CDEvents with global suite id, uri, and name ([#325](https://github.com/cdviz-dev/cdviz-collector/pull/325))
+- *(deps)* update rust crate nom to 0.8 ([#324](https://github.com/cdviz-dev/cdviz-collector/pull/324))
+- *(deps)* update rust crate hmac to 0.13 ([#323](https://github.com/cdviz-dev/cdviz-collector/pull/323))
+- *(deps)* update rust crate quick-xml-to-json to 0.2 ([#322](https://github.com/cdviz-dev/cdviz-collector/pull/322))
+
 ## [0.34.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.33.2...0.34.0) - 2026-03-26
 
 ### Added
