@@ -75,7 +75,7 @@
 //! is disabled to avoid duplicate output.
 
 use crate::{
-    config::{Config, ConfigSource, resolve_config_source},
+    config::{SEND_BASE_CONFIG, Config, ConfigSource, resolve_config_source},
     errors::{IntoDiagnostic, Result},
     pipeline::PipelineBuilder,
     sources::cli::parsers,
@@ -250,9 +250,6 @@ impl From<ParserSelection> for parsers::Config {
         }
     }
 }
-
-/// Embedded base configuration for send command
-const SEND_BASE_CONFIG: &str = include_str!("../assets/send.base.toml");
 
 pub(crate) async fn send(args: SendArgs, shutdown_token: CancellationToken) -> Result<bool> {
     if let Some(run_type) = args.run.clone() {
