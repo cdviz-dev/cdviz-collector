@@ -521,8 +521,8 @@ if github_actions == "true" {
   .metadata.run.ci_repo     = ""
   .metadata.run.ci_job_name = ""
   .metadata.run.suite_name  = suite
-  .metadata.run.suite_id    = string(.metadata.run.suite_id) ?? ("cdviz-collector://local/" + suite)
-  .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? ("cdviz-collector://local/" + suite)
+  .metadata.run.suite_id    = string(.metadata.run.suite_id) ?? ("cdviz-collector://local/" + encode_uri_component(suite))
+  .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? ("cdviz-collector://local/" + encode_uri_component(suite))
   .metadata.run.env_id      = "/local"
   .metadata.run.subject_id  = "cdviz-collector://local/" + suite
 }
