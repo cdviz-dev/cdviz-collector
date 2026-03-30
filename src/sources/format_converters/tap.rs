@@ -4,12 +4,12 @@
 //! structured JSON. See: <https://testanything.org/tap-version-14-specification.html>
 
 use nom::{
-    IResult,
+    IResult, Parser,
     branch::alt,
     bytes::complete::{tag, take_until},
     character::complete::{char, digit1, line_ending, not_line_ending, space0, space1},
     combinator::{opt, value},
-    sequence::{preceded, terminated, tuple},
+    sequence::{preceded, terminated},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -58,7 +58,7 @@ pub enum DirectiveKind {
 
 /// Parse TAP version line: "TAP version 14"
 fn tap_version(input: &str) -> IResult<&str, u8> {
-    let (input, _) = tuple((tag("TAP"), space1, tag("version"), space1))(input)?;
+    let (input, _) = (tag("TAP"), space1, tag("version"), space1).parse(input)?;
     let (input, version) = digit1(input)?;
     let (input, _) = line_ending(input)?;
     Ok((input, version.parse().unwrap_or(14)))
@@ -75,28 +75,32 @@ fn plan_line(input: &str) -> IResult<&str, Plan> {
 
 /// Parse test status: "ok" or "not ok"
 fn test_status(input: &str) -> IResult<&str, TestStatus> {
-    alt((value(TestStatus::Ok, tag("ok")), value(TestStatus::NotOk, tag("not ok"))))(input)
+    alt((value(TestStatus::Ok, tag("ok")), value(TestStatus::NotOk, tag("not ok")))).parse(input)
 }
 
 /// Parse directive: "# SKIP reason" or "# TODO reason"
 fn directive(input: &str) -> IResult<&str, Directive> {
-    let (input, _) = tuple((space0, char('#'), space1))(input)?;
+    let (input, _) = (space0, char('#'), space1).parse(input)?;
     let (input, kind) = alt((
         value(DirectiveKind::Skip, tag("SKIP")),
         value(DirectiveKind::Todo, tag("TODO")),
-    ))(input)?;
-    let (input, reason) = opt(preceded(space1, not_line_ending))(input)?;
+    ))
+    .parse(input)?;
+    let (input, reason) = opt(preceded(space1, not_line_ending)).parse(input)?;
     Ok((
         input,
-        Directive { kind, reason: reason.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) },
+        Directive {
+            kind,
+            reason: reason.map(|s: &str| s.trim().to_string()).filter(|s| !s.is_empty()),
+        },
     ))
 }
 
 /// Parse YAML diagnostic block between "  ---" and "  ..."
 fn yaml_block(input: &str) -> IResult<&str, String> {
-    let (input, _) = tuple((tag("  ---"), line_ending))(input)?;
+    let (input, _) = (tag("  ---"), line_ending).parse(input)?;
     let (input, yaml_lines) = take_until("  ...")(input)?;
-    let (input, _) = tuple((tag("  ..."), line_ending))(input)?;
+    let (input, _) = (tag("  ..."), line_ending).parse(input)?;
 
     // Remove the 2-space indentation from each line
     let yaml_content = yaml_lines
@@ -114,10 +118,10 @@ fn test_line(input: &str) -> IResult<&str, TestLine> {
     let (input, _) = space1(input)?;
 
     // Parse optional test number
-    let (input, number) = opt(terminated(digit1, space1))(input)?;
+    let (input, number) = opt(terminated(digit1, space1)).parse(input)?;
 
     // Parse optional dash separator
-    let (input, _) = opt(tuple((char('-'), space1)))(input)?;
+    let (input, _) = opt((char('-'), space1)).parse(input)?;
 
     // Parse description and directive in one go
     let (input, rest) = not_line_ending(input)?;
@@ -142,8 +146,8 @@ fn test_line(input: &str) -> IResult<&str, TestLine> {
     };
 
     // Check for YAML diagnostic block
-    let (input, yaml_str) = opt(yaml_block)(input)?;
-    let yaml_diagnostics = yaml_str.and_then(|yaml| {
+    let (input, yaml_str) = opt(yaml_block).parse(input)?;
+    let yaml_diagnostics = yaml_str.and_then(|yaml: String| {
         // Parse YAML using parse_yaml from parent module
         super::parse_yaml(&yaml).ok()
     });
@@ -152,7 +156,7 @@ fn test_line(input: &str) -> IResult<&str, TestLine> {
         input,
         TestLine {
             status,
-            number: number.and_then(|n| n.parse().ok()),
+            number: number.and_then(|n: &str| n.parse().ok()),
             description,
             directive: dir,
             yaml_diagnostics,
@@ -177,7 +181,7 @@ fn empty_line(input: &str) -> IResult<&str, ()> {
 
 /// Parse any ignorable line (comment or empty)
 fn ignorable_line(input: &str) -> IResult<&str, ()> {
-    alt((comment_line, empty_line))(input)
+    alt((comment_line, empty_line)).parse(input)
 }
 
 /// Parse TAP document

@@ -859,7 +859,7 @@ dependencies = [
  "miette",
  "mime",
  "multihash",
- "nom 7.1.3",
+ "nom 8.0.0",
  "opendal",
  "opentelemetry",
  "packageurl",

@@ -1,6 +1,5 @@
 use core::fmt;
 use eventsource_stream::EventStreamError;
-use nom::error::Error as NomError;
 use reqwest::Error as ReqwestError;
 // use reqwest::Response;
 use reqwest::StatusCode;
@@ -32,7 +31,8 @@ pub enum Error {
     /// Source stream is not valid UTF8
     Utf8(FromUtf8Error),
     /// Source stream is not a valid `EventStream`
-    Parser(NomError<String>),
+    #[from(ignore)]
+    Parser(#[error(not(source))] String),
     /// The HTTP Request could not be completed
     Transport(ReqwestError),
     /// The `Content-Type` returned by the server is invalid
@@ -59,7 +59,7 @@ impl From<EventStreamError<ReqwestError>> for Error {
     fn from(err: EventStreamError<ReqwestError>) -> Self {
         match err {
             EventStreamError::Utf8(err) => Self::Utf8(err),
-            EventStreamError::Parser(err) => Self::Parser(err),
+            EventStreamError::Parser(err) => Self::Parser(err.to_string()),
             EventStreamError::Transport(err) => Self::Transport(err),
         }
     }
