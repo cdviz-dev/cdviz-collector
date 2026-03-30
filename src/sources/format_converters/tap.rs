@@ -91,7 +91,7 @@ fn directive(input: &str) -> IResult<&str, Directive> {
         input,
         Directive {
             kind,
-            reason: reason.map(|s: &str| s.trim().to_string()).filter(|s| !s.is_empty()),
+            reason: reason.map(str::trim).filter(|s| !s.is_empty()).map(str::to_string),
         },
     ))
 }
