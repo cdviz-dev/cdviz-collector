@@ -76,6 +76,8 @@ template = '''
 # At this point .metadata.run.* is populated by ci_env_detection
 
 suite_name = string(.metadata.run.suite_name) ?? "unknown"
+suite_id   = string(.metadata.run.suite_id) ?? suite_name
+suite_uri  = string(.metadata.run.suite_uri) ?? suite_name
 subject_id = string(.metadata.run.subject_id) ?? "unknown"
 source_url = string(.metadata.context.source) ?? ""
 env_id     = string(.metadata.run.env_id) ?? "/local"
@@ -88,7 +90,7 @@ if .metadata.run.status == "started" {
     "subject": { "id": subject_id,
       "content": { "trigger": {"type": "schedule"},
         "environment": {"id": env_id},
-        "testSuite": {"id": suite_name, "version": ""} } }
+        "testSuite": {"id": suite_id, "name": suite_name, "uri": suite_uri, "version": ""} } }
   }
 } else {
   # Aggregate from array of XML-parsed JUnit files in .body
@@ -113,7 +115,7 @@ if .metadata.run.status == "started" {
     "subject": { "id": subject_id,
       "content": { "outcome": outcome, "reason": "",
         "environment": {"id": env_id},
-        "testSuite": {"id": suite_name, "version": ""} } },
+        "testSuite": {"id": suite_id, "name": suite_name, "uri": suite_uri, "version": ""} } },
     "customData": {
       "testsuiterun": {
         "summary": {
@@ -143,6 +145,8 @@ template = '''
 # At this point .metadata.run.* is populated by ci_env_detection
 
 suite_name = string(.metadata.run.suite_name) ?? "unknown"
+suite_id   = string(.metadata.run.suite_id) ?? suite_name
+suite_uri  = string(.metadata.run.suite_uri) ?? suite_name
 subject_id = string(.metadata.run.subject_id) ?? "unknown"
 source_url = string(.metadata.context.source) ?? ""
 env_id     = string(.metadata.run.env_id) ?? "/local"
@@ -155,7 +159,7 @@ if .metadata.run.status == "started" {
     "subject": { "id": subject_id,
       "content": { "trigger": {"type": "schedule"},
         "environment": {"id": env_id},
-        "testSuite": {"id": suite_name, "version": ""} } }
+        "testSuite": {"id": suite_id, "name": suite_name, "uri": suite_uri, "version": ""} } }
   }
 } else {
   total_tests = 0; total_failed = 0
@@ -179,7 +183,7 @@ if .metadata.run.status == "started" {
     "subject": { "id": subject_id,
       "content": { "outcome": outcome, "reason": "",
         "environment": {"id": env_id},
-        "testSuite": {"id": suite_name, "version": ""} } },
+        "testSuite": {"id": suite_id, "name": suite_name, "uri": suite_uri, "version": ""} } },
     "customData": {
       "testsuiterun": {
         "summary": {
@@ -209,6 +213,8 @@ template = '''
 # At this point .metadata.run.* is populated by ci_env_detection
 
 suite_name = string(.metadata.run.suite_name) ?? "unknown"
+suite_id   = string(.metadata.run.suite_id) ?? suite_name
+suite_uri  = string(.metadata.run.suite_uri) ?? suite_name
 subject_id = string(.metadata.run.subject_id) ?? "unknown"
 source_url = string(.metadata.context.source) ?? ""
 env_id     = string(.metadata.run.env_id) ?? "/local"
@@ -221,7 +227,7 @@ if .metadata.run.status == "started" {
     "subject": { "id": subject_id,
       "content": { "trigger": {"type": "schedule"},
         "environment": {"id": env_id},
-        "testSuite": {"id": suite_name, "version": ""} } }
+        "testSuite": {"id": suite_id, "name": suite_name, "uri": suite_uri, "version": ""} } }
   }
 } else {
   # Extract tool name/version from first run of first SARIF file
@@ -270,7 +276,7 @@ if .metadata.run.status == "started" {
     "subject": { "id": subject_id,
       "content": { "outcome": outcome, "reason": "",
         "environment": {"id": env_id},
-        "testSuite": {"id": suite_name, "version": ""} } },
+        "testSuite": {"id": suite_id, "name": suite_name, "uri": suite_uri, "version": ""} } },
     "customData": {
       "testsuiterun": {
         "summary": {
@@ -415,6 +421,30 @@ if results_url != "" {
   })
 }
 
+# Add partOf link to the parent pipeline run (when running inside a CI pipeline)
+# Reconstructs the pipelinerun id using the same scheme as the CI-system event transformers:
+#   github  → suite_id + "/attempts/" + attempt  (API URL, matches workflow_run transformer)
+#   gitlab  → suite_uri                           (web URL, matches pipeline transformer)
+#   jenkins → suite_uri                           (build URL)
+ci_system = string(.metadata.run.ci_system) ?? ""
+if ci_system != "" && ci_system != "local" {
+  suite_id  = string(.metadata.run.suite_id)  ?? ""
+  suite_uri = string(.metadata.run.suite_uri) ?? ""
+  pipeline_run_id = if ci_system == "github" {
+    run_parts = split(string(.metadata.run.ci_run_id) ?? "0/1", "/")
+    attempt   = string(get(run_parts, [1]) ?? "1") ?? "1"
+    suite_id + "/attempts/" + attempt
+  } else {
+    suite_uri
+  }
+  if pipeline_run_id != "" {
+    links = push(links, {
+      "linkKind": "partOf",
+      "target": { "subject": { "type": "pipelinerun", "id": pipeline_run_id } }
+    })
+  }
+}
+
 if length(links) > 0 {
   .body.customData.links = append(array(.body.customData.links) ?? [], links)
 }
@@ -435,62 +465,75 @@ gitlab_ci      = get_env_var("GITLAB_CI") ?? ""
 jenkins_url    = get_env_var("JENKINS_URL") ?? ""
 
 if github_actions == "true" {
-  repo      = get_env_var("GITHUB_REPOSITORY") ?? ""
-  run_id    = join!([get_env_var("GITHUB_RUN_ID") ?? "0", get_env_var("GITHUB_RUN_ATTEMPT") ?? "1"], "/")
-  job_name  = get_env_var("GITHUB_JOB") ?? "unknown"
-  workflow  = get_env_var("GITHUB_WORKFLOW") ?? ""
-  ref_name  = get_env_var("GITHUB_REF_NAME") ?? ""
+  repo         = get_env_var("GITHUB_REPOSITORY") ?? ""
+  run_id_base  = get_env_var("GITHUB_RUN_ID") ?? "0"
+  run_id       = join!([run_id_base, get_env_var("GITHUB_RUN_ATTEMPT") ?? "1"], "/")
+  job_name     = get_env_var("GITHUB_JOB") ?? "unknown"
+  workflow     = get_env_var("GITHUB_WORKFLOW") ?? ""
+  ref_name     = get_env_var("GITHUB_REF_NAME") ?? ""
+  server       = get_env_var("GITHUB_SERVER_URL") ?? "https://github.com"
 
   .metadata.run.ci_system   = "github"
   .metadata.run.ci_repo     = repo
   .metadata.run.ci_run_id   = run_id
   .metadata.run.ci_job_name = job_name
   .metadata.run.ci_workflow = workflow
-  .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? job_name
-  .metadata.run.task_name   = string(.metadata.run.task_name) ?? job_name
-  .metadata.run.env_id      = "/ci/" + ref_name
-  .metadata.run.subject_id  = "https://github.com/" + repo + "/actions/runs/" + run_id + "/" + job_name
+  .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? (repo + "/" + workflow + "/" + job_name)
+  .metadata.run.task_name   = string(.metadata.run.task_name) ?? (repo + "/" + workflow + "/" + job_name)
+  .metadata.run.suite_id    = string(.metadata.run.suite_id) ?? ("https://api.github.com/repos/" + repo + "/actions/runs/" + run_id_base)
+  .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? (server + "/" + repo + "/actions/runs/" + run_id_base)
+  .metadata.run.env_id      = string(.metadata.run.env_id) ?? (server + "/" + repo + "/tree/" + encode_percent(ref_name))
+  .metadata.run.subject_id  = server + "/" + repo + "/actions/runs/" + run_id + "/" + encode_percent(job_name)
 
   # Set context.source to pipeline definition URL (no run ID) if not CLI-set
   if (string(.metadata.context.source) ?? "") == "" {
-    server = get_env_var("GITHUB_SERVER_URL") ?? "https://github.com"
     .metadata.context.source = server + "/" + repo + "/actions"
   }
 
 } else if gitlab_ci == "true" {
-  repo      = get_env_var("CI_PROJECT_PATH") ?? ""
-  run_id    = get_env_var("CI_PIPELINE_ID") ?? "0"
-  job_name  = get_env_var("CI_JOB_NAME") ?? "unknown"
-  ref_name  = get_env_var("CI_COMMIT_REF_NAME") ?? ""
+  repo         = get_env_var("CI_PROJECT_PATH") ?? ""
+  run_id       = get_env_var("CI_PIPELINE_ID") ?? "0"
+  job_name     = get_env_var("CI_JOB_NAME") ?? "unknown"
+  ref_name     = get_env_var("CI_COMMIT_REF_NAME") ?? ""
+  project_id   = get_env_var("CI_PROJECT_ID") ?? "0"
+  pipeline_url = get_env_var("CI_PIPELINE_URL") ?? ""
+  project_url  = get_env_var("CI_PROJECT_URL") ?? ("https://gitlab.com/" + repo)
+  api_url      = get_env_var("CI_API_V4_URL") ?? "https://gitlab.com/api/v4"
 
   .metadata.run.ci_system   = "gitlab"
   .metadata.run.ci_repo     = repo
   .metadata.run.ci_run_id   = run_id
   .metadata.run.ci_job_name = job_name
-  .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? job_name
-  .metadata.run.task_name   = string(.metadata.run.task_name) ?? job_name
-  .metadata.run.env_id      = "/ci/" + ref_name
-  .metadata.run.subject_id  = "https://gitlab.com/" + repo + "/-/pipelines/" + run_id + "/" + job_name
+  .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? (repo + "/" + job_name)
+  .metadata.run.task_name   = string(.metadata.run.task_name) ?? (repo + "/" + job_name)
+  _gitlab_suite_uri         = if pipeline_url != "" { pipeline_url } else { project_url + "/-/pipelines/" + run_id }
+  .metadata.run.suite_id    = string(.metadata.run.suite_id) ?? (api_url + "/projects/" + project_id + "/pipelines/" + run_id)
+  .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? _gitlab_suite_uri
+  .metadata.run.env_id      = string(.metadata.run.env_id) ?? (project_url + "/-/tree/" + encode_percent(ref_name))
+  .metadata.run.subject_id  = "https://gitlab.com/" + repo + "/-/pipelines/" + run_id + "/" + encode_percent(job_name)
 
   # Set context.source to project pipelines URL (no pipeline ID) if not CLI-set
   if (string(.metadata.context.source) ?? "") == "" {
-    project_url = get_env_var("CI_PROJECT_URL") ?? ("https://gitlab.com/" + repo)
     .metadata.context.source = project_url + "/-/pipelines"
   }
 
 } else if jenkins_url != "" {
-  job_name = get_env_var("JOB_BASE_NAME") ?? "unknown"
-  run_id   = get_env_var("BUILD_NUMBER") ?? "0"
-  job_full = get_env_var("JOB_NAME") ?? job_name
+  job_name   = get_env_var("JOB_BASE_NAME") ?? "unknown"
+  run_id     = get_env_var("BUILD_NUMBER") ?? "0"
+  job_full   = get_env_var("JOB_NAME") ?? job_name
+  build_url  = get_env_var("BUILD_URL") ?? ""
 
   .metadata.run.ci_system   = "jenkins"
   .metadata.run.ci_repo     = job_full
   .metadata.run.ci_run_id   = run_id
   .metadata.run.ci_job_name = job_name
-  .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? job_name
-  .metadata.run.task_name   = string(.metadata.run.task_name) ?? job_name
-  .metadata.run.env_id      = "/ci"
-  .metadata.run.subject_id  = jenkins_url + "job/" + job_full + "/" + run_id + "/" + job_name
+  .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? (job_full + "/" + job_name)
+  .metadata.run.task_name   = string(.metadata.run.task_name) ?? (job_full + "/" + job_name)
+  _jenkins_build_url        = if build_url != "" { build_url } else { jenkins_url + "job/" + job_full + "/" + run_id + "/" }
+  .metadata.run.suite_id    = string(.metadata.run.suite_id) ?? (jenkins_url + "job/" + job_full + "/" + run_id + "/api/json")
+  .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? _jenkins_build_url
+  .metadata.run.env_id      = string(.metadata.run.env_id) ?? (jenkins_url + "job/" + job_full + "/")
+  .metadata.run.subject_id  = _jenkins_build_url + encode_percent(job_name)
 
   # Set context.source to job definition URL (no build number) if not CLI-set
   if (string(.metadata.context.source) ?? "") == "" {
@@ -499,10 +542,13 @@ if github_actions == "true" {
 
 } else {
   # Generic local fallback — leave context.source unset so Processor injects default
-  suite = string(.metadata.run.suite_name) ?? "run"
+  suite = if is_string(.metadata.run.suite_name) && .metadata.run.suite_name != "" { string!(.metadata.run.suite_name) } else { "run" }
   .metadata.run.ci_system   = "local"
   .metadata.run.ci_repo     = ""
   .metadata.run.ci_job_name = ""
+  .metadata.run.suite_name  = suite
+  .metadata.run.suite_id    = string(.metadata.run.suite_id) ?? ("cdviz-collector://local/" + encode_percent(suite))
+  .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? ("cdviz-collector://local/" + encode_percent(suite))
   .metadata.run.env_id      = "/local"
   .metadata.run.subject_id  = "cdviz-collector://local/" + suite
 }
