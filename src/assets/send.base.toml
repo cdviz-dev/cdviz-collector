@@ -421,6 +421,30 @@ if results_url != "" {
   })
 }
 
+# Add partOf link to the parent pipeline run (when running inside a CI pipeline)
+# Reconstructs the pipelinerun id using the same scheme as the CI-system event transformers:
+#   github  → suite_id + "/attempts/" + attempt  (API URL, matches workflow_run transformer)
+#   gitlab  → suite_uri                           (web URL, matches pipeline transformer)
+#   jenkins → suite_uri                           (build URL)
+ci_system = string(.metadata.run.ci_system) ?? ""
+if ci_system != "" && ci_system != "local" {
+  suite_id  = string(.metadata.run.suite_id)  ?? ""
+  suite_uri = string(.metadata.run.suite_uri) ?? ""
+  pipeline_run_id = if ci_system == "github" {
+    run_parts = split(string(.metadata.run.ci_run_id) ?? "0/1", "/")
+    attempt   = string(get(run_parts, [1]) ?? "1") ?? "1"
+    suite_id + "/attempts/" + attempt
+  } else {
+    suite_uri
+  }
+  if pipeline_run_id != "" {
+    links = push(links, {
+      "linkKind": "partOf",
+      "target": { "subject": { "type": "pipelinerun", "id": pipeline_run_id } }
+    })
+  }
+}
+
 if length(links) > 0 {
   .body.customData.links = append(array(.body.customData.links) ?? [], links)
 }
@@ -458,8 +482,8 @@ if github_actions == "true" {
   .metadata.run.task_name   = string(.metadata.run.task_name) ?? (repo + "/" + workflow + "/" + job_name)
   .metadata.run.suite_id    = string(.metadata.run.suite_id) ?? ("https://api.github.com/repos/" + repo + "/actions/runs/" + run_id_base)
   .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? (server + "/" + repo + "/actions/runs/" + run_id_base)
-  .metadata.run.env_id      = string(.metadata.run.env_id) ?? (server + "/" + repo + "/tree/" + encode_uri_component(ref_name))
-  .metadata.run.subject_id  = server + "/" + repo + "/actions/runs/" + run_id + "/" + encode_uri_component(job_name)
+  .metadata.run.env_id      = string(.metadata.run.env_id) ?? (server + "/" + repo + "/tree/" + encode_percent(ref_name))
+  .metadata.run.subject_id  = server + "/" + repo + "/actions/runs/" + run_id + "/" + encode_percent(job_name)
 
   # Set context.source to pipeline definition URL (no run ID) if not CLI-set
   if (string(.metadata.context.source) ?? "") == "" {
@@ -482,10 +506,11 @@ if github_actions == "true" {
   .metadata.run.ci_job_name = job_name
   .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? (repo + "/" + job_name)
   .metadata.run.task_name   = string(.metadata.run.task_name) ?? (repo + "/" + job_name)
+  _gitlab_suite_uri         = if pipeline_url != "" { pipeline_url } else { project_url + "/-/pipelines/" + run_id }
   .metadata.run.suite_id    = string(.metadata.run.suite_id) ?? (api_url + "/projects/" + project_id + "/pipelines/" + run_id)
-  .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? (if pipeline_url != "" { pipeline_url } else { project_url + "/-/pipelines/" + run_id })
-  .metadata.run.env_id      = string(.metadata.run.env_id) ?? (project_url + "/-/tree/" + encode_uri_component(ref_name))
-  .metadata.run.subject_id  = "https://gitlab.com/" + repo + "/-/pipelines/" + run_id + "/" + encode_uri_component(job_name)
+  .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? _gitlab_suite_uri
+  .metadata.run.env_id      = string(.metadata.run.env_id) ?? (project_url + "/-/tree/" + encode_percent(ref_name))
+  .metadata.run.subject_id  = "https://gitlab.com/" + repo + "/-/pipelines/" + run_id + "/" + encode_percent(job_name)
 
   # Set context.source to project pipelines URL (no pipeline ID) if not CLI-set
   if (string(.metadata.context.source) ?? "") == "" {
@@ -504,10 +529,11 @@ if github_actions == "true" {
   .metadata.run.ci_job_name = job_name
   .metadata.run.suite_name  = string(.metadata.run.suite_name) ?? (job_full + "/" + job_name)
   .metadata.run.task_name   = string(.metadata.run.task_name) ?? (job_full + "/" + job_name)
+  _jenkins_build_url        = if build_url != "" { build_url } else { jenkins_url + "job/" + job_full + "/" + run_id + "/" }
   .metadata.run.suite_id    = string(.metadata.run.suite_id) ?? (jenkins_url + "job/" + job_full + "/" + run_id + "/api/json")
-  .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? (if build_url != "" { build_url } else { jenkins_url + "job/" + job_full + "/" + run_id + "/" })
+  .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? _jenkins_build_url
   .metadata.run.env_id      = string(.metadata.run.env_id) ?? (jenkins_url + "job/" + job_full + "/")
-  .metadata.run.subject_id  = jenkins_url + "job/" + job_full + "/" + run_id + "/" + job_name
+  .metadata.run.subject_id  = _jenkins_build_url + encode_percent(job_name)
 
   # Set context.source to job definition URL (no build number) if not CLI-set
   if (string(.metadata.context.source) ?? "") == "" {
@@ -516,13 +542,13 @@ if github_actions == "true" {
 
 } else {
   # Generic local fallback — leave context.source unset so Processor injects default
-  suite = string(.metadata.run.suite_name) ?? "run"
+  suite = if is_string(.metadata.run.suite_name) && .metadata.run.suite_name != "" { string!(.metadata.run.suite_name) } else { "run" }
   .metadata.run.ci_system   = "local"
   .metadata.run.ci_repo     = ""
   .metadata.run.ci_job_name = ""
   .metadata.run.suite_name  = suite
-  .metadata.run.suite_id    = string(.metadata.run.suite_id) ?? ("cdviz-collector://local/" + encode_uri_component(suite))
-  .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? ("cdviz-collector://local/" + encode_uri_component(suite))
+  .metadata.run.suite_id    = string(.metadata.run.suite_id) ?? ("cdviz-collector://local/" + encode_percent(suite))
+  .metadata.run.suite_uri   = string(.metadata.run.suite_uri) ?? ("cdviz-collector://local/" + encode_percent(suite))
   .metadata.run.env_id      = "/local"
   .metadata.run.subject_id  = "cdviz-collector://local/" + suite
 }
