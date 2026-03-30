@@ -91,7 +91,7 @@ run = [
 ]
 
 [tasks."test"]
-depends = ["test:unit", "test:transform"]
+depends = ["test:unit", "test:transform", "test:config"]
 wait_for = ["lint", "lint:*"]
 
 [tasks."test:unit"]
@@ -172,6 +172,21 @@ run = [
     --input ./inputs/yaml \
     --output ./outputs/yaml
   """,
+]
+wait_for = [ "test:config"]
+
+[tasks."test:config"]
+depends = ["build:cli"]
+description = "validate every collector config file in the repository, including VRL compilation"
+run = [
+  # no user config: check connect base defaults
+  "target/debug/cdviz-collector --disable-otel config --for connect --check",
+  # no user config: check send base defaults
+  "target/debug/cdviz-collector --disable-otel config --for send --check",
+  # examples/assets connect config
+  "target/debug/cdviz-collector --disable-otel --directory examples/assets config --for connect --config ./cdviz-collector.toml --check",
+  # tests/assets config samples
+  "target/debug/cdviz-collector --disable-otel --directory tests/assets/config_samples config --for connect --config ./sample_chart.toml --check",
 ]
 
 [tasks."test:transform:community"]
