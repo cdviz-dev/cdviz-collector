@@ -52,5 +52,9 @@
       matchPackageNames: ["/reqwest/"],
       groupName: "reqwest",
     },
+    {
+      matchPackageNames: ["hmac", "sha2", "digest"],
+      groupName: "crypto",
+    },
   ],
 }

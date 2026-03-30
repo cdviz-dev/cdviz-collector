@@ -10,7 +10,7 @@ use faster_hex::{hex_decode, hex_string};
 //use futures::future::BoxFuture;
 //use futures::future::TryFutureExt;
 use hmac::{
-    Hmac, Mac,
+    Hmac, KeyInit, Mac,
     digest::{InvalidLength, MacError},
 };
 use secrecy::{ExposeSecret, SecretString};
