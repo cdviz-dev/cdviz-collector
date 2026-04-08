@@ -81,18 +81,19 @@ suite_uri  = string(.metadata.run.suite_uri) ?? suite_name
 subject_id = string(.metadata.run.subject_id) ?? "unknown"
 source_url = string(.metadata.context.source) ?? ""
 env_id     = string(.metadata.run.env_id) ?? "/local"
-started_at = string(.metadata.run.started_at) ?? ""
 
 if .metadata.run.status == "started" {
+  event_at = string(.metadata.run.started_at) ?? ""
   .body = {
     "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.started.0.3.0", "timestamp": started_at },
+      "type": "dev.cdevents.testsuiterun.started.0.3.0", "timestamp": event_at },
     "subject": { "id": subject_id,
       "content": { "trigger": {"type": "schedule"},
         "environment": {"id": env_id},
         "testSuite": {"id": suite_id, "name": suite_name, "uri": suite_uri, "version": ""} } }
   }
 } else {
+  event_at = string(.metadata.run.finished_at) ?? ""
   # Aggregate from array of XML-parsed JUnit files in .body
   total_tests = 0; total_failed = 0; total_errors = 0; total_skipped = 0; total_time = 0.0
   if is_array(.body) {
@@ -111,7 +112,7 @@ if .metadata.run.status == "started" {
 
   .body = {
     "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.finished.0.3.0", "timestamp": started_at },
+      "type": "dev.cdevents.testsuiterun.finished.0.3.0", "timestamp": event_at },
     "subject": { "id": subject_id,
       "content": { "outcome": outcome, "reason": "",
         "environment": {"id": env_id},
@@ -150,18 +151,19 @@ suite_uri  = string(.metadata.run.suite_uri) ?? suite_name
 subject_id = string(.metadata.run.subject_id) ?? "unknown"
 source_url = string(.metadata.context.source) ?? ""
 env_id     = string(.metadata.run.env_id) ?? "/local"
-started_at = string(.metadata.run.started_at) ?? ""
 
 if .metadata.run.status == "started" {
+  event_at = string(.metadata.run.started_at) ?? ""
   .body = {
     "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.started.0.3.0", "timestamp": started_at },
+      "type": "dev.cdevents.testsuiterun.started.0.3.0", "timestamp": event_at },
     "subject": { "id": subject_id,
       "content": { "trigger": {"type": "schedule"},
         "environment": {"id": env_id},
         "testSuite": {"id": suite_id, "name": suite_name, "uri": suite_uri, "version": ""} } }
   }
 } else {
+  event_at = string(.metadata.run.finished_at) ?? ""
   total_tests = 0; total_failed = 0
   if is_array(.body) {
     for_each(array!(.body)) -> |_i, result| {
@@ -179,7 +181,7 @@ if .metadata.run.status == "started" {
 
   .body = {
     "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.finished.0.3.0", "timestamp": started_at },
+      "type": "dev.cdevents.testsuiterun.finished.0.3.0", "timestamp": event_at },
     "subject": { "id": subject_id,
       "content": { "outcome": outcome, "reason": "",
         "environment": {"id": env_id},
@@ -218,18 +220,19 @@ suite_uri  = string(.metadata.run.suite_uri) ?? suite_name
 subject_id = string(.metadata.run.subject_id) ?? "unknown"
 source_url = string(.metadata.context.source) ?? ""
 env_id     = string(.metadata.run.env_id) ?? "/local"
-started_at = string(.metadata.run.started_at) ?? ""
 
 if .metadata.run.status == "started" {
+  event_at = string(.metadata.run.started_at) ?? ""
   .body = {
     "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.started.0.3.0", "timestamp": started_at },
+      "type": "dev.cdevents.testsuiterun.started.0.3.0", "timestamp": event_at },
     "subject": { "id": subject_id,
       "content": { "trigger": {"type": "schedule"},
         "environment": {"id": env_id},
         "testSuite": {"id": suite_id, "name": suite_name, "uri": suite_uri, "version": ""} } }
   }
 } else {
+  event_at = string(.metadata.run.finished_at) ?? ""
   # Extract tool name/version from first run of first SARIF file
   tool_name = suite_name; tool_version = ""
   if is_array(.body) && length(array!(.body)) > 0 {
@@ -272,7 +275,7 @@ if .metadata.run.status == "started" {
 
   .body = {
     "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testsuiterun.finished.0.3.0", "timestamp": started_at },
+      "type": "dev.cdevents.testsuiterun.finished.0.3.0", "timestamp": event_at },
     "subject": { "id": subject_id,
       "content": { "outcome": outcome, "reason": "",
         "environment": {"id": env_id},
@@ -308,21 +311,22 @@ template = '''
 task_name = string(.metadata.run.task_name) ?? "unknown"
 subject_id = string(.metadata.run.subject_id) ?? "unknown"
 source_url = string(.metadata.context.source) ?? ""
-started_at = string(.metadata.run.started_at) ?? ""
 
 if .metadata.run.status == "started" {
+  event_at = string(.metadata.run.started_at) ?? ""
   .body = {
     "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
-      "type": "dev.cdevents.taskrun.started.0.3.0", "timestamp": started_at },
+      "type": "dev.cdevents.taskrun.started.0.3.0", "timestamp": event_at },
     "subject": { "id": subject_id,
       "content": { "taskName": task_name } }
   }
 } else {
   exit_code = to_int(.metadata.run.exit_code) ?? 0
   outcome   = if exit_code != 0 { "failure" } else { "success" }
+  event_at = string(.metadata.run.finished_at) ?? ""
   .body = {
     "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
-      "type": "dev.cdevents.taskrun.finished.0.3.0", "timestamp": started_at },
+      "type": "dev.cdevents.taskrun.finished.0.3.0", "timestamp": event_at },
     "subject": { "id": subject_id,
       "content": { "outcome": outcome, "taskName": task_name } }
   }
@@ -343,12 +347,12 @@ event_type  = string(.body.context.type) ?? ""
 
 if event_type == "dev.cdevents.testsuiterun.finished.0.3.0" && results_url != "" {
   source_url = string(.metadata.context.source) ?? ""
-  started_at = string(.metadata.run.started_at) ?? ""
+  event_at = string(.metadata.run.finished_at) ?? ""
 
   testoutput_event = .
   testoutput_event.body = {
     "context": { "specversion": "0.5.0", "id": "0", "source": source_url,
-      "type": "dev.cdevents.testoutput.published.0.3.0", "timestamp": started_at },
+      "type": "dev.cdevents.testoutput.published.0.3.0", "timestamp": event_at },
     "subject": { "id": results_url,
       "content": { "outputType": "report", "format": "text/html", "uri": results_url } }
   }
