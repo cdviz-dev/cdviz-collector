@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.35.0...0.35.1) - 2026-04-09
+
+### Fixed
+
+- timestamp of the finished event on `send --run` ([#333](https://github.com/cdviz-dev/cdviz-collector/pull/333))
+- *(deps)* update ([#332](https://github.com/cdviz-dev/cdviz-collector/pull/332))
+- *(deps)* update rust crate similar to v3 ([#329](https://github.com/cdviz-dev/cdviz-collector/pull/329))
+- *(deps)* update rust crate async-nats to 0.47 ([#327](https://github.com/cdviz-dev/cdviz-collector/pull/327))
+
+### Other
+
+- *(deps)* update rust crate tokio to v1.51.0 ([#330](https://github.com/cdviz-dev/cdviz-collector/pull/330))
+
 ## [0.35.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.34.0...0.35.0) - 2026-03-30
 
 ### Added
