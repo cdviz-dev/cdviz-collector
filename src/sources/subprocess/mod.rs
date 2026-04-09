@@ -147,10 +147,12 @@ impl SubprocessExtractor {
         };
 
         // Step 6: build and send "finished" event (sync — must complete before exit)
+        let finished_at = jiff::Timestamp::now().to_string();
         let mut finished_metadata = self.config.metadata.clone();
         finished_metadata["run"]["status"] = serde_json::json!("finished");
         finished_metadata["run"]["exit_code"] = serde_json::json!(exit_code);
         finished_metadata["run"]["started_at"] = serde_json::json!(started_at);
+        finished_metadata["run"]["finished_at"] = serde_json::json!(finished_at);
 
         let finished_event =
             EventSource { body, metadata: finished_metadata, headers: HashMap::new() };
@@ -310,6 +312,50 @@ mod tests {
         assert_eq!(events.len(), 2);
         // body should be empty array when no_data=true
         assert_eq!(events[1].body, serde_json::json!([]));
+    }
+
+    #[tokio::test]
+    async fn test_finished_event_sent_after_subprocess_completes() {
+        // Regression: both events were sharing the same `started_at` timestamp,
+        // making them appear simultaneous even when the child ran for many seconds.
+        let config = Config {
+            command: vec!["sleep".to_string(), "0.2".to_string()],
+            ..Default::default()
+        };
+
+        let collector = Collector::<EventSource>::new();
+        let pipe = Box::new(collector.create_pipe());
+        let cancel_token = CancellationToken::new();
+
+        let t_before = std::time::Instant::now();
+        let extractor = SubprocessExtractor::new(config, pipe);
+        timeout(Duration::from_secs(5), extractor.run(cancel_token)).await.unwrap().unwrap();
+        let elapsed = t_before.elapsed();
+
+        let events: Vec<EventSource> = collector.try_into_iter().unwrap().collect();
+        assert_eq!(events.len(), 2);
+
+        // The extractor must have actually waited for the 200 ms subprocess.
+        assert!(
+            elapsed >= Duration::from_millis(150),
+            "pipeline did not wait for the subprocess: elapsed={elapsed:?}"
+        );
+
+        // The "finished" event must carry its own `finished_at` timestamp …
+        let started_at =
+            events[0].metadata["run"]["started_at"].as_str().unwrap().to_string();
+        let finished_at = events[1].metadata["run"]["finished_at"]
+            .as_str()
+            .expect("finished event must have a 'finished_at' field separate from 'started_at'");
+
+        // … and it must be strictly later than `started_at`.
+        assert_ne!(started_at, finished_at, "started_at and finished_at must differ");
+        let started_ts: jiff::Timestamp = started_at.parse().unwrap();
+        let finished_ts: jiff::Timestamp = finished_at.parse().unwrap();
+        assert!(
+            finished_ts > started_ts,
+            "finished_at ({finished_ts}) must be after started_at ({started_ts})"
+        );
     }
 
     #[tokio::test]
