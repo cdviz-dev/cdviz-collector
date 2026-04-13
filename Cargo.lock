@@ -820,7 +820,7 @@ dependencies = [
 
 [[package]]
 name = "cdviz-collector"
-version = "0.35.1"
+version = "0.35.2"
 dependencies = [
  "assert2",
  "async-nats",
