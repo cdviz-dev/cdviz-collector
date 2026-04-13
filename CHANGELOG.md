@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.35.1...0.35.2) - 2026-04-13
+
+### Fixed
+
+- *(send)* use job's url as subject_id for testsuiterun, taskrun ([#334](https://github.com/cdviz-dev/cdviz-collector/pull/334))
+
+### Other
+
+- *(deps)* update rust crate similar to v3.1.0 ([#336](https://github.com/cdviz-dev/cdviz-collector/pull/336))
+
 ## [0.35.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.35.0...0.35.1) - 2026-04-09
 
 ### Fixed
