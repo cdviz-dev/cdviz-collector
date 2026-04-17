@@ -54,8 +54,8 @@ run = [
 description = "Automatically fix some linting issues & format code"
 depends_post = ["format"]
 run = [
-  "cargo fix --workspace --allow-dirty",
-  "cargo clippy --all-features --fix --allow-dirty",
+  "cargo fix --allow-dirty --workspace --all-features --all-targets --profile test",
+  "cargo clippy --fix --allow-dirty --workspace --all-features --all-targets --no-deps --profile test",
 ]
 
 [tasks."deny"]

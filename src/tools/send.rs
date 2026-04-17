@@ -75,7 +75,7 @@
 //! is disabled to avoid duplicate output.
 
 use crate::{
-    config::{SEND_BASE_CONFIG, Config, ConfigSource, resolve_config_source},
+    config::{Config, ConfigSource, SEND_BASE_CONFIG, resolve_config_source},
     errors::{IntoDiagnostic, Result},
     pipeline::PipelineBuilder,
     sources::cli::parsers,

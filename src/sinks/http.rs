@@ -44,7 +44,7 @@ fn default_user_agent() -> String {
 }
 
 fn default_total_duration_of_retries() -> Duration {
-    Duration::from_secs(30 * 60)
+    Duration::from_mins(30)
 }
 
 impl TryFrom<Config> for HttpSink {
