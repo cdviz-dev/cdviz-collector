@@ -654,7 +654,7 @@ mod tests {
             .await;
 
         let config = Config {
-            polling_interval: Duration::from_secs(60), // long interval
+            polling_interval: Duration::from_mins(1), // long interval
             ts_after: None,
             ts_before_limit: None,
             request_vrl: format!(r#".url = "{}/data""#, server.uri()),

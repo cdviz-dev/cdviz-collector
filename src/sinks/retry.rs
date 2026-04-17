@@ -4,7 +4,7 @@ use crate::errors::{Report, Result};
 use retry_policies::{RetryDecision, RetryPolicy};
 
 pub(crate) fn default_total_duration_of_retries() -> Duration {
-    Duration::from_secs(30 * 60)
+    Duration::from_mins(30)
 }
 
 /// Executes `operation` repeatedly until it succeeds, encounters a non-transient error,

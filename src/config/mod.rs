@@ -2,8 +2,7 @@
 mod remote_file_adapter;
 mod toml_provider;
 
-pub(crate) const CONNECT_BASE_CONFIG: &str =
-    include_str!("../assets/connect.base.toml");
+pub(crate) const CONNECT_BASE_CONFIG: &str = include_str!("../assets/connect.base.toml");
 pub(crate) const SEND_BASE_CONFIG: &str = include_str!("../assets/send.base.toml");
 
 use crate::{

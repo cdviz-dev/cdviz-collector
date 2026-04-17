@@ -276,7 +276,7 @@ mod tests {
             brokers: "localhost:9092,localhost:9093".to_string(),
             topic: "events".to_string(),
             rdkafka_config: producer_config,
-            timeout: Duration::from_secs(60),
+            timeout: Duration::from_mins(1),
             ..Default::default()
         };
 

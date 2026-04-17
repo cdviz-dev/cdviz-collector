@@ -3,7 +3,7 @@ use std::io::Write as _;
 use clap::{Args, ValueEnum};
 
 use crate::{
-    config::{CONNECT_BASE_CONFIG, SEND_BASE_CONFIG, Config, ConfigSource, resolve_config_source},
+    config::{CONNECT_BASE_CONFIG, Config, ConfigSource, SEND_BASE_CONFIG, resolve_config_source},
     errors::{IntoDiagnostic, Result},
     pipes::discard_all,
     sources::EventSource,
@@ -130,10 +130,7 @@ pub(crate) async fn config_cmd(args: ConfigArgs) -> Result<bool> {
                 let mut transformer_names: Vec<_> = config.transformers.keys().collect();
                 transformer_names.sort();
                 for name in transformer_names {
-                    try_compile(
-                        format!("transformer '{name}'"),
-                        &config.transformers[name],
-                    );
+                    try_compile(format!("transformer '{name}'"), &config.transformers[name]);
                 }
 
                 for (i, tconfig) in config.pipeline.transformers.iter().enumerate() {

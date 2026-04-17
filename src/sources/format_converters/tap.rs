@@ -81,11 +81,9 @@ fn test_status(input: &str) -> IResult<&str, TestStatus> {
 /// Parse directive: "# SKIP reason" or "# TODO reason"
 fn directive(input: &str) -> IResult<&str, Directive> {
     let (input, _) = (space0, char('#'), space1).parse(input)?;
-    let (input, kind) = alt((
-        value(DirectiveKind::Skip, tag("SKIP")),
-        value(DirectiveKind::Todo, tag("TODO")),
-    ))
-    .parse(input)?;
+    let (input, kind) =
+        alt((value(DirectiveKind::Skip, tag("SKIP")), value(DirectiveKind::Todo, tag("TODO"))))
+            .parse(input)?;
     let (input, reason) = opt(preceded(space1, not_line_ending)).parse(input)?;
     Ok((
         input,

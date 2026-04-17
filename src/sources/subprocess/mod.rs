@@ -318,10 +318,8 @@ mod tests {
     async fn test_finished_event_sent_after_subprocess_completes() {
         // Regression: both events were sharing the same `started_at` timestamp,
         // making them appear simultaneous even when the child ran for many seconds.
-        let config = Config {
-            command: vec!["sleep".to_string(), "0.2".to_string()],
-            ..Default::default()
-        };
+        let config =
+            Config { command: vec!["sleep".to_string(), "0.2".to_string()], ..Default::default() };
 
         let collector = Collector::<EventSource>::new();
         let pipe = Box::new(collector.create_pipe());
@@ -342,8 +340,7 @@ mod tests {
         );
 
         // The "finished" event must carry its own `finished_at` timestamp …
-        let started_at =
-            events[0].metadata["run"]["started_at"].as_str().unwrap().to_string();
+        let started_at = events[0].metadata["run"]["started_at"].as_str().unwrap().to_string();
         let finished_at = events[1].metadata["run"]["finished_at"]
             .as_str()
             .expect("finished event must have a 'finished_at' field separate from 'started_at'");

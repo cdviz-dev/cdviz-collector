@@ -22,10 +22,10 @@ fn default_pool_acquire_timeout() -> Duration {
     Duration::from_secs(30)
 }
 fn default_pool_idle_timeout() -> Duration {
-    Duration::from_secs(10 * 60)
+    Duration::from_mins(10)
 }
 fn default_pool_max_lifetime() -> Duration {
-    Duration::from_secs(30 * 60)
+    Duration::from_mins(30)
 }
 fn default_pool_test_before_acquire() -> bool {
     true
