@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.4](https://github.com/cdviz-dev/cdviz-collector/compare/0.35.3...0.35.4) - 2026-04-17
+
+### Fixed
+
+- *(deps)* update rust crate vrl to 0.32 ([#340](https://github.com/cdviz-dev/cdviz-collector/pull/340))
+
+### Other
+
+- *(deps)* update dependency rust to v1.95.0 ([#339](https://github.com/cdviz-dev/cdviz-collector/pull/339))
+
 ## [0.35.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.35.2...0.35.3) - 2026-04-16
 
 ### Other
