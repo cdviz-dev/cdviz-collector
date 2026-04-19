@@ -1,6 +1,6 @@
 use crate::errors::{IntoDiagnostic, Result};
+use crate::event::{Event as EventSource, EventPipe as EventSourcePipe};
 use crate::pipes::Pipe;
-use crate::sources::{EventSource, EventSourcePipe};
 use miette::{LabeledSpan, MietteDiagnostic};
 use vrl::compiler::{Program, TargetValue};
 use vrl::core::Value;

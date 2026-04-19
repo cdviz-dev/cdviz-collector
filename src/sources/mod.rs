@@ -17,13 +17,11 @@ pub(crate) mod webhook;
 
 use crate::cdevent_utils::sanitize_id;
 use crate::errors::{Error, IntoDiagnostic, Result};
-use crate::pipes::Pipe;
 use crate::transformers;
 use crate::{Message, Sender};
+use serde::Deserialize;
 use axum::Router;
 use cdevents_sdk::CDEvent;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -92,15 +90,8 @@ pub(crate) fn make(
     config.extractor.make_extractor(name, pipe, cancel_token, state_config)
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
-pub struct EventSource {
-    pub metadata: Value,
-    pub headers: HashMap<String, String>,
-    pub body: Value,
-}
-
-// TODO explore to use enum_dispatch instead of Box(dyn) on EventSourcePipe (a recursive structure)
-pub type EventSourcePipe = Box<dyn Pipe<Input = EventSource> + Send + Sync>;
+pub use crate::event::Event as EventSource;
+pub use crate::event::EventPipe as EventSourcePipe;
 
 impl TryFrom<EventSource> for CDEvent {
     type Error = miette::Error;

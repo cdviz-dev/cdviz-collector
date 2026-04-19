@@ -5,8 +5,8 @@ pub(crate) mod vrl_purl;
 
 use crate::{
     errors::{Error, IntoDiagnostic, Result},
+    event::EventPipe,
     pipes::{discard_all, log, passthrough},
-    sources::EventSourcePipe,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -27,8 +27,8 @@ pub(crate) enum Config {
 }
 
 impl Config {
-    pub(crate) fn make_transformer(&self, next: EventSourcePipe) -> Result<EventSourcePipe> {
-        let out: EventSourcePipe = match &self {
+    pub(crate) fn make_transformer(&self, next: EventPipe) -> Result<EventPipe> {
+        let out: EventPipe = match &self {
             Config::Passthrough => Box::new(passthrough::Processor::new(next)),
             Config::Log(config) => Box::new(log::Processor::try_from(config, next)?),
             Config::DiscardAll => Box::new(discard_all::Processor::new()),

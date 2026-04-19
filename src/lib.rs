@@ -4,6 +4,7 @@
 
 mod config;
 mod errors;
+pub mod event;
 mod http;
 mod message;
 mod pipeline;
