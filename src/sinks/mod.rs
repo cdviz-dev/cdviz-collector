@@ -84,6 +84,8 @@ impl Config {
     ) -> Result<()> {
         match self {
             Self::Debug(c) => c.resolve_transformers(configs),
+            #[cfg(feature = "sink_http")]
+            Self::Http(c) => c.resolve_transformers(configs),
             // Other sink variants don't have transformer_refs fields, so there is nothing to
             // resolve. If a new variant gains transformer_refs, add it above or this arm
             // will silently ignore configured refs.

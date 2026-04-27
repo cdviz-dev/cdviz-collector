@@ -1,13 +1,15 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use super::Sink;
 use crate::Message;
 use crate::errors::{IntoDiagnostic, Report, Result};
+use crate::event::{Event, EventPipe, message_to_event};
+use crate::pipes::collect_to_vec;
 use crate::security::header::{
     OutgoingHeaderMap, generate_headers, outgoing_header_map_to_configs,
 };
-use cdevents_sdk::cloudevents::BuilderExt;
-use cloudevents::{Data, EventBuilder, EventBuilderV10};
+use crate::transformers;
 use opentelemetry::propagation::Injector;
 use opentelemetry::trace::TraceContextExt;
 use opentelemetry::{Context, global};
@@ -37,6 +39,17 @@ pub(crate) struct Config {
     /// Defaults to `cdviz-collector/<version>`.
     #[serde(default = "default_user_agent")]
     user_agent: String,
+    #[serde(flatten)]
+    pub(crate) chain: transformers::TransformerChainConfig,
+}
+
+impl Config {
+    pub(crate) fn resolve_transformers(
+        &mut self,
+        configs: &HashMap<String, transformers::Config>,
+    ) -> Result<()> {
+        self.chain.resolve(configs)
+    }
 }
 
 fn default_user_agent() -> String {
@@ -51,44 +64,95 @@ impl TryFrom<Config> for HttpSink {
     type Error = Report;
 
     fn try_from(value: Config) -> Result<Self> {
-        HttpSink::new(
-            value.destination,
-            value.headers,
-            value.total_duration_of_retries,
-            value.log_full_response_on_error,
-            value.user_agent,
+        let event_collector = collect_to_vec::Collector::<Event>::new();
+        let terminal: EventPipe = Box::new(event_collector.create_pipe());
+        let transformer_chain =
+            transformers::TransformerChain::try_new(&value.chain.transformers, terminal)?;
+        // Retry up to 3 times with increasing intervals between attempts.
+        let retry_policy = ExponentialBackoff::builder()
+            .build_with_total_retry_duration_and_limit_retries(value.total_duration_of_retries);
+        let client = ClientBuilder::new(
+            reqwest::Client::builder().user_agent(value.user_agent).build().into_diagnostic()?,
         )
+        .with(TracingMiddleware::default())
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build();
+        Ok(Self {
+            dest: value.destination,
+            client,
+            headers: value.headers,
+            log_full_response_on_error: value.log_full_response_on_error,
+            transformer_chain,
+            event_collector,
+        })
     }
 }
 
-#[derive(Debug)]
 pub(crate) struct HttpSink {
     client: ClientWithMiddleware,
     dest: Url,
     headers: OutgoingHeaderMap,
     log_full_response_on_error: bool,
+    transformer_chain: transformers::TransformerChain,
+    event_collector: collect_to_vec::Collector<Event>,
+}
+
+impl std::fmt::Debug for HttpSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpSink")
+            .field("dest", &self.dest)
+            .field("log_full_response_on_error", &self.log_full_response_on_error)
+            .finish_non_exhaustive()
+    }
 }
 
 impl HttpSink {
-    pub(crate) fn new(
-        url: Url,
-        headers: OutgoingHeaderMap,
-        total_duration_of_retries: Duration,
-        log_full_response_on_error: bool,
-        user_agent: String,
-    ) -> Result<Self> {
-        // Retry up to 3 times with increasing intervals between attempts.
-        let retry_policy = ExponentialBackoff::builder()
-            .build_with_total_retry_duration_and_limit_retries(total_duration_of_retries);
-        let client = ClientBuilder::new(
-            reqwest::Client::builder().user_agent(user_agent).build().into_diagnostic()?,
-        )
-        // Trace HTTP requests. See the tracing crate to make use of these traces.
-        .with(TracingMiddleware::default())
-        // Retry failed requests.
-        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-        .build();
-        Ok(Self { dest: url, client, headers, log_full_response_on_error })
+    async fn send_event(
+        &self,
+        event: &Event,
+        trace_context: Option<&crate::message::TraceContext>,
+    ) -> Result<()> {
+        let body_bytes = serde_json::to_vec(&event.body).into_diagnostic()?;
+        let mut req = self.client.post(self.dest.clone());
+        // Content-Type is set first so event.headers (from VRL) can override it.
+        // add_headers (HMAC) runs last so it signs the final body bytes.
+        req = req.header(CONTENT_TYPE, "application/json");
+        req = add_cloudevents_headers(req, event);
+        for (name, value) in &event.headers {
+            req = req.header(name.as_str(), value.as_str());
+        }
+        req = add_trace_context_headers(req, trace_context);
+        req = self.add_headers(req, &body_bytes)?.body(body_bytes);
+        let response = req.send().await.into_diagnostic()?;
+        if !response.status().is_success() {
+            let http_status = response.status().as_u16();
+            let destination = self.dest.as_str();
+            if self.log_full_response_on_error {
+                let resp_headers: serde_json::Map<String, serde_json::Value> = response
+                    .headers()
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            k.as_str().to_owned(),
+                            serde_json::Value::String(
+                                v.to_str().unwrap_or("<non-utf8>").to_owned(),
+                            ),
+                        )
+                    })
+                    .collect();
+                let http_body = response.text().await.unwrap_or_default();
+                tracing::warn!(
+                    http_status,
+                    destination,
+                    http_headers = %serde_json::Value::Object(resp_headers),
+                    http_body,
+                    "Failed to send event",
+                );
+            } else {
+                tracing::warn!(http_status, destination, "Failed to send event");
+            }
+        }
+        Ok(())
     }
 
     /// Generate and add configured headers to the request
@@ -107,23 +171,27 @@ impl HttpSink {
     }
 }
 
-/// Set `CloudEvent` binary HTTP binding headers on `req`.
-/// Per spec: `datacontenttype` → `content-type`; all other attributes → `ce-{name}`.
-fn add_ce_headers(mut req: RequestBuilder, event: &cloudevents::Event) -> RequestBuilder {
-    use cloudevents::binding::http::header_prefix;
-    for (name, value) in event.iter() {
-        req = req.header(header_prefix(name), value.to_string());
-    }
-    req
-}
-
-/// Add source headers from the message to the request
-fn add_source_headers(
-    mut req: RequestBuilder,
-    source_headers: &std::collections::HashMap<String, String>,
-) -> RequestBuilder {
-    for (name, value) in source_headers {
-        req = req.header(name, value);
+/// Set `CloudEvents` headers from the `CDEvent` context (if event has it) so downstream consumers
+/// can route without parsing the body.
+fn add_cloudevents_headers(mut req: RequestBuilder, event: &Event) -> RequestBuilder {
+    if let Some(ctx) = event.body.get("context") {
+        let mut ce_defined = false;
+        for (header, field) in [
+            //("ce-specversion", "specversion"),
+            ("ce-id", "id"),
+            ("ce-source", "source"),
+            ("ce-type", "type"),
+            ("ce-time", "timestamp"),
+        ] {
+            if let Some(value) = ctx.get(field).and_then(|v| v.as_str()) {
+                req = req.header(header, value);
+                ce_defined = true;
+            }
+        }
+        if ce_defined {
+            req = req.header("ce-specversion", "1.0");
+            //req = req.header("content-type", "application/cloudevents+json");
+        }
     }
     req
 }
@@ -190,78 +258,18 @@ impl Injector for HeaderInjector {
 impl Sink for HttpSink {
     #[tracing::instrument(skip(self, msg), fields(cdevent_id = %msg.cdevent.id()))]
     async fn send(&self, msg: &Message) -> Result<()> {
-        let cd_event = msg.cdevent.clone();
-        let event_result = EventBuilderV10::new().with_cdevent(cd_event.clone());
-
-        let mut req = self.client.post(self.dest.clone());
-
-        // Add source headers and trace context first.
-        req = add_source_headers(req, &msg.headers);
-        req = add_trace_context_headers(req, msg.trace_context.as_ref());
-
-        let (mut req, body_bytes) = match event_result {
-            Ok(event_builder) => {
-                let event = event_builder.build().into_diagnostic()?;
-                // Extract body bytes exactly as the binary CloudEvents wire format does
-                // (Data::Json → serde_json::to_vec, Data::Binary → clone, Data::String →
-                // into_bytes). Reading event.data() directly avoids the BinaryDeserializer
-                // machinery and any intermediate Value round-trips that could change the
-                // serialization. The HMAC signature is then computed over the same bytes
-                // that will appear in the HTTP body.
-                let body_bytes: Vec<u8> = match event.data() {
-                    None => vec![],
-                    Some(Data::Binary(b)) => b.clone(),
-                    Some(Data::String(s)) => s.as_bytes().to_vec(),
-                    Some(Data::Json(v)) => serde_json::to_vec(v).into_diagnostic()?,
-                };
-                // Set CloudEvent binary HTTP binding headers then body.
-                (add_ce_headers(req, &event), body_bytes)
-            }
-            Err(err) => {
-                tracing::warn!(error = ?err, "Failed to convert to cloudevents");
-                // Fallback: send the raw CDEvent as plain JSON.
-                let body_bytes = serde_json::to_vec(&cd_event).into_diagnostic()?;
-                (req.header(CONTENT_TYPE, "application/json"), body_bytes)
-            }
-        };
-        req = self.add_headers(req, &body_bytes)?.body(body_bytes);
-
-        let response = req.send().await.into_diagnostic()?;
-        // TODO: non-success HTTP responses (4xx/5xx) are only logged; transient errors are
-        // retried by reqwest_middleware but persistent failures (e.g. 400, 404) are silently ignored.
-        if !response.status().is_success() {
-            let http_status = response.status().as_u16();
-            let destination = self.dest.as_str();
-            if self.log_full_response_on_error {
-                let resp_headers: serde_json::Map<String, serde_json::Value> = response
-                    .headers()
-                    .iter()
-                    .map(|(k, v)| {
-                        (
-                            k.as_str().to_owned(),
-                            serde_json::Value::String(
-                                v.to_str().unwrap_or("<non-utf8>").to_owned(),
-                            ),
-                        )
-                    })
-                    .collect();
-                let http_body = response.text().await.unwrap_or_default();
-                tracing::warn!(
-                    cdevent_id = msg.cdevent.id().as_str(),
-                    http_status,
-                    destination,
-                    http_headers = %serde_json::Value::Object(resp_headers),
-                    http_body,
-                    "Failed to send event",
-                );
-            } else {
-                tracing::warn!(
-                    cdevent_id = msg.cdevent.id().as_str(),
-                    http_status,
-                    destination,
-                    "Failed to send event",
-                );
-            }
+        // convert first and drain to avoid:
+        // There is a potential for event leakage between messages.
+        // If transformer_chain.push fails, any events already emitted by the
+        // chain and stored in the event_collector will remain there because
+        // drain() is never called.
+        // These stale events would then be sent during the next successful
+        // send call for a different message.
+        let push_res = self.transformer_chain.push(message_to_event(msg)?);
+        let events = self.event_collector.drain()?;
+        push_res?;
+        for event in events {
+            self.send_event(&event, msg.trace_context.as_ref()).await?;
         }
         Ok(())
     }
@@ -272,6 +280,7 @@ mod tests {
     use super::*;
     use crate::Message;
     use crate::security::header::HeaderSource;
+    use crate::transformers::TransformerChainConfig;
     use reqwest::Url;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -284,6 +293,7 @@ mod tests {
             total_duration_of_retries: Duration::from_secs(1),
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
+            chain: TransformerChainConfig::default(),
         }
     }
 
@@ -319,7 +329,8 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/events"))
-            .and(wiremock::matchers::header("content-type", "application/cloudevents+json"))
+            //.and(wiremock::matchers::header("content-type", "application/cloudevents+json"))
+            .and(wiremock::matchers::header("content-type", "application/json"))
             .respond_with(ResponseTemplate::new(200))
             .mount(&mock_server)
             .await;
@@ -396,6 +407,82 @@ mod tests {
 
         // Currently allows HTTP - in production you might want to validate this
         assert2::assert!(let Ok(_) = HttpSink::try_from(config));
+    }
+
+    /// Verify all four header categories coexist in a single request:
+    /// Content-Type (hardcoded), `CloudEvents` headers (from body context),
+    /// source/VRL headers (from event.headers), and configured headers (HMAC/static).
+    #[tokio::test]
+    async fn test_http_sink_all_header_categories_preserved() {
+        use crate::security::header::HeaderSource;
+        use crate::sources::EventSource;
+        use cdevents_sdk::CDEvent;
+        use serde_json::json;
+        use std::collections::HashMap;
+        use wiremock::matchers::header_exists;
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .and(wiremock::matchers::header("Content-Type", "application/json")) // category 1: hardcoded
+            .and(header_exists("ce-id")) // category 2: CloudEvents from body context
+            .and(wiremock::matchers::header("X-Source-Header", "source-value")) // category 3: event.headers
+            .and(wiremock::matchers::header("X-API-Key", "test-key")) // category 4: configured static
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let config = Config {
+            enabled: true,
+            destination: Url::parse(&format!("{}/events", mock_server.uri())).unwrap(),
+            headers: {
+                let mut map = OutgoingHeaderMap::new();
+                map.insert(
+                    "X-API-Key".to_string(),
+                    HeaderSource::Static { value: "test-key".to_string() },
+                );
+                map
+            },
+            total_duration_of_retries: Duration::from_secs(1),
+            log_full_response_on_error: false,
+            user_agent: default_user_agent(),
+            chain: TransformerChainConfig::default(),
+        };
+        let sink = HttpSink::try_from(config).unwrap();
+
+        let mut source_headers = HashMap::new();
+        source_headers.insert("X-Source-Header".to_string(), "source-value".to_string());
+
+        let event_source = EventSource {
+            metadata: json!({}),
+            headers: source_headers.clone(),
+            body: json!({
+                "context": {
+                    "version": "0.4.0",
+                    "id": "test-all-headers",
+                    "source": "test-source",
+                    "type": "dev.cdevents.service.deployed.0.1.1",
+                    "timestamp": "2024-03-14T10:30:00Z"
+                },
+                "subject": {
+                    "id": "test-subject",
+                    "source": "test-source",
+                    "type": "service",
+                    "content": {
+                        "environment": { "id": "test-env" },
+                        "artifactId": "pkg:test/artifact@1.0.0"
+                    }
+                }
+            }),
+        };
+
+        let cdevent = CDEvent::try_from(event_source).unwrap();
+        let message = Message { cdevent, headers: source_headers, trace_context: None };
+
+        assert2::assert!(let Ok(()) = sink.send(&message).await);
+        // wiremock verifies all 4 matchers on MockServer drop (via .expect(1))
     }
 
     #[tokio::test]
@@ -476,6 +563,7 @@ mod tests {
             total_duration_of_retries: Duration::from_secs(1),
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
+            chain: TransformerChainConfig::default(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -591,6 +679,7 @@ mod tests {
             total_duration_of_retries: Duration::from_secs(1),
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
+            chain: TransformerChainConfig::default(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
@@ -670,6 +759,7 @@ mod tests {
             total_duration_of_retries: Duration::from_secs(1),
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
+            chain: TransformerChainConfig::default(),
         };
         let sink = HttpSink::try_from(config).unwrap();
 
