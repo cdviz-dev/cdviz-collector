@@ -259,6 +259,7 @@ skip = [
   # "wasi",
   "wasm-streams",
   "webpki-roots",
+  "wit-bindgen",
   # "windows-core",
   # "windows-result",
   # "windows-strings",
