@@ -46,6 +46,15 @@ where
             .map_err(|err| miette!("{}", err))
             .map(|buffer| buffer.clone().into_iter())
     }
+
+    #[allow(dead_code)]
+    /// Take all buffered items and clear the buffer.
+    pub fn drain(&self) -> Result<Vec<I>> {
+        self.buffer
+            .lock()
+            .map_err(|err| miette!("{}", err))
+            .map(|mut buf| std::mem::take(&mut *buf))
+    }
 }
 
 #[cfg(test)]

@@ -19,9 +19,9 @@ use crate::cdevent_utils::sanitize_id;
 use crate::errors::{Error, IntoDiagnostic, Result};
 use crate::transformers;
 use crate::{Message, Sender};
-use serde::Deserialize;
 use axum::Router;
 use cdevents_sdk::CDEvent;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -36,10 +36,8 @@ pub(crate) struct Config {
     enabled: bool,
     #[serde(default)]
     extractor: extractors::Config,
-    #[serde(default)]
-    transformer_refs: Vec<String>,
-    #[serde(default)]
-    pub(crate) transformers: Vec<transformers::Config>,
+    #[serde(flatten)]
+    pub(crate) chain: transformers::TransformerChainConfig,
 }
 
 impl Config {
@@ -51,13 +49,11 @@ impl Config {
         &mut self,
         configs: &HashMap<String, transformers::Config>,
     ) -> Result<()> {
-        let mut tconfigs = transformers::resolve_transformer_refs(&self.transformer_refs, configs)?;
-        self.transformers.append(&mut tconfigs);
-        Ok(())
+        self.chain.resolve(configs)
     }
 
     pub(crate) fn append_transformers(&mut self, extra: &[transformers::Config]) {
-        self.transformers.extend_from_slice(extra);
+        self.chain.append(extra);
     }
 
     pub(crate) fn inject_subprocess_exit_code_out(
@@ -80,13 +76,9 @@ pub(crate) fn make(
 ) -> Result<extractors::Extractor> {
     let mut default_source = root_url.clone();
     default_source.query_pairs_mut().append_pair("source", name);
-    let mut pipe: EventSourcePipe =
+    let terminal: EventSourcePipe =
         Box::new(send_cdevents::Processor::new(tx, default_source.to_string()));
-    let mut tconfigs = config.transformers.clone();
-    tconfigs.reverse();
-    for tconfig in tconfigs {
-        pipe = tconfig.make_transformer(pipe)?;
-    }
+    let pipe = transformers::build_transformer_chain(&config.chain.transformers, terminal)?;
     config.extractor.make_extractor(name, pipe, cancel_token, state_config)
 }
 

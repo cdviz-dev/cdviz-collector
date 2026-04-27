@@ -451,7 +451,7 @@ enabled = true
 
             let source = config.sources.get("dummy").unwrap();
             // The global passthrough transformer must be present in the source's list
-            assert!(!source.transformers.is_empty());
+            assert!(!source.chain.transformers.is_empty());
             // The pipeline-level resolved list must also contain it
             assert!(!config.pipeline.transformers.is_empty());
             Ok(())
