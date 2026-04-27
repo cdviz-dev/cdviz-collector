@@ -222,6 +222,9 @@ impl ConfigBuilder {
         config.sources.iter_mut().try_for_each(|(_name, source_config)| {
             source_config.resolve_transformers(&config.transformers)
         })?;
+        config.sinks.iter_mut().try_for_each(|(_name, sink_config)| {
+            sink_config.resolve_transformers(&config.transformers)
+        })?;
 
         // Resolve pipeline-level global transformer chain
         let global_transformers = transformers::resolve_transformer_refs(

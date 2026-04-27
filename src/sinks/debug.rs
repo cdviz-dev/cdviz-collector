@@ -89,9 +89,14 @@
 //! - **Testing**: Validating event structure and content before production deployment
 //! - **Monitoring**: Temporary event inspection without affecting production sinks
 
+use std::collections::HashMap;
+
 use super::Sink;
 use crate::Message;
 use crate::errors::{IntoDiagnostic, Report, Result};
+use crate::event::{Event, EventPipe, message_to_event};
+use crate::pipes::Pipe;
+use crate::transformers;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Default)]
@@ -122,55 +127,75 @@ pub(crate) struct Config {
     /// Output destination for debug messages
     #[serde(default)]
     pub(crate) destination: Destination,
+    #[serde(flatten)]
+    pub(crate) chain: transformers::TransformerChainConfig,
 }
 
-impl TryFrom<Config> for DebugSink {
-    type Error = Report;
-
-    fn try_from(value: Config) -> Result<Self> {
-        Ok(DebugSink { format: value.format, destination: value.destination })
+impl Config {
+    pub(crate) fn resolve_transformers(
+        &mut self,
+        configs: &HashMap<String, transformers::Config>,
+    ) -> Result<()> {
+        self.chain.resolve(configs)
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct DebugSink {
+struct DebugPipe {
     format: Format,
     destination: Destination,
 }
 
-impl Sink for DebugSink {
-    #[tracing::instrument(skip(self, msg), fields(cdevent_id = %msg.cdevent.id()))]
-    #[allow(clippy::print_stdout, clippy::disallowed_macros)]
-    async fn send(&self, msg: &Message) -> Result<()> {
+impl Pipe for DebugPipe {
+    type Input = Event;
+
+    fn send(&mut self, event: Event) -> Result<()> {
         match self.destination {
-            Destination::LogInfo => {
-                // Use compact format for logging to avoid issues with structured logging
-                match self.format {
-                    Format::RustDebug => {
-                        tracing::info!(cdevent=?msg.cdevent, "mock sending");
-                    }
-                    Format::Json => {
-                        // Use compact JSON for logging
-                        let json = serde_json::to_string(&msg.cdevent).into_diagnostic()?;
-                        tracing::info!(cdevent=%json, "mock sending");
-                    }
+            Destination::LogInfo => match self.format {
+                Format::RustDebug => {
+                    tracing::info!(event=?event, "mock sending");
                 }
-            }
-            Destination::Stdout => {
-                // Print directly to stdout with human-readable formatting, no prefix message
+                Format::Json => {
+                    let json = serde_json::to_string(&event.body).into_diagnostic()?;
+                    tracing::info!(event=%json, "mock sending");
+                }
+            },
+            Destination::Stdout =>
+            {
+                #[allow(clippy::print_stdout, clippy::disallowed_macros)]
                 match self.format {
-                    Format::RustDebug => {
-                        println!("{:#?}", msg.cdevent);
-                    }
+                    Format::RustDebug => println!("{event:#?}"),
                     Format::Json => {
-                        // Use pretty JSON for direct stdout output
-                        let json = serde_json::to_string_pretty(&msg.cdevent).into_diagnostic()?;
+                        let json = serde_json::to_string_pretty(&event.body).into_diagnostic()?;
                         println!("{json}");
                     }
                 }
             }
         }
         Ok(())
+    }
+}
+
+impl TryFrom<Config> for DebugSink {
+    type Error = Report;
+
+    fn try_from(value: Config) -> Result<Self> {
+        let terminal: EventPipe =
+            Box::new(DebugPipe { format: value.format, destination: value.destination });
+        let transformer_chain =
+            transformers::TransformerChain::try_new(&value.chain.transformers, terminal)?;
+        Ok(DebugSink { transformer_chain })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct DebugSink {
+    transformer_chain: transformers::TransformerChain,
+}
+
+impl Sink for DebugSink {
+    #[tracing::instrument(skip(self, msg), fields(cdevent_id = %msg.cdevent.id()))]
+    async fn send(&self, msg: &Message) -> Result<()> {
+        self.transformer_chain.push(message_to_event(msg)?)
     }
 }
 

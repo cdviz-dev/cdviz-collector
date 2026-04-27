@@ -17,6 +17,7 @@ mod retry;
 pub(crate) mod sse;
 
 use crate::errors::{Report, Result};
+use crate::transformers;
 use crate::{Message, Receiver};
 use axum::Router;
 #[cfg(feature = "sink_clickhouse")]
@@ -36,6 +37,7 @@ use nats::NatsSink;
 use serde::Deserialize;
 #[cfg(feature = "sink_sse")]
 use sse::SseSink;
+use std::collections::HashMap;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
 
@@ -76,6 +78,19 @@ impl Default for Config {
 }
 
 impl Config {
+    pub(crate) fn resolve_transformers(
+        &mut self,
+        configs: &HashMap<String, transformers::Config>,
+    ) -> Result<()> {
+        match self {
+            Self::Debug(c) => c.resolve_transformers(configs),
+            // Other sink variants don't have transformer_refs fields, so there is nothing to
+            // resolve. If a new variant gains transformer_refs, add it above or this arm
+            // will silently ignore configured refs.
+            _ => Ok(()),
+        }
+    }
+
     pub(crate) fn is_enabled(&self) -> bool {
         match self {
             #[cfg(feature = "sink_clickhouse")]
