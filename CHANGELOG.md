@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.35.4...0.36.0) - 2026-04-27
+
+### Added
+
+- add support for transformers chain on http sink
+- add support for transformers chain on sink debug
+
+### Fixed
+
+- *(deps)* update
+
+### Other
+
+- merge pipes module into transformers
+- prepare to use transformers chain on sink like on source
+- move `Event` out of `sources` to be shared with `sinks`
+
 ## [0.35.4](https://github.com/cdviz-dev/cdviz-collector/compare/0.35.3...0.35.4) - 2026-04-17
 
 ### Fixed
