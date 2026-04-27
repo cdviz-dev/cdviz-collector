@@ -1,5 +1,5 @@
 use crate::errors::{IntoDiagnostic, Result};
-use crate::pipes::Pipe;
+use crate::transformers::Pipe;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;

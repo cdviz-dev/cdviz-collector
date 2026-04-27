@@ -596,7 +596,7 @@ impl Parser for TextLineParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipes::collect_to_vec;
+    use crate::transformers::collect_to_vec;
     use futures::TryStreamExt;
     use std::path::Path;
 

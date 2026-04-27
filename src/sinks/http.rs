@@ -5,11 +5,11 @@ use super::Sink;
 use crate::Message;
 use crate::errors::{IntoDiagnostic, Report, Result};
 use crate::event::{Event, EventPipe, message_to_event};
-use crate::pipes::collect_to_vec;
 use crate::security::header::{
     OutgoingHeaderMap, generate_headers, outgoing_header_map_to_configs,
 };
 use crate::transformers;
+use crate::transformers::collect_to_vec;
 use opentelemetry::propagation::Injector;
 use opentelemetry::trace::TraceContextExt;
 use opentelemetry::{Context, global};

@@ -426,7 +426,7 @@ impl HttpPollingExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipes::collect_to_vec::Collector;
+    use crate::transformers::collect_to_vec::Collector;
     use std::time::Duration;
     use tokio::time::timeout;
     use tokio_util::sync::CancellationToken;

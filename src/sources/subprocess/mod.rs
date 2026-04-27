@@ -223,7 +223,7 @@ fn walk_dir(dir: &std::path::Path, matcher: &globset::GlobSet, out: &mut Vec<std
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipes::collect_to_vec::Collector;
+    use crate::transformers::collect_to_vec::Collector;
     use std::time::Duration;
     use tokio::time::timeout;
 

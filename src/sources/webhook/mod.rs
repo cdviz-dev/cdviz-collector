@@ -97,7 +97,7 @@ async fn webhook(
 
 #[cfg(test)]
 mod tests_handler {
-    use crate::pipes::collect_to_vec;
+    use crate::transformers::collect_to_vec;
 
     use super::*;
     use axum::body::Body;
@@ -173,9 +173,9 @@ mod tests_handler {
 #[allow(deprecated)]
 mod security_tests {
     use super::*;
-    use crate::pipes::collect_to_vec;
     use crate::security::rule::Rule;
     use crate::security::signature::{Encoding, SignatureConfig, SignatureOn};
+    use crate::transformers::collect_to_vec;
     use axum::body::Body;
     use axum::http::{HeaderValue, Request, StatusCode};
     use serde_json::json;

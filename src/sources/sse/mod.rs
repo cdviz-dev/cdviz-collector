@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_sse_source_state_creation() {
-        use crate::pipes::collect_to_vec::Collector;
+        use crate::transformers::collect_to_vec::Collector;
 
         let config = Config::default();
         let collector = Collector::<EventSource>::new();
@@ -238,7 +238,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sse_source_connection_failure() {
-        use crate::pipes::collect_to_vec::Collector;
+        use crate::transformers::collect_to_vec::Collector;
 
         // Test that SSE source handles connection failures gracefully
         let config = Config {
@@ -268,9 +268,9 @@ mod tests {
 #[cfg(test)]
 mod integration_tests {
     use super::*;
-    use crate::pipes::collect_to_vec::Collector;
     use crate::security::header::OutgoingHeaderMap;
     use crate::sinks::sse as sse_sink;
+    use crate::transformers::collect_to_vec::Collector;
     use axum::Router;
     use std::time::Duration;
     use tokio::net::TcpListener;
@@ -560,8 +560,8 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_sse_extractor_cancellation() {
-        use crate::pipes::collect_to_vec::Collector;
         use crate::sources::EventSource;
+        use crate::transformers::collect_to_vec::Collector;
         use tokio::time::{Duration, timeout};
         use tokio_util::sync::CancellationToken;
 

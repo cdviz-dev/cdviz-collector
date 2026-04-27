@@ -2,7 +2,7 @@ pub(crate) mod parsers;
 
 use super::{EventSource, EventSourcePipe};
 use crate::errors::{IntoDiagnostic, Result};
-use crate::pipes::Pipe;
+use crate::transformers::Pipe;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -162,7 +162,7 @@ fn extract_filename(data: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipes::collect_to_vec::Collector;
+    use crate::transformers::collect_to_vec::Collector;
     use std::io::Cursor;
 
     #[tokio::test]

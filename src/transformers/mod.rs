@@ -1,3 +1,7 @@
+pub mod collect_to_vec;
+pub(crate) mod discard_all;
+pub(crate) mod log;
+pub(crate) mod passthrough;
 #[cfg(feature = "transformer_vrl")]
 mod vrl;
 #[cfg(feature = "transformer_vrl")]
@@ -6,11 +10,31 @@ pub(crate) mod vrl_purl;
 use crate::{
     errors::{Error, IntoDiagnostic, Result, miette},
     event::{Event, EventPipe},
-    pipes::{discard_all, log, passthrough},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+
+/// A pipe is an interface to implement processor for inputs.
+///
+/// The composition of Pipes to create pipeline could be done by configuration,
+/// and the behavior of the pipe should be internal,
+/// so chaining of pipes should not depends of method `map`, `fold`, `filter`,
+/// `filter_map`, `drop`,... like for `Iterator`, `Stream`, `RxRust`.
+/// Also being able to return Error to the sender could help the Sender to ease handling (vs `Stream`)
+/// like retry, buffering, forward to its caller...
+pub trait Pipe {
+    type Input;
+
+    fn send(&mut self, input: Self::Input) -> Result<()>;
+}
+
+impl<I, T: Pipe<Input = I> + ?Sized> Pipe for Box<T> {
+    type Input = I;
+    fn send(&mut self, input: Self::Input) -> Result<()> {
+        T::send(self, input)
+    }
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(tag = "type")]
@@ -114,7 +138,7 @@ impl TransformerChain {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipes::collect_to_vec;
+    use crate::transformers::collect_to_vec;
     use serde_json::json;
 
     fn make_chain(configs: &[Config]) -> (TransformerChain, collect_to_vec::Collector<Event>) {

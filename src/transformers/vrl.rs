@@ -1,6 +1,6 @@
+use super::Pipe;
 use crate::errors::{IntoDiagnostic, Result};
 use crate::event::{Event as EventSource, EventPipe as EventSourcePipe};
-use crate::pipes::Pipe;
 use miette::{LabeledSpan, MietteDiagnostic};
 use vrl::compiler::{Program, TargetValue};
 use vrl::core::Value;
@@ -135,7 +135,7 @@ impl Pipe for Processor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipes::collect_to_vec;
+    use crate::transformers::collect_to_vec;
     use pretty_assertions::assert_eq;
 
     #[test_trace::test]

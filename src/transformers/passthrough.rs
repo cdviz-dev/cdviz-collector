@@ -30,7 +30,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::pipes::collect_to_vec::Collector;
+    use crate::transformers::collect_to_vec::Collector;
 
     use super::*;
 

@@ -5,8 +5,8 @@ use clap::{Args, ValueEnum};
 use crate::{
     config::{CONNECT_BASE_CONFIG, Config, ConfigSource, SEND_BASE_CONFIG, resolve_config_source},
     errors::{IntoDiagnostic, Result},
-    pipes::discard_all,
     sources::EventSource,
+    transformers::discard_all,
 };
 
 /// Which subcommand's base configuration to use when inspecting or validating config.

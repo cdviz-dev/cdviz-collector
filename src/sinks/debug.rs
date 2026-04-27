@@ -95,8 +95,8 @@ use super::Sink;
 use crate::Message;
 use crate::errors::{IntoDiagnostic, Report, Result};
 use crate::event::{Event, EventPipe, message_to_event};
-use crate::pipes::Pipe;
 use crate::transformers;
+use crate::transformers::Pipe;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Default)]

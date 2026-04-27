@@ -148,8 +148,8 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipes::collect_to_vec::Collector;
     use crate::sources::EventSource;
+    use crate::transformers::collect_to_vec::Collector;
     use std::time::Duration;
     use tokio::time::timeout;
 
@@ -234,8 +234,8 @@ mod tests {
 #[cfg(test)]
 mod security_tests {
     use super::*;
-    use crate::pipes::collect_to_vec::Collector;
     use crate::sources::EventSource;
+    use crate::transformers::collect_to_vec::Collector;
 
     #[tokio::test]
     async fn test_extractor_name_injection_safety() {

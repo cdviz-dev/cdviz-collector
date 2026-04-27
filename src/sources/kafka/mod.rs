@@ -245,7 +245,7 @@ impl KafkaExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipes::collect_to_vec;
+    use crate::transformers::collect_to_vec;
     use std::collections::HashMap;
 
     #[tokio::test]

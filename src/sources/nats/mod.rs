@@ -266,7 +266,7 @@ impl NatsExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipes::collect_to_vec;
+    use crate::transformers::collect_to_vec;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_nats_source_config_validation() {
