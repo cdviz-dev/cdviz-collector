@@ -1,4 +1,5 @@
 pub mod collect_to_vec;
+pub(crate) mod deduplicate;
 pub(crate) mod discard_all;
 pub(crate) mod log;
 pub(crate) mod passthrough;
@@ -44,6 +45,8 @@ pub(crate) enum Config {
     Passthrough,
     #[serde(alias = "log")]
     Log(log::Config),
+    #[serde(alias = "deduplicate")]
+    Deduplicate(deduplicate::Config),
     #[serde(alias = "discard_all")]
     DiscardAll,
     #[cfg(feature = "transformer_vrl")]
@@ -56,6 +59,7 @@ impl Config {
         let out: EventPipe = match &self {
             Config::Passthrough => Box::new(passthrough::Processor::new(next)),
             Config::Log(config) => Box::new(log::Processor::try_from(config, next)?),
+            Config::Deduplicate(config) => Box::new(deduplicate::Processor::new(config, next)),
             Config::DiscardAll => Box::new(discard_all::Processor::new()),
             #[cfg(feature = "transformer_vrl")]
             Config::Vrl { template } => Box::new(vrl::Processor::new(template, next)?),

@@ -55,6 +55,7 @@ futures-core = { version = "0.3", optional = true }
 futures-timer = { version = "3", optional = true }
 globset = "0.4"
 hmac = "0.13"
+indexmap = "2"
 humantime-serde = "1"
 init-tracing-opentelemetry = { version = "0.37", features = [
   "logfmt",

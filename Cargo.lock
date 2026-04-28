@@ -844,6 +844,7 @@ dependencies = [
  "globset",
  "hmac 0.13.0",
  "humantime-serde",
+ "indexmap 2.14.0",
  "indoc",
  "init-tracing-opentelemetry",
  "insta",

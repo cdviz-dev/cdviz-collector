@@ -73,3 +73,8 @@ target = "transformers::log"
 
 [transformers.discard_all]
 type = "discard_all"
+
+[transformers.deduplicate_on_context_id]
+type = "deduplicate"
+capacity = 10
+key_path = "/context/id"
