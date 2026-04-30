@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.36.0...0.37.0) - 2026-04-28
+
+### Added
+
+- added a deduplicate transformer pipe with FIFO key memory and JSON Pointer path config
+
 ## [0.36.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.35.4...0.36.0) - 2026-04-27
 
 ### Added
