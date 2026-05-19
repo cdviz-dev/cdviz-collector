@@ -76,7 +76,7 @@ opendal = { version = "0.55", default-features = false, features = [
   "services-s3",
   "services-sftp",
 ], optional = true }
-opentelemetry = "0.31"
+opentelemetry = "0.32"
 packageurl = "0.6"
 pin-project-lite = { version = "0.2", optional = true }
 quick-xml-to-json = "0.2"
@@ -123,7 +123,7 @@ tower-http = { version = "0.6", features = [
   "validate-request",
 ] }
 tracing = "0.1"
-tracing-opentelemetry = "0.32"
+tracing-opentelemetry = "0.33"
 tracing-opentelemetry-instrumentation-sdk = { version = "0.32" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 url = "2.5.7"
