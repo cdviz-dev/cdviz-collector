@@ -24,7 +24,7 @@ path = "src/main.rs"
 [dependencies]
 async-nats = { version = "0.48", optional = true }
 axum = "0.8"
-axum-tracing-opentelemetry = "0.33"
+axum-tracing-opentelemetry = "0.38"
 base64 = "0.22"
 bytes = { version = "1", optional = true }
 cdevents-sdk = { version = "0.3", features = ["cloudevents"] }
@@ -57,7 +57,7 @@ globset = "0.4"
 hmac = "0.13"
 indexmap = "2"
 humantime-serde = "1"
-init-tracing-opentelemetry = { version = "0.37", features = [
+init-tracing-opentelemetry = { version = "0.38", features = [
   "logfmt",
   "otlp",
   "tracing_subscriber_ext",
@@ -77,7 +77,6 @@ opendal = { version = "0.56", default-features = false, features = [
   "services-s3",
   "services-sftp",
 ], optional = true }
-opentelemetry = "0.31"
 packageurl = "0.6"
 pin-project-lite = { version = "0.2", optional = true }
 quick-xml-to-json = "0.2"
@@ -124,8 +123,7 @@ tower-http = { version = "0.6", features = [
   "validate-request",
 ] }
 tracing = "0.1"
-tracing-opentelemetry = "0.32"
-tracing-opentelemetry-instrumentation-sdk = { version = "0.32" }
+tracing-opentelemetry-instrumentation-sdk = { version = "0.38" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 url = "2.5.7"
 uuid = { version = "1", optional = true }

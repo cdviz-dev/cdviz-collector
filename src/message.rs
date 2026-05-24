@@ -4,8 +4,8 @@
 //! including message structure, trace context, and channel types.
 
 use cdevents_sdk::CDEvent;
-use opentelemetry::trace::{SpanId, TraceContextExt, TraceId};
-use tracing_opentelemetry::OpenTelemetrySpanExt;
+use init_tracing_opentelemetry::opentelemetry::trace::{SpanId, TraceContextExt, TraceId};
+use init_tracing_opentelemetry::tracing_opentelemetry::OpenTelemetrySpanExt;
 
 pub(crate) type Sender<T> = tokio::sync::broadcast::Sender<T>;
 pub(crate) type Receiver<T> = tokio::sync::broadcast::Receiver<T>;

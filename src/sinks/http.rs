@@ -10,9 +10,9 @@ use crate::security::header::{
 };
 use crate::transformers;
 use crate::transformers::collect_to_vec;
-use opentelemetry::propagation::Injector;
-use opentelemetry::trace::TraceContextExt;
-use opentelemetry::{Context, global};
+use init_tracing_opentelemetry::opentelemetry::propagation::Injector;
+use init_tracing_opentelemetry::opentelemetry::trace::TraceContextExt;
+use init_tracing_opentelemetry::opentelemetry::{Context, global};
 use reqwest::Url;
 use reqwest::header::CONTENT_TYPE;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
@@ -203,7 +203,9 @@ fn add_trace_context_headers(
 ) -> RequestBuilder {
     if let Some(trace_ctx) = trace_context {
         // Create OpenTelemetry context with trace information
-        use opentelemetry::trace::{SpanContext, TraceFlags, TraceState};
+        use init_tracing_opentelemetry::opentelemetry::trace::{
+            SpanContext, TraceFlags, TraceState,
+        };
 
         let span_context = SpanContext::new(
             trace_ctx.trace_id,
