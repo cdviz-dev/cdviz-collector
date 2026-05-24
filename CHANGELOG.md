@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.38.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.37.0...0.38.0) - 2026-05-24
+
+### Fixed
+
+- *(deps)* update opentelemetry
+- *(deps)* update opendal to 0.56
+- *(deps)* update sqlx to 0.9
+- *(deps)* update rust crate async-nats to 0.48 ([#348](https://github.com/cdviz-dev/cdviz-collector/pull/348))
+
+### Other
+
+- [**breaking**] disable mega-linter
+- *(deps)* update rust crate serde_with to v3.20.0 ([#351](https://github.com/cdviz-dev/cdviz-collector/pull/351))
+- *(deps)* update rust crate serde_with to v3.19.0 ([#347](https://github.com/cdviz-dev/cdviz-collector/pull/347))
+
 ## [0.37.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.36.0...0.37.0) - 2026-04-28
 
 ### Added
