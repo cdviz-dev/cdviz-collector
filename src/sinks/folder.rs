@@ -1,18 +1,15 @@
 use super::Sink;
 use crate::Message;
 use crate::errors::{IntoDiagnostic, Report, Result};
-use opendal::{Operator, Scheme};
+use opendal::Operator;
 use serde::{Deserialize, Serialize};
-use serde_with::{DisplayFromStr, serde_as};
 use std::collections::HashMap;
 
-#[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub(crate) struct Config {
     /// Is the sink is enabled?
     pub(crate) enabled: bool,
-    #[serde_as(as = "DisplayFromStr")]
-    kind: Scheme,
+    kind: String,
     parameters: HashMap<String, String>,
 }
 
@@ -20,7 +17,7 @@ impl TryFrom<Config> for FolderSink {
     type Error = Report;
 
     fn try_from(value: Config) -> Result<Self> {
-        let op = Operator::via_iter(value.kind, value.parameters.clone()).into_diagnostic()?;
+        let op = Operator::via_iter(&value.kind, value.parameters.clone()).into_diagnostic()?;
         Ok(Self { op })
     }
 }
@@ -68,7 +65,7 @@ mod tests {
         let tmp_dir = tempfile::tempdir().unwrap();
         let config = Config {
             enabled: true,
-            kind: Scheme::Fs,
+            kind: "fs".to_string(),
             parameters: HashMap::from([(
                 "root".to_string(),
                 tmp_dir.path().to_string_lossy().to_string(),

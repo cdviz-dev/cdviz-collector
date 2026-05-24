@@ -91,7 +91,6 @@ use crate::{
 };
 use cdevents_sdk::CDEvent;
 use clap::{Args, ValueEnum};
-use opendal::Scheme;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -316,7 +315,7 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
     }
     let config_extractor = source_opendal::Config {
         polling_interval: std::time::Duration::ZERO,
-        kind: Scheme::Fs,
+        kind: "fs".to_string(),
         parameters: HashMap::from([("root".to_string(), args.input.to_string_lossy().to_string())]),
         recursive: true,
         path_patterns: args.parser.path_patterns(),

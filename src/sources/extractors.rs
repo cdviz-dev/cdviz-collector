@@ -192,7 +192,7 @@ mod tests {
 
         let config = Config::Opendal(opendal::Config {
             polling_interval: std::time::Duration::from_secs(10),
-            kind: ::opendal::Scheme::Fs,
+            kind: "fs".to_string(),
             parameters: std::collections::HashMap::new(), // Invalid - missing required params
             recursive: false,
             path_patterns: Vec::new(),

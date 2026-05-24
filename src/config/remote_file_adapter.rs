@@ -5,9 +5,9 @@ use figment::{
     error::{Error as FigmentError, Kind as ErrorKind},
     value::{Dict, Map, Value},
 };
-use opendal::{Operator, Scheme};
+use opendal::Operator;
 use serde::Deserialize;
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 
 /// Error type for remote file adapter operations
 #[derive(Debug, derive_more::Display, derive_more::Error)]
@@ -18,9 +18,6 @@ pub enum RemoteFileError {
     /// Remote configuration not found
     #[display("Remote configuration '{}' not found", _0)]
     RemoteNotFound(#[error(ignore)] String),
-    /// Invalid `OpenDAL` scheme
-    #[display("Invalid OpenDAL scheme '{}'", _0)]
-    InvalidScheme(#[error(ignore)] String),
     /// `OpenDAL` operation failed
     #[display("OpenDAL operation failed: {}", _0)]
     OpenDalError(opendal::Error),
@@ -206,13 +203,9 @@ impl<T: Provider> RemoteFileAdapter<T> {
 
     /// Read a file from a remote using `OpenDAL`
     fn read_remote_file(remote_config: &RemoteConfig, path: &str) -> Result<String> {
-        // Parse the scheme
-        let scheme = Scheme::from_str(&remote_config.service_type).map_err(|e| {
-            RemoteFileError::InvalidScheme(format!("{}: {e}", remote_config.service_type))
-        })?;
-
         // Create `OpenDAL` operator
-        let operator = Operator::via_iter(scheme, remote_config.parameters.clone())?;
+        let operator =
+            Operator::via_iter(&remote_config.service_type, remote_config.parameters.clone())?;
 
         // Read the file content
         // Clone path for error reporting

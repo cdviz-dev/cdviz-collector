@@ -8,23 +8,20 @@ use self::resource::Resource;
 use super::EventSourcePipe;
 use crate::errors::{IntoDiagnostic, Result};
 use futures::TryStreamExt;
-use opendal::{Operator, Scheme};
+use opendal::Operator;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_with::{DisplayFromStr, serde_as};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
-#[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct Config {
     #[serde(with = "humantime_serde")]
     pub(crate) polling_interval: Duration,
-    #[serde_as(as = "DisplayFromStr")]
-    pub(crate) kind: Scheme,
+    pub(crate) kind: String,
     pub(crate) parameters: HashMap<String, String>,
     pub(crate) recursive: bool,
     pub(crate) path_patterns: Vec<String>,
@@ -56,7 +53,7 @@ impl OpendalExtractor {
         source_name: String,
     ) -> Result<Self> {
         let op: Operator =
-            Operator::via_iter(config.kind, config.parameters.clone()).into_diagnostic()?;
+            Operator::via_iter(&config.kind, config.parameters.clone()).into_diagnostic()?;
         let filter = Filter::from_patterns(FilePatternMatcher::from(&config.path_patterns)?);
         let parser = config.parser.make_parser(config.metadata.clone(), next)?;
         let try_read_headers_json = config.try_read_headers_json;

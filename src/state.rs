@@ -23,9 +23,7 @@ impl Default for Config {
 impl Config {
     pub(crate) fn make_operator(&self) -> crate::errors::Result<opendal::Operator> {
         use crate::errors::IntoDiagnostic;
-        use std::str::FromStr;
-        let scheme = opendal::Scheme::from_str(&self.kind).into_diagnostic()?;
-        opendal::Operator::via_iter(scheme, self.parameters.clone()).into_diagnostic()
+        opendal::Operator::via_iter(&self.kind, self.parameters.clone()).into_diagnostic()
     }
 }
 
