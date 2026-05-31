@@ -139,13 +139,15 @@ pub(crate) struct SendArgs {
     #[clap(long = "config-header")]
     config_headers: Vec<String>,
 
-    /// Override individual config key/value pairs.
+    /// Override config with a raw TOML fragment. Can be repeated; fragments are concatenated.
     ///
-    /// Format: `key=value`. Can be repeated.
-    /// Values are auto-typed: `true`/`false` → bool, integers → int, decimals → float,
-    /// everything else → quoted string.
+    /// Each value must be valid TOML (booleans, integers, arrays, and inline tables work
+    /// unquoted; strings must be quoted).
     ///
-    /// Example: `--set sinks.http.enabled=true --set sinks.http.destination=http://...`
+    /// Examples:
+    /// - `--set sinks.http.enabled=true`
+    /// - `--set 'sinks.http.destination="http://..."'`
+    /// - `--set 'sources.cli.transformer_refs=["my_transformer"]'`
     #[clap(long = "set")]
     set: Vec<String>,
 
@@ -563,6 +565,26 @@ mod tests {
         assert!(
             !out.contains("log_full_response_on_error"),
             "Flag should be absent when not set, got:\n{out}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_load_config_with_transformer_ref_and_parser_via_set() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg_path = dir.path().join("t.toml");
+        std::fs::write(&cfg_path, "[transformers.my_t]\ntype = \"passthrough\"\n").unwrap();
+
+        let args = SendArgs {
+            config: Some(ConfigSource::File(cfg_path)),
+            set: vec![r#"sources.cli.transformer_refs=["my_t"]"#.to_string()],
+            parser: ParserSelection::Json,
+            ..default_args()
+        };
+        let config = load_config(&args).await.unwrap();
+        let cli_src = config.sources.get("cli").unwrap();
+        assert!(
+            !cli_src.chain.transformers.is_empty(),
+            "transformer chain should be non-empty after --set"
         );
     }
 

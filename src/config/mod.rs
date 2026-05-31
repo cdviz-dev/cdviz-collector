@@ -337,37 +337,13 @@ pub(crate) async fn resolve_config_source(
 
 /// Convert `key=value` pairs into TOML dotted-key lines.
 fn keyvalue_to_toml(kvs: &[String]) -> Result<String> {
-    use std::fmt::Write as _;
-    let mut out = String::new();
-    for kv in kvs {
-        let (key, raw) = kv
-            .split_once('=')
-            .ok_or_else(|| miette::miette!("invalid --set '{kv}': expected 'key=value' format"))?;
-        let toml_val = infer_toml_value(raw);
-        writeln!(&mut out, "{} = {}", key.trim(), toml_val).into_diagnostic()?;
+    if kvs.is_empty() {
+        return Ok(String::new());
     }
+    let out = kvs.join("\n");
+    toml::from_str::<toml::Value>(&out)
+        .map_err(|e| miette::miette!("invalid --set TOML fragment: {e}"))?;
     Ok(out)
-}
-
-fn infer_toml_value(raw: &str) -> String {
-    let trimmed = raw.trim();
-    if trimmed.eq_ignore_ascii_case("true") {
-        "true".to_string()
-    } else if trimmed.eq_ignore_ascii_case("false") {
-        "false".to_string()
-    } else if trimmed.parse::<i64>().is_ok() || trimmed.parse::<f64>().is_ok() {
-        trimmed.to_string()
-    } else {
-        format!("\"{}\"", escape_toml_string(raw))
-    }
-}
-
-fn escape_toml_string(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t")
 }
 
 #[cfg(test)]
@@ -393,7 +369,7 @@ mod tests {
         // Keys with dashes are the primary motivation: env vars can't express them.
         // We only verify parsing succeeds (config won't have a "my-source" unless defined).
         let toml = keyvalue_to_toml(&["sources.my-source.enabled=false".to_string()]).unwrap();
-        assert!(toml.contains("sources.my-source.enabled = false"));
+        assert!(toml.contains("sources.my-source.enabled=false"));
     }
 
     #[test]
@@ -403,14 +379,36 @@ mod tests {
             "http.timeout=2.5".to_string(),
         ])
         .unwrap();
-        assert!(toml.contains("pipeline.max_retries = 5"));
-        assert!(toml.contains("http.timeout = 2.5"));
+        assert!(toml.contains("pipeline.max_retries=5"));
+        assert!(toml.contains("http.timeout=2.5"));
     }
 
     #[test]
-    fn keyvalue_to_toml_string_with_equals_in_value() {
-        let toml = keyvalue_to_toml(&["sources.foo.url=http://x.com?a=1&b=2".to_string()]).unwrap();
-        assert!(toml.contains(r#"sources.foo.url = "http://x.com?a=1&b=2""#));
+    fn keyvalue_to_toml_string_requires_quotes() {
+        // Unquoted URL is invalid TOML — user must quote strings
+        assert!(keyvalue_to_toml(&[r"sources.foo.url=http://x.com?a=1&b=2".to_string()]).is_err());
+        // Quoted URL is valid
+        let toml =
+            keyvalue_to_toml(&[r#"sources.foo.url="http://x.com?a=1&b=2""#.to_string()]).unwrap();
+        assert!(toml.contains(r#"sources.foo.url="http://x.com?a=1&b=2""#));
+    }
+
+    #[test]
+    fn keyvalue_to_toml_array_value() {
+        let toml = keyvalue_to_toml(&[r#"sources.cli.transformer_refs=["foo","bar"]"#.to_string()])
+            .unwrap();
+        assert!(toml.contains(r#"sources.cli.transformer_refs=["foo","bar"]"#));
+    }
+
+    #[test]
+    fn keyvalue_to_toml_multiline() {
+        let toml = keyvalue_to_toml(&[
+            "sinks.debug.enabled=true".to_string(),
+            "sinks.http.enabled=false".to_string(),
+        ])
+        .unwrap();
+        assert!(toml.contains("sinks.debug.enabled=true"));
+        assert!(toml.contains("sinks.http.enabled=false"));
     }
 
     #[test]
@@ -419,7 +417,7 @@ mod tests {
     }
 
     #[test]
-    fn keyvalue_to_toml_missing_equals_is_error() {
+    fn keyvalue_to_toml_invalid_fragment_is_error() {
         assert!(keyvalue_to_toml(&["no-equals-sign".to_string()]).is_err());
     }
 
