@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.39.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.38.0...0.39.0) - 2026-05-31
+
+### Added
+
+- *(sources)* unify parsers and add jsonl/csv_row to CLI source ([#358](https://github.com/cdviz-dev/cdviz-collector/pull/358))
+
+### Fixed
+
+- *(deps)* update rust crate vrl to 0.33 ([#357](https://github.com/cdviz-dev/cdviz-collector/pull/357))
+- *(deps)* update rust crate async-nats to 0.49 ([#354](https://github.com/cdviz-dev/cdviz-collector/pull/354))
+
+### Other
+
+- *(deps)* update dependency rust to v1.96.0 ([#356](https://github.com/cdviz-dev/cdviz-collector/pull/356))
+
 ## [0.38.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.37.0...0.38.0) - 2026-05-24
 
 ### Fixed
