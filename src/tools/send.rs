@@ -174,6 +174,8 @@ pub(crate) struct SendArgs {
     /// Supported formats:
     /// - auto: Auto-detect format based on file extension (default)
     /// - json: Parse as JSON
+    /// - jsonl: Parse as JSONL (one event per non-empty line)
+    /// - csv-row: Parse as CSV (one event per data row, headers as keys; requires `parser_csv_row` feature)
     /// - xml: Parse as XML (requires `parser_xml` feature)
     /// - yaml: Parse as YAML (requires `parser_yaml` feature)
     /// - tap: Parse as TAP format (requires `parser_tap` feature)
@@ -219,6 +221,11 @@ enum ParserSelection {
     Auto,
     /// Parse as JSON
     Json,
+    /// Parse as JSONL (one event per non-empty line)
+    Jsonl,
+    /// Parse as CSV (one event per data row, headers as keys)
+    #[cfg(feature = "parser_csv_row")]
+    CsvRow,
     /// Parse as XML
     #[cfg(feature = "parser_xml")]
     Xml,
@@ -239,6 +246,9 @@ impl From<ParserSelection> for parsers::Config {
         match selection {
             ParserSelection::Auto => parsers::Config::Auto,
             ParserSelection::Json => parsers::Config::Json,
+            ParserSelection::Jsonl => parsers::Config::Jsonl,
+            #[cfg(feature = "parser_csv_row")]
+            ParserSelection::CsvRow => parsers::Config::CsvRow,
             #[cfg(feature = "parser_xml")]
             ParserSelection::Xml => parsers::Config::Xml,
             #[cfg(feature = "parser_yaml")]
@@ -379,6 +389,10 @@ fn convert_args_into_toml(args: &SendArgs) -> Result<String> {
     let parser_str = match args.parser.clone().into() {
         parsers::Config::Auto => "auto",
         parsers::Config::Json => "json",
+        parsers::Config::Jsonl => "jsonl",
+        #[cfg(feature = "parser_csv_row")]
+        parsers::Config::CsvRow => "csv_row",
+        parsers::Config::Metadata => "metadata",
         #[cfg(feature = "parser_xml")]
         parsers::Config::Xml => "xml",
         #[cfg(feature = "parser_yaml")]

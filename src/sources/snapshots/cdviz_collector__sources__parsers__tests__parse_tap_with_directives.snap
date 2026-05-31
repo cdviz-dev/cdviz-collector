@@ -1,23 +1,27 @@
 ---
-source: src/sources/format_converters.rs
+source: src/sources/parsers.rs
 expression: result
 ---
 plan:
   end: 3
   start: 1
 tests:
-  - description: First test
+  - description: Normal test
     directive: ~
     number: 1
     status: ok
     yaml_diagnostics: ~
-  - description: Second test
-    directive: ~
+  - description: Skipped
+    directive:
+      kind: SKIP
+      reason: not implemented
     number: 2
     status: ok
     yaml_diagnostics: ~
-  - description: Third test
-    directive: ~
+  - description: Known issue
+    directive:
+      kind: TODO
+      reason: fix later
     number: 3
     status: not_ok
     yaml_diagnostics: ~

@@ -1,5 +1,6 @@
-use std::{collections::HashMap, io::BufRead};
+use std::io::BufRead;
 
+use super::Resource;
 use crate::{
     errors::{Error, IntoDiagnostic, Result},
     sources::{EventSource, EventSourcePipe},
@@ -7,37 +8,8 @@ use crate::{
 use bytes::Buf;
 use enum_dispatch::enum_dispatch;
 use opendal::Operator;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
 
-use super::Resource;
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub(crate) enum Config {
-    #[serde(alias = "auto")]
-    Auto,
-    #[serde(alias = "csv_row")]
-    CsvRow,
-    #[serde(alias = "json")]
-    Json,
-    #[serde(alias = "jsonl")]
-    Jsonl,
-    #[serde(alias = "metadata")]
-    Metadata,
-    #[cfg(feature = "parser_xml")]
-    #[serde(alias = "xml")]
-    Xml,
-    #[cfg(feature = "parser_yaml")]
-    #[serde(alias = "yaml")]
-    Yaml,
-    #[cfg(feature = "parser_tap")]
-    #[serde(alias = "tap")]
-    Tap,
-    #[serde(alias = "text")]
-    Text,
-    #[serde(alias = "text_line")]
-    TextLine,
-}
+pub(crate) use crate::sources::parsers::Config;
 
 impl Config {
     #[allow(clippy::unnecessary_wraps)]
@@ -48,6 +20,7 @@ impl Config {
     ) -> Result<ParserEnum> {
         let out = match self {
             Config::Auto => AutoParser::new(base_metadata, next).into(),
+            #[cfg(feature = "parser_csv_row")]
             Config::CsvRow => CsvRowParser::new(base_metadata, next).into(),
             Config::Json => JsonParser::new(base_metadata, next).into(),
             Config::Jsonl => JsonlParser::new(base_metadata, next).into(),
@@ -69,6 +42,7 @@ impl Config {
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum ParserEnum {
     AutoParser,
+    #[cfg(feature = "parser_csv_row")]
     CsvRowParser,
     JsonParser,
     JsonlParser,
@@ -132,16 +106,16 @@ impl Parser for AutoParser {
     async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
         use std::io::Read;
 
-        // Detect format from file extension
         let path_str = resource.path();
-        let extension = std::path::Path::new(path_str).extension().and_then(|e| e.to_str());
+        let ext_lower = std::path::Path::new(path_str)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_ascii_lowercase);
 
-        // Read file data once
         let bytes = op.read(path_str).await.into_diagnostic()?;
         let resource_metadata = resource.as_json_metadata();
         let headers = resource.as_headers();
 
-        // Merge base_metadata with resource metadata
         let mut metadata = self.base_metadata.clone();
         if let (Some(base_obj), Some(resource_obj)) =
             (metadata.as_object_mut(), resource_metadata.as_object())
@@ -151,8 +125,7 @@ impl Parser for AutoParser {
             }
         }
 
-        // Parse based on extension
-        match extension {
+        match ext_lower.as_deref() {
             Some("json") => {
                 let mut buf = String::new();
                 bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
@@ -178,17 +151,22 @@ impl Parser for AutoParser {
                 }
                 Ok(())
             }
+            #[cfg(feature = "parser_csv_row")]
             Some("csv") => {
                 use csv::Reader;
                 let mut rdr = Reader::from_reader(bytes.reader());
                 let csv_headers = rdr.headers().into_diagnostic()?.clone();
                 for record in rdr.records() {
                     let record = record.into_diagnostic()?;
-                    let body = json!(
-                        csv_headers.iter().zip(record.iter()).collect::<HashMap<&str, &str>>()
-                    );
-                    let event =
-                        EventSource { metadata: metadata.clone(), headers: headers.clone(), body };
+                    let mut map = serde_json::Map::with_capacity(csv_headers.len());
+                    for (h, v) in csv_headers.iter().zip(record.iter()) {
+                        map.insert(h.to_string(), serde_json::Value::String(v.to_string()));
+                    }
+                    let event = EventSource {
+                        metadata: metadata.clone(),
+                        headers: headers.clone(),
+                        body: serde_json::Value::Object(map),
+                    };
                     self.next.send(event)?;
                 }
                 Ok(())
@@ -197,7 +175,7 @@ impl Parser for AutoParser {
             Some("xml") => {
                 let mut buf = String::new();
                 bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
-                let body = super::super::format_converters::parse_xml(&buf)?;
+                let body = crate::sources::parsers::parse_xml(&buf)?;
                 let event = EventSource { metadata, headers, body };
                 self.next.send(event)
             }
@@ -205,7 +183,7 @@ impl Parser for AutoParser {
             Some("yaml" | "yml") => {
                 let mut buf = String::new();
                 bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
-                let body = super::super::format_converters::parse_yaml(&buf)?;
+                let body = crate::sources::parsers::parse_yaml(&buf)?;
                 let event = EventSource { metadata, headers, body };
                 self.next.send(event)
             }
@@ -213,14 +191,14 @@ impl Parser for AutoParser {
             Some("tap") => {
                 let mut buf = String::new();
                 bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
-                let body = super::super::format_converters::parse_tap(&buf)?;
+                let body = crate::sources::parsers::parse_tap(&buf)?;
                 let event = EventSource { metadata, headers, body };
                 self.next.send(event)
             }
             Some("txt") => {
                 let mut buf = String::new();
                 bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
-                let body = super::super::format_converters::parse_text(&buf);
+                let body = crate::sources::parsers::parse_text(&buf);
                 let event = EventSource { metadata, headers, body };
                 self.next.send(event)
             }
@@ -230,7 +208,7 @@ impl Parser for AutoParser {
                 while reader.read_line(&mut buf).into_diagnostic()? > 0 {
                     let line = buf.trim_end_matches('\n').trim_end_matches('\r');
                     if !line.is_empty() {
-                        let body = super::super::format_converters::parse_text(line);
+                        let body = crate::sources::parsers::parse_text(line);
                         let event = EventSource {
                             metadata: metadata.clone(),
                             headers: headers.clone(),
@@ -336,17 +314,20 @@ impl Parser for JsonlParser {
     }
 }
 
+#[cfg(feature = "parser_csv_row")]
 pub(crate) struct CsvRowParser {
     base_metadata: serde_json::Value,
     next: EventSourcePipe,
 }
 
+#[cfg(feature = "parser_csv_row")]
 impl CsvRowParser {
     fn new(base_metadata: serde_json::Value, next: EventSourcePipe) -> Self {
         Self { base_metadata, next }
     }
 }
 
+#[cfg(feature = "parser_csv_row")]
 impl Parser for CsvRowParser {
     async fn parse(&mut self, op: &Operator, resource: &Resource) -> Result<()> {
         use csv::Reader;
@@ -369,9 +350,15 @@ impl Parser for CsvRowParser {
 
         for record in rdr.records() {
             let record = record.into_diagnostic()?;
-            let body =
-                json!(csv_headers.iter().zip(record.iter()).collect::<HashMap<&str, &str>>());
-            let event = EventSource { metadata: metadata.clone(), headers: headers.clone(), body };
+            let mut map = serde_json::Map::with_capacity(csv_headers.len());
+            for (h, v) in csv_headers.iter().zip(record.iter()) {
+                map.insert(h.to_string(), serde_json::Value::String(v.to_string()));
+            }
+            let event = EventSource {
+                metadata: metadata.clone(),
+                headers: headers.clone(),
+                body: serde_json::Value::Object(map),
+            };
             self.next.send(event)?;
         }
         Ok(())
@@ -406,7 +393,7 @@ impl Parser for XmlParser {
         bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
 
         // Convert XML to JSON using shared format converter
-        let body = super::super::format_converters::parse_xml(&buf)?;
+        let body = crate::sources::parsers::parse_xml(&buf)?;
 
         // Merge base_metadata with resource metadata
         let mut metadata = self.base_metadata.clone();
@@ -451,7 +438,7 @@ impl Parser for YamlParser {
         bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
 
         // Convert YAML to JSON using shared format converter
-        let body = super::super::format_converters::parse_yaml(&buf)?;
+        let body = crate::sources::parsers::parse_yaml(&buf)?;
 
         // Merge base_metadata with resource metadata
         let mut metadata = self.base_metadata.clone();
@@ -496,7 +483,7 @@ impl Parser for TapParser {
         bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
 
         // Convert TAP to JSON using shared format converter
-        let body = super::super::format_converters::parse_tap(&buf)?;
+        let body = crate::sources::parsers::parse_tap(&buf)?;
 
         // Merge base_metadata with resource metadata
         let mut metadata = self.base_metadata.clone();
@@ -535,7 +522,7 @@ impl Parser for TextParser {
         let mut buf = String::new();
         bytes.reader().read_to_string(&mut buf).into_diagnostic()?;
 
-        let body = super::super::format_converters::parse_text(&buf);
+        let body = crate::sources::parsers::parse_text(&buf);
 
         let mut metadata = self.base_metadata.clone();
         if let (Some(base_obj), Some(resource_obj)) =
@@ -582,7 +569,7 @@ impl Parser for TextLineParser {
         while reader.read_line(&mut buf).into_diagnostic()? > 0 {
             let line = buf.trim_end_matches('\n').trim_end_matches('\r');
             if !line.is_empty() {
-                let body = super::super::format_converters::parse_text(line);
+                let body = crate::sources::parsers::parse_text(line);
                 let event =
                     EventSource { metadata: metadata.clone(), headers: headers.clone(), body };
                 self.next.send(event)?;
@@ -727,6 +714,7 @@ mod tests {
     // ── CsvRowParser ─────────────────────────────────────────────────────────
 
     #[tokio::test]
+    #[cfg(feature = "parser_csv_row")]
     async fn csv_row_parser_emits_one_event_per_data_row() {
         let (op, resource) = make_op_and_resource("cdevents.csv").await;
         let collector = collect_to_vec::Collector::<EventSource>::new();
@@ -745,6 +733,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "parser_csv_row")]
     async fn csv_row_parser_maps_headers_to_keys() {
         let content = b"name,age\nAlice,30\nBob,25\n";
         let (_dir, op, resource) = make_tmp_op_and_resource("data.csv", content).await;

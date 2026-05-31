@@ -1,6 +1,5 @@
 pub(crate) mod cli;
 pub(crate) mod extractors;
-pub(crate) mod format_converters;
 #[cfg(feature = "source_http_polling")]
 pub(crate) mod http_polling;
 #[cfg(feature = "source_kafka")]
@@ -9,6 +8,7 @@ pub(crate) mod kafka;
 pub(crate) mod nats;
 #[cfg(feature = "source_opendal")]
 pub(crate) mod opendal;
+pub(crate) mod parsers;
 pub(crate) mod send_cdevents;
 #[cfg(feature = "source_sse")]
 pub(crate) mod sse;

@@ -186,7 +186,8 @@ http_client = [
   "reqwest/rustls",
 ]
 #! ### Parsers
-parser_all = ["parser_tap", "parser_xml", "parser_yaml"]
+parser_all = ["parser_csv_row", "parser_tap", "parser_xml", "parser_yaml"]
+parser_csv_row = ["dep:csv"]
 parser_tap = ["dep:nom", "parser_yaml"]
 parser_xml = []
 parser_yaml = ["dep:serde_yaml"]
@@ -245,7 +246,7 @@ source_default = [
 source_http_polling = ["http_client", "transformer_vrl"]
 source_kafka = ["dep:rdkafka"]
 source_nats = ["dep:async-nats"]
-source_opendal = ["dep:bytes", "dep:csv", "dep:opendal", "state"]
+source_opendal = ["dep:bytes", "dep:opendal", "state"]
 source_sse = ["dep:uuid", "reqwest-eventsource"]
 #! ### Persist state (for sources,...)
 state = ["dep:opendal"]
