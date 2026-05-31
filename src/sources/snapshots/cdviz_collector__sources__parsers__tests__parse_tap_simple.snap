@@ -1,9 +1,9 @@
 ---
-source: src/sources/format_converters.rs
+source: src/sources/parsers.rs
 expression: result
 ---
 plan:
-  end: 2
+  end: 3
   start: 1
 tests:
   - description: First test
@@ -15,5 +15,10 @@ tests:
     directive: ~
     number: 2
     status: ok
+    yaml_diagnostics: ~
+  - description: Third test
+    directive: ~
+    number: 3
+    status: not_ok
     yaml_diagnostics: ~
 version: 14
