@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.39.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.39.0...0.39.1) - 2026-05-31
+
+### Fixed
+
+- *(deps)* update
+- *(config)* accept raw TOML fragments in --set
+- *(config)* support opendal 0.56 github service in remote_file_adapter
+
 ## [0.39.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.38.0...0.39.0) - 2026-05-31
 
 ### Added
