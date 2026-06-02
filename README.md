@@ -24,9 +24,9 @@
 **Sources**
 
 - Push (inbound): HTTP webhook, HTTP SSE, Kafka, NATS
-- Pull (polling): File system, S3, GitHub, HTTP polling (any REST/JSON API — Jenkins, Jira, custom web APIs, …)
+- Pull (polling): File system, S3, `HTTP` polling (any REST/JSON API — `Jenkins`, `Jira`, custom web APIs, …)
 
-**Sinks**: HTTP webhook · HTTP SSE · File system · Kafka · NATS · PostgreSQL · ClickHouse
+**Sinks**: `HTTP` webhook · `HTTP` SSE · File system · `Kafka` · `NATS` · `PostgreSQL` · `ClickHouse`
 
 **Parsers**: `JSON` · `JSONL` · `CSV` · `XML` · `YAML` · `TAP` · `text` / `text_line`
 
@@ -36,10 +36,10 @@
 
 ## Use Cases
 
-- **Capture CI/CD pipeline events** from GitHub Actions, GitLab CI, Jenkins → normalized CDEvents
+- **Capture CI/CD pipeline events** from GitHub Actions, GitLab CI, Jenkins → normalized `CDEvents`
 - **Wrap test commands** — emit `testsuiterun` started/finished events with JUnit/TAP/SARIF results
-- **Poll REST APIs** (Jenkins, Jira, any HTTP endpoint) and forward changes as CDEvents
-- **Bridge message streams** — consume Kafka/NATS topics, re-publish as CDEvents to PostgreSQL or ClickHouse
+- **Poll REST APIs** (Jenkins, Jira, any HTTP endpoint) and forward changes as `CDEvents`
+- **Bridge message streams** — consume Kafka/NATS topics, re-publish as `CDEvents` to `PostgreSQL` or `ClickHouse`
 - **Observe deployments & artifacts** — track environment changes and artifact publications
 - **Feed [CDviz](https://cdviz.dev) dashboards** with normalized SDLC telemetry
 
@@ -151,7 +151,7 @@ See [connect docs](https://cdviz.dev/docs/cdviz-collector/connect).
 
 ### `send` — One-Shot or Wrap a Command
 
-Send JSON directly to a sink, or wrap a command to emit lifecycle CDEvents automatically.
+Send JSON directly to a sink, or wrap a command to emit lifecycle `CDEvents` automatically.
 
 ```bash
 # Send raw JSON
@@ -164,7 +164,7 @@ cdviz-collector send --run testsuiterun-junit -- pytest --junitxml=report.xml
 cdviz-collector send --run taskrun -- ./deploy.sh
 ```
 
-`--run` captures exit code and output artifacts, then emits lifecycle CDEvents (started → finished). Built-in run types: `testsuiterun-junit`, `testsuiterun-tap`, `taskrun`.
+`--run` captures exit code and output artifacts, then emits lifecycle `CDEvents` (started → finished). Built-in run types: `testsuiterun-junit`, `testsuiterun-tap`, `taskrun`.
 
 See [send docs](https://cdviz.dev/docs/cdviz-collector/send).
 
@@ -184,12 +184,12 @@ For all options: `cdviz-collector --help` or `cdviz-collector <command> --help`.
 
 ## Related Projects
 
-| Project                                                     | Role                                                                        |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------- |
-| [CDviz](https://cdviz.dev)                                  | SDLC observability dashboard — consumes CDEvents produced by this collector |
-| [send-cdevents](https://github.com/cdviz-dev/send-cdevents) | GitHub Action wrapping `cdviz-collector send`                               |
-| [CDEvents spec](https://cdevents.dev)                       | CloudEvents-based open standard for SDLC events                             |
-| [VRL](https://vector.dev/docs/reference/vrl/)               | Transformation language used by transformers                                |
+| Project                                                     | Role                                                                          |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [CDviz](https://cdviz.dev)                                  | SDLC observability dashboard — consumes `CDEvents` produced by this collector |
+| [send-cdevents](https://github.com/cdviz-dev/send-cdevents) | GitHub Action wrapping `cdviz-collector send`                                 |
+| [CDEvents spec](https://cdevents.dev)                       | CloudEvents-based open standard for SDLC events                               |
+| [VRL](https://vector.dev/docs/reference/vrl/)               | Transformation language used by transformers                                  |
 
 ## Development
 
