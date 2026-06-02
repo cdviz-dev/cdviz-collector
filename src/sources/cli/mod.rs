@@ -67,25 +67,6 @@ impl CliExtractor {
             return Ok(());
         }
 
-        // TextLine: split into lines and send each non-empty line as a separate event
-        if matches!(self.parser_config, parsers::Config::TextLine) {
-            let lines: Vec<&str> = data.lines().filter(|line| !line.trim().is_empty()).collect();
-            tracing::info!(count = lines.len(), "processing text lines");
-            for (index, line) in lines.into_iter().enumerate() {
-                let body = serde_json::json!({"text": line});
-                let mut metadata = self.base_metadata.clone();
-                if let Some(obj) = metadata.as_object_mut() {
-                    obj.insert("index".to_string(), serde_json::json!(index));
-                }
-                let event_source =
-                    EventSource { body, metadata, headers: std::collections::HashMap::new() };
-                if let Err(err) = self.next.send(event_source) {
-                    tracing::warn!(?err, index, "failed to send event");
-                }
-            }
-            return Ok(());
-        }
-
         // Parse using configured parser
         let json_value: serde_json::Value =
             parsers::parse_with_config(&data, &self.parser_config, self.data_source.as_deref())?;

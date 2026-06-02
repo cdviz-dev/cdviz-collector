@@ -344,6 +344,7 @@ fn convert_run_args_into_toml(args: &SendArgs, run_type: &str) -> Result<String>
         }
     }
     for (key, values) in &meta_map {
+        validate_toml_bare_key(key)?;
         if values.len() == 1 {
             let escaped = escape_toml_string(&values[0]);
             writeln!(
@@ -384,9 +385,8 @@ fn convert_args_into_toml(args: &SendArgs) -> Result<String> {
     use std::fmt::Write as _;
     let mut out = String::new();
 
-    // Use triple-quoted string to avoid escaping issues with JSON body
-    let data_str = args.data.join("\n");
-    writeln!(&mut out, "sources.cli.extractor.data = \"\"\"{data_str}\"\"\"").into_diagnostic()?;
+    let data_str = escape_toml_string(&args.data.join("\n"));
+    writeln!(&mut out, "sources.cli.extractor.data = \"{data_str}\"").into_diagnostic()?;
 
     let parser_str = match args.parser.clone().into() {
         parsers::Config::Auto => "auto",
@@ -408,8 +408,10 @@ fn convert_args_into_toml(args: &SendArgs) -> Result<String> {
 
     for kv in &args.metadata {
         if let Some((key, value)) = kv.split_once('=') {
+            let key = key.trim();
+            validate_toml_bare_key(key)?;
             let escaped = escape_toml_string(value);
-            writeln!(&mut out, "sources.cli.extractor.metadata.{} = \"{escaped}\"", key.trim())
+            writeln!(&mut out, "sources.cli.extractor.metadata.{key} = \"{escaped}\"")
                 .into_diagnostic()?;
         }
     }
@@ -451,6 +453,23 @@ fn escape_toml_string(s: &str) -> String {
         .replace('\n', "\\n")
         .replace('\r', "\\r")
         .replace('\t', "\\t")
+}
+
+/// Validate that `key` is a safe TOML bare key (alphanumeric, `-`, `_` only).
+///
+/// TOML dotted paths like `a.b.key` are built by the caller; the user-supplied
+/// segment must not contain `.`, `[`, `]`, spaces, or other metacharacters that
+/// would silently restructure the generated TOML.
+fn validate_toml_bare_key(key: &str) -> Result<()> {
+    if key.is_empty() {
+        return Err(miette::miette!("metadata key cannot be empty"));
+    }
+    if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err(miette::miette!(
+            "metadata key {key:?} contains invalid characters; only ASCII alphanumeric, hyphens and underscores are allowed"
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -604,6 +623,42 @@ mod tests {
         assert!(
             toml.contains(r#"sources.cli.extractor.metadata.other = "42""#),
             "Expected metadata key in TOML, got:\n{toml}"
+        );
+    }
+
+    #[test]
+    fn test_convert_args_data_with_triple_quote_is_safe() {
+        // attacker passes `"""` in --data to escape a triple-quoted TOML string
+        let args = SendArgs { data: vec![r#"prefix"""suffix"#.to_string()], ..default_args() };
+        let toml_str = convert_args_into_toml(&args).expect("should not error");
+        // generated TOML must parse without errors (no injection)
+        toml::from_str::<toml::Value>(&toml_str)
+            .unwrap_or_else(|e| panic!("generated TOML is invalid: {e}\n---\n{toml_str}"));
+    }
+
+    #[test]
+    fn test_convert_args_metadata_key_with_dot_is_rejected() {
+        // dot in metadata key would silently create a nested TOML table
+        let args = SendArgs { metadata: vec!["a.b=val".to_string()], ..default_args() };
+        assert!(convert_args_into_toml(&args).is_err(), "dot in metadata key must be rejected");
+    }
+
+    #[test]
+    fn test_convert_args_metadata_key_with_bracket_is_rejected() {
+        let args = SendArgs { metadata: vec!["a[b]=val".to_string()], ..default_args() };
+        assert!(convert_args_into_toml(&args).is_err(), "bracket in metadata key must be rejected");
+    }
+
+    #[test]
+    fn test_convert_run_args_metadata_key_with_dot_is_rejected() {
+        let args = SendArgs {
+            run: Some("taskrun".to_string()),
+            metadata: vec!["a.b=val".to_string()],
+            ..default_args()
+        };
+        assert!(
+            convert_run_args_into_toml(&args, "taskrun").is_err(),
+            "dot in metadata key must be rejected"
         );
     }
 }

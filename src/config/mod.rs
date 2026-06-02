@@ -133,7 +133,7 @@ impl ConfigBuilder {
     /// These overrides are applied after `with_cli_overrides` and take highest priority.
     pub fn with_keyvalue(mut self, kvs: &[String]) -> Result<Self> {
         if !kvs.is_empty() {
-            self.key_value_overrides = Some(keyvalue_to_toml(kvs)?);
+            self.key_value_overrides = Some(join_toml_fragments(kvs)?);
         }
         Ok(self)
     }
@@ -335,8 +335,12 @@ pub(crate) async fn resolve_config_source(
     }
 }
 
-/// Convert `key=value` pairs into TOML dotted-key lines.
-fn keyvalue_to_toml(kvs: &[String]) -> Result<String> {
+/// Validate and join raw TOML fragments from `--set` arguments.
+///
+/// Each element may be a single dotted key (`key=value`) or a multi-line
+/// TOML fragment. All fragments are joined with a newline and validated as
+/// a whole TOML document before use.
+fn join_toml_fragments(kvs: &[String]) -> Result<String> {
     if kvs.is_empty() {
         return Ok(String::new());
     }
@@ -368,13 +372,13 @@ mod tests {
     fn with_keyvalue_dashed_key() {
         // Keys with dashes are the primary motivation: env vars can't express them.
         // We only verify parsing succeeds (config won't have a "my-source" unless defined).
-        let toml = keyvalue_to_toml(&["sources.my-source.enabled=false".to_string()]).unwrap();
+        let toml = join_toml_fragments(&["sources.my-source.enabled=false".to_string()]).unwrap();
         assert!(toml.contains("sources.my-source.enabled=false"));
     }
 
     #[test]
-    fn keyvalue_to_toml_int_and_float() {
-        let toml = keyvalue_to_toml(&[
+    fn join_toml_fragments_int_and_float() {
+        let toml = join_toml_fragments(&[
             "pipeline.max_retries=5".to_string(),
             "http.timeout=2.5".to_string(),
         ])
@@ -384,25 +388,28 @@ mod tests {
     }
 
     #[test]
-    fn keyvalue_to_toml_string_requires_quotes() {
+    fn join_toml_fragments_string_requires_quotes() {
         // Unquoted URL is invalid TOML — user must quote strings
-        assert!(keyvalue_to_toml(&[r"sources.foo.url=http://x.com?a=1&b=2".to_string()]).is_err());
+        assert!(
+            join_toml_fragments(&[r"sources.foo.url=http://x.com?a=1&b=2".to_string()]).is_err()
+        );
         // Quoted URL is valid
-        let toml =
-            keyvalue_to_toml(&[r#"sources.foo.url="http://x.com?a=1&b=2""#.to_string()]).unwrap();
+        let toml = join_toml_fragments(&[r#"sources.foo.url="http://x.com?a=1&b=2""#.to_string()])
+            .unwrap();
         assert!(toml.contains(r#"sources.foo.url="http://x.com?a=1&b=2""#));
     }
 
     #[test]
-    fn keyvalue_to_toml_array_value() {
-        let toml = keyvalue_to_toml(&[r#"sources.cli.transformer_refs=["foo","bar"]"#.to_string()])
-            .unwrap();
+    fn join_toml_fragments_array_value() {
+        let toml =
+            join_toml_fragments(&[r#"sources.cli.transformer_refs=["foo","bar"]"#.to_string()])
+                .unwrap();
         assert!(toml.contains(r#"sources.cli.transformer_refs=["foo","bar"]"#));
     }
 
     #[test]
-    fn keyvalue_to_toml_multiline() {
-        let toml = keyvalue_to_toml(&[
+    fn join_toml_fragments_multiline() {
+        let toml = join_toml_fragments(&[
             "sinks.debug.enabled=true".to_string(),
             "sinks.http.enabled=false".to_string(),
         ])
@@ -412,13 +419,13 @@ mod tests {
     }
 
     #[test]
-    fn keyvalue_to_toml_empty_list() {
-        assert!(keyvalue_to_toml(&[]).unwrap().is_empty());
+    fn join_toml_fragments_empty_list() {
+        assert!(join_toml_fragments(&[]).unwrap().is_empty());
     }
 
     #[test]
-    fn keyvalue_to_toml_invalid_fragment_is_error() {
-        assert!(keyvalue_to_toml(&["no-equals-sign".to_string()]).is_err());
+    fn join_toml_fragments_invalid_fragment_is_error() {
+        assert!(join_toml_fragments(&["no-equals-sign".to_string()]).is_err());
     }
 
     #[rstest]

@@ -68,6 +68,13 @@ pub(crate) fn parse_text(data: &str) -> serde_json::Value {
     json!({"text": data})
 }
 
+/// Split into non-empty trimmed lines; returns `Value::Array` of `{"text": line}`.
+pub(crate) fn parse_text_line(data: &str) -> serde_json::Value {
+    let events =
+        data.lines().map(str::trim).filter(|l| !l.is_empty()).map(|l| json!({"text": l})).collect();
+    serde_json::Value::Array(events)
+}
+
 /// Parse a JSON string.
 pub(crate) fn parse_json(data: &str) -> Result<serde_json::Value> {
     Ok(serde_json::from_str(data).map_err(|cause| Error::from_serde_error(data, cause))?)
@@ -195,8 +202,7 @@ pub(crate) fn parse_with_config(
         #[cfg(feature = "parser_tap")]
         Config::Tap => parse_tap(data),
         Config::Text => Ok(parse_text(data)),
-        // TextLine splitting is handled by the caller (CliExtractor); called directly → whole text
-        Config::TextLine => Ok(parse_text(data)),
+        Config::TextLine => Ok(parse_text_line(data)),
     }
 }
 
@@ -350,10 +356,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_with_config_text_line_falls_back_to_text() {
-        let data = "line1\nline2";
+    fn test_parse_with_config_text_line_returns_array() {
+        let data = "line1\nline2\n\nline3\n";
         let result = parse_with_config(data, &Config::TextLine, None).unwrap();
-        assert_eq!(result["text"], "line1\nline2");
+        assert_eq!(
+            result,
+            serde_json::json!([{"text": "line1"}, {"text": "line2"}, {"text": "line3"}])
+        );
     }
 
     #[test]

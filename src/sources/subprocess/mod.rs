@@ -134,6 +134,7 @@ impl SubprocessExtractor {
                     let filename = path.to_string_lossy().to_string();
                     match parsers::parse_with_config(&content, &self.config.parser, Some(&filename))
                     {
+                        Ok(serde_json::Value::Array(items)) => results.extend(items),
                         Ok(parsed) => results.push(parsed),
                         Err(err) => {
                             tracing::warn!(?err, file = %path.display(), "failed to parse result file");
@@ -380,5 +381,38 @@ mod tests {
 
         // Exit code should be 130 (cancelled)
         assert_eq!(exit_code_out.load(Ordering::SeqCst), 130);
+    }
+
+    #[tokio::test]
+    async fn test_textline_parser_emits_one_event_per_line() {
+        // Regression: TextLine with data_globs must emit one body element per non-empty line,
+        // not one element wrapping the entire file content.
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("output.txt");
+        std::fs::write(&file, "line1\nline2\n\nline3\n").unwrap();
+
+        let config = Config {
+            command: vec!["true".to_string()],
+            data_globs: vec![file.to_string_lossy().to_string()],
+            parser: parsers::Config::TextLine,
+            ..Default::default()
+        };
+
+        let collector = Collector::<EventSource>::new();
+        let pipe = Box::new(collector.create_pipe());
+        let cancel_token = CancellationToken::new();
+
+        let extractor = SubprocessExtractor::new(config, pipe);
+        timeout(Duration::from_secs(5), extractor.run(cancel_token)).await.unwrap().unwrap();
+
+        let events: Vec<EventSource> = collector.try_into_iter().unwrap().collect();
+        // started + finished
+        assert_eq!(events.len(), 2);
+        let body = &events[1].body;
+        assert_eq!(
+            body,
+            &serde_json::json!([{"text": "line1"}, {"text": "line2"}, {"text": "line3"}]),
+            "expected 3 line events, got: {body}"
+        );
     }
 }
