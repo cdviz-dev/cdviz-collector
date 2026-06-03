@@ -19,6 +19,7 @@ cdviz-collector operates in three modes:
 - **`cdviz-collector`** (root) - Main binary crate
 - **`testkit/`** - Testing utility crate for connector chain integration tests
 - **`transformers/`** - Git submodule pointing to community transformers repository (VRL-based, see `transformers/AGENTS.md` for conventions)
+- **`docs/`** - Architecture decision records (`docs/adr/`)
 
 ## Development Commands
 
@@ -78,9 +79,10 @@ Use `--mode review` with example tasks to review and update expected outputs.
 
 Events flow through a three-stage pipeline:
 
-1. **Sources** (`src/sources/`) - Input adapters: webhook (HTTP), opendal (filesystem/S3), SSE, Kafka, CLI
+1. **Sources** (`src/sources/`) - Input adapters: webhook (HTTP), opendal (filesystem/S3), SSE, Kafka, NATS, CLI, subprocess, http_polling
    - `extractors.rs` - Event extraction logic
-   - `transformers/` - VRL transformation engine
+   - `parsers.rs` / `parsers/` - Shared parser logic (JSON, JSONL, CSV, TAP, XML, YAML, text)
+   - `http_polling/` - Time-windowed polling with pagination (`follow_link_header`), rate-limit handling (`RetryAfterMiddleware`), and backfill support
 2. **Pipes** (`src/pipes/`) - Processing middleware (passthrough, log, collect, discard)
 3. **Sinks** (`src/sinks/`) - Output adapters: PostgreSQL (db), ClickHouse, HTTP, folder, SSE, Kafka, debug
 

@@ -2,6 +2,7 @@
 
 mod filter;
 mod request;
+mod retry_after_middleware;
 
 use crate::errors::{IntoDiagnostic, Result};
 use crate::security::header::{
@@ -12,6 +13,7 @@ use filter::TimeWindowFilter;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use reqwest_tracing::TracingMiddleware;
+use retry_after_middleware::RetryAfterMiddleware;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -63,6 +65,17 @@ pub(crate) struct Config {
     /// Defaults to `cdviz-collector/<version>`.
     #[serde(default = "default_user_agent")]
     pub(crate) user_agent: String,
+
+    /// Follow `Link: <url>; rel="next"` headers to consume all pages within a
+    /// single time window before advancing. Default: `false`.
+    #[serde(default)]
+    pub(crate) follow_link_header: bool,
+
+    /// Minimum delay between consecutive HTTP requests, including pagination
+    /// fetches. Useful for APIs without rate-limit headers (e.g. Jenkins).
+    /// Default: no delay.
+    #[serde(default, with = "humantime_serde::option")]
+    pub(crate) min_request_interval: Option<Duration>,
 }
 
 fn default_user_agent() -> String {
@@ -152,6 +165,43 @@ impl ResolvedParser {
     }
 }
 
+/// Outcome of a single page fetch.
+enum PageOutcome {
+    /// Page fetched successfully. Inner value is the next page URL (if any).
+    Done(Option<String>),
+    /// Recoverable failure; already logged.
+    Failed,
+}
+
+/// Maximum number of pages to follow in a single `run_once` poll cycle.
+const MAX_PAGES: u32 = 1000;
+
+/// Extract the `rel="next"` URL from a `Link` header, if present.
+///
+/// Handles the RFC 5988 format: `Link: <https://api.example.com/page2>; rel="next"`
+/// Multiple link entries separated by commas are supported.
+fn parse_link_next(headers: &reqwest::header::HeaderMap) -> Option<&str> {
+    let value = headers.get(reqwest::header::LINK)?.to_str().ok()?;
+    for part in value.split(',') {
+        let part = part.trim();
+        // Split into URL part and parameter segment(s)
+        let mut segments = part.splitn(2, ';');
+        let Some(url_segment) = segments.next() else { continue };
+        let url_part = url_segment.trim().trim_start_matches('<').trim_end_matches('>');
+        // Each ';'-separated param token is checked for exact "rel=next" match
+        // (RFC 5988 §5.3 — token must be exactly "next", not "nextpage" etc.)
+        let params = segments.next().unwrap_or("");
+        let is_next = params.split(';').map(str::trim).any(|p| {
+            let p = p.to_ascii_lowercase();
+            p == "rel=\"next\"" || p == "rel=next"
+        });
+        if is_next {
+            return Some(url_part);
+        }
+    }
+    None
+}
+
 pub(crate) struct HttpPollingExtractor {
     config: Config,
     filter: TimeWindowFilter,
@@ -177,10 +227,17 @@ impl HttpPollingExtractor {
 
         let retry_policy = ExponentialBackoff::builder()
             .build_with_total_retry_duration_and_limit_retries(config.total_duration_of_retries);
+        // Disable automatic redirect following so RetryAfterMiddleware can handle
+        // 303/301/302/307 responses with optional Retry-After delays.
         let client = ClientBuilder::new(
-            reqwest::Client::builder().user_agent(&config.user_agent).build().into_diagnostic()?,
+            reqwest::Client::builder()
+                .user_agent(&config.user_agent)
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .into_diagnostic()?,
         )
         .with(TracingMiddleware::default())
+        .with(RetryAfterMiddleware)
         .with(RetryTransientMiddleware::new_with_policy(retry_policy))
         .build();
 
@@ -244,13 +301,114 @@ impl HttpPollingExtractor {
         metadata
     }
 
-    /// Perform a single poll: build request, send, parse response, forward events.
+    /// Send one HTTP request and forward the parsed events downstream.
+    ///
+    /// Returns `Ok(PageOutcome::Done(next_url))` on success — `next_url` is `Some`
+    /// when a `Link: rel="next"` header indicates more pages, `None` for the last
+    /// page. Returns `Ok(PageOutcome::Failed)` on a recoverable failure (already
+    /// logged).
+    async fn fetch_page(
+        &mut self,
+        url: &str,
+        method: &str,
+        params_headers: &HashMap<String, String>,
+        params_body: Option<Vec<u8>>,
+    ) -> Result<PageOutcome> {
+        let method_val = reqwest::Method::from_bytes(method.to_uppercase().as_bytes())
+            .map_err(|_| miette::MietteDiagnostic::new(format!("invalid HTTP method: {method}")))?;
+
+        let mut req = self.client.request(method_val, url);
+        req = req.header(reqwest::header::ACCEPT, self.config.parser.accept_header());
+        for (name, value) in params_headers {
+            req = req.header(name.as_str(), value.as_str());
+        }
+
+        let header_configs = outgoing_header_map_to_configs(&self.config.headers);
+        let body_bytes = params_body.as_deref().unwrap_or(&[]);
+        match generate_headers(&header_configs, Some(body_bytes)) {
+            Ok(headers) => req = req.headers(headers),
+            Err(e) => tracing::warn!(err = ?e, "failed to generate static headers, skipping"),
+        }
+        if let Some(body) = params_body {
+            req = req.body(body);
+        }
+
+        let response = match req.send().await {
+            Ok(r) => r,
+            Err(err) => {
+                tracing::warn!(?err, url, "HTTP polling request error");
+                return Ok(PageOutcome::Failed);
+            }
+        };
+
+        let status = response.status();
+        if !status.is_success() {
+            tracing::warn!(status = status.as_u16(), url, "HTTP polling non-success status");
+            return Ok(PageOutcome::Failed);
+        }
+
+        let next_url = self
+            .config
+            .follow_link_header
+            .then(|| parse_link_next(response.headers()))
+            .flatten()
+            .map(str::to_string);
+
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+        let response_headers: HashMap<String, String> = response
+            .headers()
+            .iter()
+            .filter_map(|(k, v)| v.to_str().ok().map(|s| (k.to_string(), s.to_string())))
+            .collect();
+        let body_text = match response.text().await {
+            Ok(t) => t,
+            Err(err) => {
+                tracing::warn!(?err, "failed to read response body");
+                return Ok(PageOutcome::Failed);
+            }
+        };
+
+        let resolved = self.config.parser.resolve(content_type.as_deref());
+        let body_values = match resolved.parse(&body_text) {
+            Ok(v) => v,
+            Err(err) => {
+                tracing::warn!(?err, url, "failed to parse response body");
+                return Ok(PageOutcome::Failed);
+            }
+        };
+
+        let metadata = self.build_event_metadata(url, method, status.as_u16());
+        for body_value in body_values {
+            let event = EventSource {
+                body: body_value,
+                metadata: metadata.clone(),
+                headers: response_headers.clone(),
+            };
+            if let Err(err) = self.next.send(event) {
+                tracing::warn!(?err, "failed to send event downstream");
+                return Ok(PageOutcome::Failed);
+            }
+        }
+
+        Ok(PageOutcome::Done(next_url))
+    }
+
+    /// Perform a single poll: build request via VRL, fetch all pages, forward events.
     ///
     /// Returns `Ok(true)` on success (caller should advance the time window),
     /// `Ok(false)` on recoverable failure (already logged), or `Err` on hard failure.
+    ///
+    /// **Partial pagination failure:** if page N > 0 fails after pages 0..N-1 succeeded,
+    /// this still returns `Ok(true)` so the window advances past the already-emitted
+    /// events. The failed page's events are silently dropped. Sinks should be idempotent
+    /// if full consistency is required.
     #[instrument(skip(self), fields(source = %self.source_name))]
     async fn run_once(&mut self) -> Result<bool> {
-        // 1. Generate request params via VRL
+        // 1. Generate initial request params via VRL
         let vrl_input = self.build_vrl_input();
         let params = match self.request_program.execute(&vrl_input) {
             Ok(p) => p,
@@ -261,107 +419,57 @@ impl HttpPollingExtractor {
         };
 
         // 2. Build URL with query params
-        let mut url = url::Url::parse(&params.url)
+        let mut initial_url = url::Url::parse(&params.url)
             .map_err(|e| miette::MietteDiagnostic::new(format!("invalid URL: {e}")))?;
         if !params.query.is_empty() {
-            let mut pairs = url.query_pairs_mut();
+            let mut pairs = initial_url.query_pairs_mut();
             for (k, v) in &params.query {
                 pairs.append_pair(k, v);
             }
         }
 
-        // 3. Build reqwest method
-        let method =
-            reqwest::Method::from_bytes(params.method.to_uppercase().as_bytes()).map_err(|_| {
-                miette::MietteDiagnostic::new(format!("invalid HTTP method: {}", params.method))
-            })?;
-
-        let mut req = self.client.request(method, url.as_str());
-
-        // 4. Accept header from parser config
-        req = req.header(reqwest::header::ACCEPT, self.config.parser.accept_header());
-
-        // 5. VRL-computed headers (added first; static config may override below)
-        for (name, value) in &params.headers {
-            req = req.header(name.as_str(), value.as_str());
-        }
-
-        // 6. Static/secret/signature headers from config
-        let header_configs = outgoing_header_map_to_configs(&self.config.headers);
-        let body_bytes = params.body.as_deref().unwrap_or(&[]);
-        match generate_headers(&header_configs, Some(body_bytes)) {
-            Ok(headers) => req = req.headers(headers),
-            Err(e) => tracing::warn!(err = ?e, "failed to generate static headers, skipping"),
-        }
-
-        // 7. Request body
-        if let Some(body) = params.body {
-            req = req.body(body);
-        }
-
-        // 8. Send
-        let response = match req.send().await {
-            Ok(r) => r,
-            Err(err) => {
-                tracing::warn!(?err, url = url.as_str(), "HTTP polling request error");
-                return Ok(false);
+        // 3. Fetch first page (and follow pagination links if configured)
+        let mut current_url = initial_url.to_string();
+        let mut page_index: u32 = 0;
+        loop {
+            if page_index > 0
+                && let Some(interval) = self.config.min_request_interval
+            {
+                sleep(interval).await;
             }
-        };
 
-        let status = response.status();
-        if !status.is_success() {
-            tracing::warn!(
-                status = status.as_u16(),
-                url = url.as_str(),
-                "HTTP polling returned non-success status, not advancing"
-            );
-            return Ok(false);
-        }
-
-        // 9. Extract content-type before consuming the response
-        let content_type = response
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .map(str::to_string);
-
-        let response_headers: HashMap<String, String> = response
-            .headers()
-            .iter()
-            .filter_map(|(k, v)| v.to_str().ok().map(|s| (k.to_string(), s.to_string())))
-            .collect();
-
-        let body_text = match response.text().await {
-            Ok(t) => t,
-            Err(err) => {
-                tracing::warn!(?err, "failed to read response body");
-                return Ok(false);
+            if page_index >= MAX_PAGES {
+                tracing::warn!(
+                    MAX_PAGES,
+                    source = %self.source_name,
+                    "page limit reached; remaining pages skipped"
+                );
+                break;
             }
-        };
 
-        // 10. Parse response body
-        let resolved = self.config.parser.resolve(content_type.as_deref());
-        let body_values = match resolved.parse(&body_text) {
-            Ok(v) => v,
-            Err(err) => {
-                tracing::warn!(?err, url = url.as_str(), "failed to parse response body");
-                return Ok(false);
-            }
-        };
-
-        // 11. Build metadata for all events from this poll
-        let metadata = self.build_event_metadata(url.as_str(), &params.method, status.as_u16());
-
-        // 12. Send each event downstream
-        for body_value in body_values {
-            let event = EventSource {
-                body: body_value,
-                metadata: metadata.clone(),
-                headers: response_headers.clone(),
-            };
-            if let Err(err) = self.next.send(event) {
-                tracing::warn!(?err, "failed to send event downstream");
-                return Ok(false);
+            match self
+                .fetch_page(&current_url, &params.method, &params.headers, params.body.clone())
+                .await?
+            {
+                PageOutcome::Done(Some(next)) => {
+                    current_url = next;
+                    page_index += 1;
+                }
+                PageOutcome::Done(None) => break,
+                PageOutcome::Failed if page_index == 0 => {
+                    // First page failed; do not advance window
+                    return Ok(false);
+                }
+                PageOutcome::Failed => {
+                    // Pages 0..page_index-1 succeeded; advancing the window prevents
+                    // re-emitting those events. Events from this page are dropped.
+                    tracing::warn!(
+                        url = current_url,
+                        source = %self.source_name,
+                        "pagination fetch failed; partial window processed"
+                    );
+                    break;
+                }
             }
         }
 
@@ -444,6 +552,8 @@ mod tests {
             parser: ParserConfig::Json,
             metadata: serde_json::json!({}),
             user_agent: default_user_agent(),
+            follow_link_header: false,
+            min_request_interval: None,
         }
     }
 
@@ -588,6 +698,8 @@ mod tests {
             parser: ParserConfig::Json,
             metadata: serde_json::json!({}),
             user_agent: default_user_agent(),
+            follow_link_header: false,
+            min_request_interval: None,
         };
         let (mut extractor, _collector) = make_extractor(&config);
 
@@ -663,6 +775,8 @@ mod tests {
             parser: ParserConfig::Json,
             metadata: serde_json::json!({}),
             user_agent: default_user_agent(),
+            follow_link_header: false,
+            min_request_interval: None,
         };
         let cancel_token = CancellationToken::new();
         let (mut extractor, _collector) = make_extractor(&config);
@@ -677,5 +791,141 @@ mod tests {
         let result = timeout(Duration::from_secs(2), extractor.run(cancel_token)).await;
         assert!(result.is_ok(), "run() should stop after cancellation");
         assert!(result.unwrap().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_pagination_follows_link_header() {
+        let server = MockServer::start().await;
+
+        // Page 1 — returns Link: rel="next" pointing to /page2
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header(
+                        "link",
+                        format!("<{}/page2>; rel=\"next\"", server.uri()).as_str(),
+                    )
+                    .set_body_raw(r#"{"page":1}"#, "application/json"),
+            )
+            .mount(&server)
+            .await;
+
+        // Page 2 — no Link header
+        Mock::given(method("GET"))
+            .and(path("/page2"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_raw(r#"{"page":2}"#, "application/json"),
+            )
+            .mount(&server)
+            .await;
+
+        let mut config = make_config(&server.uri(), "");
+        config.follow_link_header = true;
+        let (mut extractor, collector) = make_extractor(&config);
+
+        let result = extractor.run_once().await;
+        assert!(result.is_ok());
+        assert!(result.unwrap()); // should advance
+
+        let events: Vec<_> = collector.try_into_iter().unwrap().collect();
+        assert_eq!(events.len(), 2, "expected events from both pages");
+        assert_eq!(events[0].body["page"], 1);
+        assert_eq!(events[1].body["page"], 2);
+    }
+
+    #[tokio::test]
+    async fn test_pagination_disabled_stops_at_first_page() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header(
+                        "link",
+                        format!("<{}/page2>; rel=\"next\"", server.uri()).as_str(),
+                    )
+                    .set_body_raw(r#"{"page":1}"#, "application/json"),
+            )
+            .mount(&server)
+            .await;
+
+        // follow_link_header is false (default) — page2 should never be requested
+        let config = make_config(&server.uri(), "");
+        let (mut extractor, collector) = make_extractor(&config);
+
+        let result = extractor.run_once().await;
+        assert!(result.unwrap());
+
+        let events: Vec<_> = collector.try_into_iter().unwrap().collect();
+        assert_eq!(events.len(), 1, "should only fetch first page");
+    }
+
+    #[test]
+    fn test_parse_link_next_basic() {
+        use reqwest::header::{HeaderMap, HeaderValue, LINK};
+        let mut h = HeaderMap::new();
+        h.insert(LINK, HeaderValue::from_static("<https://api.example.com/page2>; rel=\"next\""));
+        assert_eq!(parse_link_next(&h), Some("https://api.example.com/page2"));
+    }
+
+    #[test]
+    fn test_parse_link_next_multiple_rels() {
+        use reqwest::header::{HeaderMap, HeaderValue, LINK};
+        let mut h = HeaderMap::new();
+        h.insert(
+            LINK,
+            HeaderValue::from_static(
+                "<https://api.example.com/page1>; rel=\"prev\", <https://api.example.com/page3>; rel=\"next\"",
+            ),
+        );
+        assert_eq!(parse_link_next(&h), Some("https://api.example.com/page3"));
+    }
+
+    #[test]
+    fn test_parse_link_next_absent() {
+        use reqwest::header::{HeaderMap, HeaderValue, LINK};
+        let mut h = HeaderMap::new();
+        h.insert(LINK, HeaderValue::from_static("<https://api.example.com/page1>; rel=\"prev\""));
+        assert_eq!(parse_link_next(&h), None);
+    }
+
+    #[test]
+    fn test_parse_link_next_no_header() {
+        use reqwest::header::HeaderMap;
+        assert_eq!(parse_link_next(&HeaderMap::new()), None);
+    }
+
+    #[test]
+    fn test_parse_link_next_does_not_match_partial_rel() {
+        // "rel=nextpage" must NOT match "rel=next"
+        use reqwest::header::{HeaderMap, HeaderValue, LINK};
+        let mut h = HeaderMap::new();
+        h.insert(LINK, HeaderValue::from_static("<https://api.example.com/page2>; rel=nextpage"));
+        assert_eq!(parse_link_next(&h), None);
+    }
+
+    #[test]
+    fn test_parse_link_next_unquoted_rel() {
+        // rel=next (unquoted) is valid per RFC 5988
+        use reqwest::header::{HeaderMap, HeaderValue, LINK};
+        let mut h = HeaderMap::new();
+        h.insert(LINK, HeaderValue::from_static("<https://api.example.com/page2>; rel=next"));
+        assert_eq!(parse_link_next(&h), Some("https://api.example.com/page2"));
+    }
+
+    #[test]
+    fn test_parse_link_next_extra_params() {
+        // rel="next" with additional params like title="foo"
+        use reqwest::header::{HeaderMap, HeaderValue, LINK};
+        let mut h = HeaderMap::new();
+        h.insert(
+            LINK,
+            HeaderValue::from_static(
+                "<https://api.example.com/page2>; rel=\"next\"; title=\"Page 2\"",
+            ),
+        );
+        assert_eq!(parse_link_next(&h), Some("https://api.example.com/page2"));
     }
 }

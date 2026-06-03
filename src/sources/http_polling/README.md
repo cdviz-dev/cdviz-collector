@@ -120,6 +120,65 @@ Every `EventSource` created by this source carries the following in its
 
 VRL transformers downstream access these fields exactly as shown above.
 
+## Pagination
+
+Many REST APIs return results in pages capped at 30–100 items. When a time window
+contains more items than a single page, following the `Link` header is necessary to
+avoid silent data loss.
+
+Set `follow_link_header = true` to automatically follow `Link: <url>; rel="next"`
+headers (RFC 5988) until the last page is reached. All pages of the same time window
+are processed before the window advances.
+
+```toml
+[sources.my_source.extractor]
+type               = "http_polling"
+follow_link_header = true
+```
+
+Use `min_request_interval` to add a minimum delay between consecutive requests,
+including pagination fetches:
+
+```toml
+min_request_interval = "720ms"  # ≈ 83 req/min
+```
+
+## Rate Limiting and Retry-After
+
+`cdviz-collector` automatically handles HTTP-level retry and redirect signals via the
+`RetryAfterMiddleware` built into every `http_polling` source:
+
+| Status                     | Action                                                                  |
+| -------------------------- | ----------------------------------------------------------------------- |
+| `303 See Other`            | Sleep `Retry-After`, re-fetch `Location` as GET (async polling pattern) |
+| `429 Too Many Requests`    | Sleep `Retry-After`, retry                                              |
+| `503 Service Unavailable`  | Sleep `Retry-After`, retry                                              |
+| `301`, `302`, `307`, `308` | Follow `Location` immediately                                           |
+
+`Retry-After` accepts both integer seconds (`Retry-After: 60`) and HTTP-date format
+(`Retry-After: Wed, 21 Oct 2015 07:28:00 GMT`).
+
+If a `429`/`503` response arrives without a `Retry-After` header, the response is
+returned as-is and the time window is not advanced (the next poll retries the same window).
+
+Automatic redirect following is disabled in the underlying HTTP client; all redirect
+and retry behaviour is managed by the middleware stack.
+
+## Backfill Pattern
+
+A historical backfill is just a `connect` run with `ts_after` and `ts_before_limit`
+set. The source exits automatically when it reaches the limit; re-running is safe
+because state checkpoints are saved after each successful window:
+
+```sh
+# Ingest one year of GitHub workflow runs, then stop.
+cdviz-collector connect --config github_backfill.toml
+```
+
+See `examples/assets/github_backfill.toml` for a complete example, and
+`docs/sources/http_polling_github.md` / `docs/sources/http_polling_gitlab.md` for
+per-endpoint VRL script templates.
+
 ## Configuration Reference
 
 ```toml
@@ -143,6 +202,13 @@ request_vrl = """
 ## Stop the source once ts_after reaches this timestamp (optional).
 ## Useful for bounded historical backfills.
 # ts_before_limit = "2025-01-01T00:00:00Z"
+
+## Follow Link: <url>; rel="next" headers for paginated APIs. Default: false.
+# follow_link_header = false
+
+## Minimum delay between consecutive HTTP requests (including pagination).
+## Humantime format. Default: no delay.
+# min_request_interval = "720ms"
 
 ## How to parse the response body.  Options: "auto" (default), "json", "jsonl", "text".
 # parser = "auto"

@@ -788,6 +788,7 @@ version = "0.39.1"
 dependencies = [
  "assert2",
  "async-nats",
+ "async-trait",
  "axum",
  "axum-tracing-opentelemetry",
  "base64",
@@ -813,6 +814,8 @@ dependencies = [
  "futures-timer",
  "globset",
  "hmac 0.13.0",
+ "http",
+ "httpdate",
  "humantime-serde",
  "indexmap 2.14.0",
  "indoc",

@@ -45,7 +45,9 @@ derive_more = { version = "2", features = [
   "error",
   "from",
 ] }
+async-trait = { version = "0.1", optional = true }
 enum_dispatch = "0.3"
+http = { version = "1", optional = true }
 eventsource-stream = { version = "0.2", optional = true }
 faster-hex = "0.10"
 figment = { version = "0.10", features = ["env"] }
@@ -89,6 +91,7 @@ rdkafka = { version = "0.39", default-features = false, features = [
   "tokio",
 ], optional = true }
 regex = "1"
+httpdate = { version = "1", optional = true }
 reqwest = { version = "0.13", default-features = false, optional = true }
 reqwest-middleware = { version = "0.5", features = ["json"], optional = true }
 reqwest-retry = { version = "0.9", optional = true }
@@ -175,6 +178,9 @@ config_http = ["http_client"]
 config_remote = ["dep:opendal"]
 #! ### Misc
 http_client = [
+  "dep:async-trait",
+  "dep:http",
+  "dep:httpdate",
   "dep:reqwest",
   "dep:reqwest-middleware",
   "dep:reqwest-retry",
