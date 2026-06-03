@@ -60,72 +60,7 @@ See the [Quick Start Guide](https://cdviz.dev/docs/cdviz-collector/quick-start) 
 
 Pipeline: **sources** → in-memory queue → multiple **sinks** (fan-out).
 
-```mermaid
----
-config:
-  theme: 'base'
-  look: 'handDrawn'
-  themeVariables:
-    darkMode: true
-    mainBkg: '#00000000'
-    background: '#00000000'
-    primaryColor: '#00000000'
-    primaryTextColor: '#f08c00'
-    secondaryTextColor: '#f08c00'
-    tertiaryTextColor: '#f08c00'
-    primaryBorderColor: '#f08c00'
-    secondaryBorderColor: '#f08c00'
-    tertiaryBorderColor: '#f08c00'
-    noteTextColor: '#f08c00'
-    noteBorderColor: '#f08c00'
-    lineColor: '#f08c00'
-    lineWidth: 2
----
-flowchart LR
-  classDef future stroke-dasharray: 5 5
-
-  q>in memory queue of cdevents]
-
-  subgraph sources
-    src_cli(cli/stdin)
-    src_http(HTTP webhook / SSE)
-    src_http_poll(HTTP polling)
-    src_fs_content(FS folder with cdevents)
-    src_fs_activity(FS folder activity)
-    src_s3_content(S3 with cdevents)
-    src_s3_activity(S3 activity)
-    src_kafka(Kafka)
-    src_nats(NATS)
-    src_ecr(AWS ECR):::future
-    src_misc(...):::future
-  end
-  src_cli --> q
-  src_http --> q
-  src_http_poll --> q
-  src_fs_content --> q
-  src_fs_activity --> q
-  src_s3_content --> q
-  src_s3_activity --> q
-  src_kafka --> q
-  src_nats --> q
-  src_ecr --> q
-  src_misc --> q
-
-  subgraph sinks
-    sink_stdout(stdout)
-    sink_db(DB)
-    sink_clickhouse(ClickHouse)
-    sink_http(HTTP)
-    sink_kafka(Kafka)
-    sink_nats(NATS)
-  end
-  q --> sink_stdout
-  q --> sink_http
-  q --> sink_db
-  q --> sink_clickhouse
-  q --> sink_kafka
-  q --> sink_nats
-```
+![Archi Overview](./overview.gif)
 
 ## Configuration
 
