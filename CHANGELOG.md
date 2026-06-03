@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.39.1...0.40.0) - 2026-06-03
+
+### Added
+
+- *(http_polling)* add pagination and Retry-After middleware
+
+### Fixed
+
+- *(deps)* update
+- *(deps)* update rust crate opendal to 0.57 ([#360](https://github.com/cdviz-dev/cdviz-collector/pull/360))
+- *(sources,config,send)* security hardening and TextLine consistency
+
+### Other
+
+- replace mermaid diagram (failed on GitHub) by an animated gif
+- fix syntax README
+- update README
+
 ## [0.39.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.39.0...0.39.1) - 2026-05-31
 
 ### Fixed
