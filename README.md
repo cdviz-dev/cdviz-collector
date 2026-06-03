@@ -49,6 +49,7 @@
 - **Docker image** → `ghcr.io/cdviz-dev/cdviz-collector`
 - **Helm chart** for Kubernetes
 - **Cargo** → `cargo install cdviz-collector`
+- **Mise** → `mise install "github:cdviz-dev/cdviz-collector"`
 
 See the [Installation Guide](https://cdviz.dev/docs/cdviz-collector/install).
 
@@ -125,6 +126,16 @@ For all options: `cdviz-collector --help` or `cdviz-collector <command> --help`.
 | [send-cdevents](https://github.com/cdviz-dev/send-cdevents) | GitHub Action wrapping `cdviz-collector send`                                 |
 | [CDEvents spec](https://cdevents.dev)                       | CloudEvents-based open standard for SDLC events                               |
 | [VRL](https://vector.dev/docs/reference/vrl/)               | Transformation language used by transformers                                  |
+
+## AI Assistant Skill
+
+Install the [agent skill](https://agentskills.io) for help configuring pipelines, writing VRL transformers, mapping `CDEvent` types, and debugging. Works with Claude Code, GitHub Copilot, Cursor, and [other supported agents](https://github.com/vercel-labs/skills).
+
+```bash
+npx skills add cdviz-dev/cdviz-collector
+```
+
+In Claude Code, invoke with `/cdviz-collector`.
 
 ## Development
 
