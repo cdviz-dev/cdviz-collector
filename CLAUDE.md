@@ -18,7 +18,6 @@ cdviz-collector operates in three modes:
 
 - **`cdviz-collector`** (root) - Main binary crate
 - **`testkit/`** - Testing utility crate for connector chain integration tests
-- **`transformers/`** - Git submodule pointing to community transformers repository (VRL-based, see `transformers/AGENTS.md` for conventions)
 - **`docs/`** - Architecture decision records (`docs/adr/`)
 
 ## Development Commands

@@ -163,8 +163,6 @@ ARG TARGETPLATFORM
 # COPY --from=download /etc/passwd /etc/passwd
 # COPY --from=download /etc/group /etc/group
 COPY --from=download --chown=0:0 --chmod=755 /app/${TARGETPLATFORM} /usr/local/bin/cdviz-collector
-# use wildcard to copy/follow all files from the directory and not copy as symlinks
-COPY ./config/transformers/* /etc/cdviz-collector/transformers/.
 
 ENV \
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="http://127.0.0.1:4317" \
