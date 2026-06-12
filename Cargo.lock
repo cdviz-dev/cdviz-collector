@@ -766,9 +766,9 @@ dependencies = [
 
 [[package]]
 name = "cdevents-sdk"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5183a90d8e5df8750db4d878cdfc3fd2d0267e099b101c95926ca8d63054cd1"
+checksum = "2ecb72e7b5f21f27beb54f21e70d5707a5b01cb0986e2e6afd7fda8ea09b8e9d"
 dependencies = [
  "cloudevents-sdk",
  "enum_dispatch",
