@@ -414,6 +414,9 @@ megalinter-reports/
 
 #misc
 .aider*
+AGENTS.md
+CLAUDE.md
+.claude
 proptest-regressions/
 build/
 .cdviz-collector/
