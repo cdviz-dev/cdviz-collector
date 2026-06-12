@@ -74,7 +74,7 @@
 #
 # checkov:skip=CKV_DOCKER_7:Ensure the base image uses a non latest version tag
 # trivy:ignore:AVD-DS-0001
-FROM alpine:3 AS download
+FROM --platform=$BUILDPLATFORM alpine:3 AS download
 
 ARG VERSION
 ARG VARIANT="gnu" # "musl"
@@ -103,18 +103,19 @@ RUN adduser \
 WORKDIR /work
 
 RUN <<EOT
+  set -eux
   case "${TARGETPLATFORM}" in
     "linux/amd64")
       ARCH="x86_64";;
     "linux/arm64")
       ARCH="aarch64";;
-    *)        
-      echo "Unknown arch: ${TARGETPLATFORM}";;
+    *)
+      echo "Unknown arch: ${TARGETPLATFORM}"
+      exit 1;;
   esac
   mkdir -p /app/
   cd /tmp
-  echo "curl -L -o cdviz-collector.tar.xz https://github.com/cdviz-dev/cdviz-collector/releases/download/${VERSION}/cdviz-collector-${ARCH}-unknown-linux-${VARIANT}.tar.xz"
-  curl -L -o cdviz-collector.tar.xz https://github.com/cdviz-dev/cdviz-collector/releases/download/${VERSION}/cdviz-collector-${ARCH}-unknown-linux-${VARIANT}.tar.xz
+  curl -L -o cdviz-collector.tar.xz "https://github.com/cdviz-dev/cdviz-collector/releases/download/${VERSION}/cdviz-collector-${ARCH}-unknown-linux-${VARIANT}.tar.xz"
   tar -xvf cdviz-collector.tar.xz --strip-components=1
   mv cdviz-collector /app/
 EOT
