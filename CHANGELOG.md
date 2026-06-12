@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.41.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.40.0...0.41.0) - 2026-06-12
+
+### Added
+
+- *(skill)* add Claude Code / agent skill for cdviz-collector
+
+### Fixed
+
+- *(Dockerfile)* fix build multiplatform ([#365](https://github.com/cdviz-dev/cdviz-collector/pull/365))
+- *(deps)* update rust crate cdevents-sdk to 0.4 ([#364](https://github.com/cdviz-dev/cdviz-collector/pull/364))
+
+### Other
+
+- *(deps)* update rust crate insta to v1.48.0 ([#366](https://github.com/cdviz-dev/cdviz-collector/pull/366))
+- gitignore AGENTS, CLAUDE,...
+- *(deps)* update rust crate serde_with to v3.21.0 ([#363](https://github.com/cdviz-dev/cdviz-collector/pull/363))
+- fix the workflows/release modified without `dist` cli
+- [**breaking**] remove transformers submodule and bundled VRL files
+
 ## [0.40.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.39.1...0.40.0) - 2026-06-03
 
 ### Added
