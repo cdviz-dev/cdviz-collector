@@ -75,8 +75,10 @@
 # checkov:skip=CKV_DOCKER_7:Ensure the base image uses a non latest version tag
 # trivy:ignore:AVD-DS-0001
 FROM --platform=$BUILDPLATFORM alpine:3 AS download
+
 ARG VERSION
 ARG VARIANT="gnu" # "musl"
+ARG TARGETPLATFORM
 
 RUN <<EOT
   set -eux
@@ -102,23 +104,20 @@ WORKDIR /work
 
 RUN <<EOT
   set -eux
-  mkdir -p /app/linux
-
-  mkdir x86_64
-  cd x86_64
-  curl -L -o cdviz-collector.tar.xz "https://github.com/cdviz-dev/cdviz-collector/releases/download/${VERSION}/cdviz-collector-x86_64-unknown-linux-${VARIANT}.tar.xz"
+  case "${TARGETPLATFORM}" in
+    "linux/amd64")
+      ARCH="x86_64";;
+    "linux/arm64")
+      ARCH="aarch64";;
+    *)
+      echo "Unknown arch: ${TARGETPLATFORM}"
+      exit 1;;
+  esac
+  mkdir -p /app/
+  cd /tmp
+  curl -L -o cdviz-collector.tar.xz "https://github.com/cdviz-dev/cdviz-collector/releases/download/${VERSION}/cdviz-collector-${ARCH}-unknown-linux-${VARIANT}.tar.xz"
   tar -xvf cdviz-collector.tar.xz --strip-components=1
-  mv cdviz-collector /app/linux/amd64
-  cd ..
-  # ldd /app/linux/amd64
-
-  mkdir aarch64
-  cd aarch64
-  curl -L -o cdviz-collector.tar.xz "https://github.com/cdviz-dev/cdviz-collector/releases/download/${VERSION}/cdviz-collector-aarch64-unknown-linux-${VARIANT}.tar.xz"
-  tar -xvf cdviz-collector.tar.xz --strip-components=1
-  mv cdviz-collector /app/linux/arm64
-  cd ..
-  # ldd /app/linux/arm64
+  mv cdviz-collector /app/
 EOT
 
 HEALTHCHECK NONE
@@ -145,7 +144,7 @@ HEALTHCHECK NONE
 
 # glibc based
 # +50MB
-FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/glibc-dynamic:latest AS cdviz-collector
+FROM cgr.dev/chainguard/glibc-dynamic:latest AS cdviz-collector
 # +85MB (but often in cache)
 # FROM --platform=$BUILDPLATFORM gcr.io/distroless/cc-debian12:nonroot AS cdviz-collector
 
@@ -162,7 +161,7 @@ ARG TARGETPLATFORM
 
 # COPY --from=download /etc/passwd /etc/passwd
 # COPY --from=download /etc/group /etc/group
-COPY --from=download --chown=0:0 --chmod=755 /app/${TARGETPLATFORM} /usr/local/bin/cdviz-collector
+COPY --from=download --chown=0:0 --chmod=755 /app/cdviz-collector /usr/local/bin/cdviz-collector
 
 ENV \
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="http://127.0.0.1:4317" \
