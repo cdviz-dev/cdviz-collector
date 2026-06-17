@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.42.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.41.0...0.42.0) - 2026-06-17
+
+### Added
+
+- *(http_polling)* [**breaking**] replace request_vrl with VRL request driver
+
+### Fixed
+
+- *(deps)* update
+- *(deps)* update rust crate tower-http to 0.7 ([#367](https://github.com/cdviz-dev/cdviz-collector/pull/367))
+
 ## [0.41.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.40.0...0.41.0) - 2026-06-12
 
 ### Added
