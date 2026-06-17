@@ -204,7 +204,11 @@ mod tests {
                 let mut map = OutgoingHeaderMap::new();
                 map.insert(
                     "Authorization".to_string(),
-                    HeaderSource::Static { value: "Bearer token".to_string() },
+                    HeaderSource::Static {
+                        value: "Bearer token".to_string(),
+                        prefix: String::new(),
+                        suffix: String::new(),
+                    },
                 );
                 map
             },
@@ -416,7 +420,7 @@ mod integration_tests {
 
         assert_eq!(config.outgoing_headers[0].header, "Authorization");
         match &config.outgoing_headers[0].rule {
-            crate::security::header::HeaderSource::Static { value } => {
+            crate::security::header::HeaderSource::Static { value, .. } => {
                 assert_eq!(value, "Bearer sse-token");
             }
             _ => panic!("Expected static header"),
@@ -424,7 +428,7 @@ mod integration_tests {
 
         assert_eq!(config.outgoing_headers[1].header, "X-API-Key");
         match &config.outgoing_headers[1].rule {
-            crate::security::header::HeaderSource::Secret { value } => {
+            crate::security::header::HeaderSource::Secret { value, .. } => {
                 assert_eq!(value.expose_secret(), "secret-api-key");
             }
             _ => panic!("Expected secret header"),
@@ -443,7 +447,7 @@ mod integration_tests {
 
         assert_eq!(config.validation_headers[1].header, "Content-Type");
         match &config.validation_headers[1].rule {
-            crate::security::rule::Rule::Equals { value, case_sensitive } => {
+            crate::security::rule::Rule::Equals { value, case_sensitive, .. } => {
                 assert_eq!(value, "application/json");
                 assert!(!case_sensitive);
             }
@@ -482,10 +486,14 @@ mod unit_tests {
     fn test_header_config() {
         use crate::security::header::HeaderSource;
 
-        let header_source = HeaderSource::Static { value: "Bearer test-token".to_string() };
+        let header_source = HeaderSource::Static {
+            value: "Bearer test-token".to_string(),
+            prefix: String::new(),
+            suffix: String::new(),
+        };
 
         match header_source {
-            HeaderSource::Static { value } => assert_eq!(value, "Bearer test-token"),
+            HeaderSource::Static { value, .. } => assert_eq!(value, "Bearer test-token"),
             _ => panic!("Expected static header source"),
         }
     }
@@ -518,7 +526,7 @@ mod unit_tests {
 
         // Validate Authorization header (static)
         match config.headers.get("Authorization").unwrap() {
-            crate::security::header::HeaderSource::Static { value } => {
+            crate::security::header::HeaderSource::Static { value, .. } => {
                 assert_eq!(value, "Bearer api-token-12345");
             }
             _ => panic!("Expected static header for Authorization"),
@@ -526,7 +534,7 @@ mod unit_tests {
 
         // Validate X-API-Key header (secret)
         match config.headers.get("X-API-Key").unwrap() {
-            crate::security::header::HeaderSource::Secret { value } => {
+            crate::security::header::HeaderSource::Secret { value, .. } => {
                 assert_eq!(value.expose_secret(), "my-secret-api-key");
             }
             _ => panic!("Expected secret header for X-API-Key"),
@@ -551,7 +559,7 @@ mod unit_tests {
 
         // Validate User-Agent header (static)
         match config.headers.get("User-Agent").unwrap() {
-            crate::security::header::HeaderSource::Static { value } => {
+            crate::security::header::HeaderSource::Static { value, .. } => {
                 assert_eq!(value, "cdviz-collector/1.0");
             }
             _ => panic!("Expected static header for User-Agent"),

@@ -24,13 +24,23 @@ pub struct OutgoingHeaderConfig {
 pub enum HeaderSource {
     /// Static header value
     #[serde(rename = "static")]
-    Static { value: String },
+    Static {
+        value: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        prefix: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        suffix: String,
+    },
 
     /// Secret header value (e.g., from environment)
     #[serde(rename = "secret")]
     Secret {
         #[serde(skip_serializing)]
         value: SecretString,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        prefix: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        suffix: String,
     },
 
     /// Generate HMAC signature for the request
@@ -105,8 +115,10 @@ fn generate_header_value_with_context(
     existing_headers: &HeaderMap,
 ) -> Result<HeaderValue, HeaderError> {
     let value_str = match &config.rule {
-        HeaderSource::Static { value } => value.clone(),
-        HeaderSource::Secret { value } => value.expose_secret().to_string(),
+        HeaderSource::Static { value, prefix, suffix } => super::enclose(value, prefix, suffix),
+        HeaderSource::Secret { value, prefix, suffix } => {
+            super::enclose(value.expose_secret(), prefix, suffix)
+        }
         HeaderSource::Signature {
             token,
             token_encoding,
@@ -199,7 +211,9 @@ pub enum SimpleHeaderValue {
 impl From<SimpleHeaderConfig> for OutgoingHeaderConfig {
     fn from(simple: SimpleHeaderConfig) -> Self {
         let source = match simple.config {
-            SimpleHeaderValue::Simple { value } => HeaderSource::Static { value },
+            SimpleHeaderValue::Simple { value } => {
+                HeaderSource::Static { value, prefix: String::new(), suffix: String::new() }
+            }
             SimpleHeaderValue::Complex(source) => source,
         };
 
@@ -221,7 +235,11 @@ mod tests {
     fn test_static_header_generation() {
         let configs = vec![OutgoingHeaderConfig {
             header: "Authorization".to_string(),
-            rule: HeaderSource::Static { value: "Bearer token123".to_string() },
+            rule: HeaderSource::Static {
+                value: "Bearer token123".to_string(),
+                prefix: String::new(),
+                suffix: String::new(),
+            },
         }];
 
         let headers = generate_headers(&configs, None).unwrap();
@@ -232,7 +250,11 @@ mod tests {
     fn test_secret_header_generation() {
         let configs = vec![OutgoingHeaderConfig {
             header: "X-API-Key".to_string(),
-            rule: HeaderSource::Secret { value: "secret123".into() },
+            rule: HeaderSource::Secret {
+                value: "secret123".into(),
+                prefix: String::new(),
+                suffix: String::new(),
+            },
         }];
 
         let headers = generate_headers(&configs, None).unwrap();
@@ -240,10 +262,68 @@ mod tests {
     }
 
     #[test]
+    fn test_static_header_with_prefix() {
+        let configs = vec![OutgoingHeaderConfig {
+            header: "Authorization".to_string(),
+            rule: HeaderSource::Static {
+                value: "token123".to_string(),
+                prefix: "Bearer ".to_string(),
+                suffix: String::new(),
+            },
+        }];
+
+        let headers = generate_headers(&configs, None).unwrap();
+        assert_eq!(headers.get("Authorization").unwrap(), "Bearer token123");
+    }
+
+    #[test]
+    fn test_secret_header_with_prefix_and_suffix() {
+        let configs = vec![OutgoingHeaderConfig {
+            header: "X-API-Key".to_string(),
+            rule: HeaderSource::Secret {
+                value: "secret".into(),
+                prefix: "[".to_string(),
+                suffix: "]".to_string(),
+            },
+        }];
+
+        let headers = generate_headers(&configs, None).unwrap();
+        assert_eq!(headers.get("X-API-Key").unwrap(), "[secret]");
+    }
+
+    #[test]
+    fn test_toml_parsing_secret_with_prefix() {
+        use secrecy::ExposeSecret;
+
+        let toml_str = indoc! {r#"
+            header = "Authorization"
+
+            [rule]
+            type = "secret"
+            value = "ghp_token"
+            prefix = "Bearer "
+            "#};
+
+        let config: OutgoingHeaderConfig = toml::from_str(toml_str).unwrap();
+        match config.rule {
+            HeaderSource::Secret { value, prefix, suffix } => {
+                assert_eq!(value.expose_secret(), "ghp_token");
+                assert_eq!(prefix, "Bearer ");
+                assert_eq!(suffix, "");
+            }
+            _ => panic!("Expected secret header source"),
+        }
+    }
+
+    #[test]
     fn test_invalid_header_name() {
         let configs = vec![OutgoingHeaderConfig {
             header: "Invalid Header Name".to_string(), // Spaces not allowed
-            rule: HeaderSource::Static { value: "value".to_string() },
+            rule: HeaderSource::Static {
+                value: "value".to_string(),
+                prefix: String::new(),
+                suffix: String::new(),
+            },
         }];
 
         let result = generate_headers(&configs, None);
@@ -261,7 +341,7 @@ mod tests {
         let outgoing: OutgoingHeaderConfig = simple.into();
         assert_eq!(outgoing.header, "Authorization");
         match outgoing.rule {
-            HeaderSource::Static { value } => assert_eq!(value, "Bearer token"),
+            HeaderSource::Static { value, .. } => assert_eq!(value, "Bearer token"),
             _ => panic!("Expected static source"),
         }
     }
@@ -279,7 +359,7 @@ mod tests {
         let config: OutgoingHeaderConfig = toml::from_str(toml_str).unwrap();
         assert_eq!(config.header, "Authorization");
         match config.rule {
-            HeaderSource::Static { value } => {
+            HeaderSource::Static { value, .. } => {
                 assert_eq!(value, "Bearer token123");
             }
             _ => panic!("Expected static header source"),
@@ -301,7 +381,7 @@ mod tests {
         let config: OutgoingHeaderConfig = toml::from_str(toml_str).unwrap();
         assert_eq!(config.header, "X-API-Key");
         match config.rule {
-            HeaderSource::Secret { value } => {
+            HeaderSource::Secret { value, .. } => {
                 assert_eq!(value.expose_secret(), "secret-from-env");
             }
             _ => panic!("Expected secret header source"),
@@ -378,7 +458,7 @@ mod tests {
         // Validate Authorization header
         assert_eq!(configs.headers[0].header, "Authorization");
         match &configs.headers[0].rule {
-            HeaderSource::Static { value } => {
+            HeaderSource::Static { value, .. } => {
                 assert_eq!(value, "Bearer static-token");
             }
             _ => panic!("Expected static header source"),
@@ -387,7 +467,7 @@ mod tests {
         // Validate X-API-Key header
         assert_eq!(configs.headers[1].header, "X-API-Key");
         match &configs.headers[1].rule {
-            HeaderSource::Secret { value } => {
+            HeaderSource::Secret { value, .. } => {
                 assert_eq!(value.expose_secret(), "api-key-secret");
             }
             _ => panic!("Expected secret header source"),
@@ -425,7 +505,7 @@ mod tests {
         let outgoing: OutgoingHeaderConfig = config.into();
         assert_eq!(outgoing.header, "Authorization");
         match outgoing.rule {
-            HeaderSource::Static { value } => {
+            HeaderSource::Static { value, .. } => {
                 assert_eq!(value, "Bearer simple-token");
             }
             _ => panic!("Expected static header source"),
@@ -457,7 +537,11 @@ mod tests {
         // (Secret configs can't be serialized due to SecretString security)
         let original_config = OutgoingHeaderConfig {
             header: "X-Custom-Header".to_string(),
-            rule: HeaderSource::Static { value: "static-value".to_string() },
+            rule: HeaderSource::Static {
+                value: "static-value".to_string(),
+                prefix: String::new(),
+                suffix: String::new(),
+            },
         };
 
         let serialized = toml::to_string(&original_config).unwrap();
@@ -465,7 +549,10 @@ mod tests {
 
         assert_eq!(original_config.header, deserialized.header);
         match (&original_config.rule, &deserialized.rule) {
-            (HeaderSource::Static { value: orig }, HeaderSource::Static { value: deser }) => {
+            (
+                HeaderSource::Static { value: orig, .. },
+                HeaderSource::Static { value: deser, .. },
+            ) => {
                 assert_eq!(orig, deser);
             }
             _ => panic!("Config types don't match"),
@@ -516,9 +603,20 @@ mod tests {
         let mut map = OutgoingHeaderMap::new();
         map.insert(
             "Authorization".to_string(),
-            HeaderSource::Static { value: "Bearer token".to_string() },
+            HeaderSource::Static {
+                value: "Bearer token".to_string(),
+                prefix: String::new(),
+                suffix: String::new(),
+            },
         );
-        map.insert("X-API-Key".to_string(), HeaderSource::Secret { value: "secret123".into() });
+        map.insert(
+            "X-API-Key".to_string(),
+            HeaderSource::Secret {
+                value: "secret123".into(),
+                prefix: String::new(),
+                suffix: String::new(),
+            },
+        );
 
         let configs = outgoing_header_map_to_configs(&map);
         assert_eq!(configs.len(), 2);
@@ -526,7 +624,7 @@ mod tests {
         // Find the authorization header
         let auth_header = configs.iter().find(|h| h.header == "Authorization").unwrap();
         match &auth_header.rule {
-            HeaderSource::Static { value } => assert_eq!(value, "Bearer token"),
+            HeaderSource::Static { value, .. } => assert_eq!(value, "Bearer token"),
             _ => panic!("Expected static source"),
         }
 
@@ -557,7 +655,7 @@ mod tests {
 
         // Check Authorization header
         match config.headers.get("Authorization").unwrap() {
-            HeaderSource::Static { value } => assert_eq!(value, "Bearer token123"),
+            HeaderSource::Static { value, .. } => assert_eq!(value, "Bearer token123"),
             _ => panic!("Expected static header source"),
         }
 

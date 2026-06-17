@@ -80,7 +80,11 @@ mod tests {
                 let mut map = OutgoingHeaderMap::new();
                 map.insert(
                     "Authorization".to_string(),
-                    HeaderSource::Static { value: "Bearer token".to_string() },
+                    HeaderSource::Static {
+                        value: "Bearer token".to_string(),
+                        prefix: String::new(),
+                        suffix: String::new(),
+                    },
                 );
                 map
             },

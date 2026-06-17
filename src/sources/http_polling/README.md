@@ -356,9 +356,11 @@ driver_vrl = """
 # total_duration_of_retries = "30s"
 
 ## Static or secret request headers (same format as the http sink).
+## `static` and `secret` accept optional `prefix`/`suffix` that enclose `value`,
+## so a bare token from an env var or file can be wrapped without modifying it.
 # [sources.my_source.extractor.headers]
-# "Authorization" = { type = "secret", value = "Bearer TOKEN" }
-# "X-Custom"      = { type = "static", value = "hello" }
+# "authorization" = { type = "secret", value = "TOKEN", prefix = "Bearer " }
+# "x-custom"      = { type = "static", value = "hello" }
 
 ## Base metadata merged into every EventSource (optional).
 # [sources.my_source.extractor.metadata]

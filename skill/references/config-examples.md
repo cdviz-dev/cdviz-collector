@@ -178,6 +178,11 @@ transformer_refs          = ["filter_errors"]  # optional pre-send transform
 "Authorization" = { type = "static",  value = "Bearer mytoken" }
 "X-API-Key"     = { type = "secret",  value = "API_KEY_ENV_VAR" }  # reads env var
 "Content-Type"  = { type = "static",  value = "application/json" }
+
+# `static`, `secret` (outgoing) and `equals` (validation) accept optional
+# `prefix`/`suffix` to enclose `value` — useful when the token is stored bare
+# in an env var or file and you don't want to embed "Bearer " in it:
+# "Authorization" = { type = "secret", value = "API_TOKEN_ENV", prefix = "Bearer " }
 ```
 
 ### PostgreSQL

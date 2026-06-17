@@ -825,7 +825,11 @@ mod tests {
         let mut config = make_config(&server.uri());
         config.headers.insert(
             "x-api-key".to_string(),
-            HeaderSource::Static { value: "test-secret".to_string() },
+            HeaderSource::Static {
+                value: "test-secret".to_string(),
+                prefix: String::new(),
+                suffix: String::new(),
+            },
         );
 
         let (mut extractor, _collector) = make_extractor(&config);

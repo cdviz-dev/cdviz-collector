@@ -443,7 +443,11 @@ mod tests {
                 let mut map = OutgoingHeaderMap::new();
                 map.insert(
                     "X-API-Key".to_string(),
-                    HeaderSource::Static { value: "test-key".to_string() },
+                    HeaderSource::Static {
+                        value: "test-key".to_string(),
+                        prefix: String::new(),
+                        suffix: String::new(),
+                    },
                 );
                 map
             },
@@ -554,11 +558,19 @@ mod tests {
                 let mut map = OutgoingHeaderMap::new();
                 map.insert(
                     "X-API-Key".to_string(),
-                    HeaderSource::Static { value: "test-secret-key".to_string() },
+                    HeaderSource::Static {
+                        value: "test-secret-key".to_string(),
+                        prefix: String::new(),
+                        suffix: String::new(),
+                    },
                 );
                 map.insert(
                     "X-Client-ID".to_string(),
-                    HeaderSource::Static { value: "cdviz-collector".to_string() },
+                    HeaderSource::Static {
+                        value: "cdviz-collector".to_string(),
+                        prefix: String::new(),
+                        suffix: String::new(),
+                    },
                 );
                 map
             },
@@ -674,7 +686,11 @@ mod tests {
                 let mut map = OutgoingHeaderMap::new();
                 map.insert(
                     "Authorization".to_string(),
-                    HeaderSource::Static { value: "Bearer configured-token".to_string() },
+                    HeaderSource::Static {
+                        value: "Bearer configured-token".to_string(),
+                        prefix: String::new(),
+                        suffix: String::new(),
+                    },
                 );
                 map
             },

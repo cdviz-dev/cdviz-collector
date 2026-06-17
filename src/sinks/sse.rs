@@ -280,7 +280,12 @@ mod tests {
                 let mut map = HeaderRuleMap::new();
                 map.insert(
                     "Authorization".to_string(),
-                    Rule::Equals { value: "Bearer secret-token".to_string(), case_sensitive: true },
+                    Rule::Equals {
+                        value: "Bearer secret-token".to_string(),
+                        case_sensitive: true,
+                        prefix: String::new(),
+                        suffix: String::new(),
+                    },
                 );
                 map
             },

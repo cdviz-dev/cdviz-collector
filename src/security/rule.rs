@@ -45,6 +45,10 @@ pub enum Rule {
         value: String,
         #[serde(default = "default_case_sensitive")]
         case_sensitive: bool,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        prefix: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        suffix: String,
     },
 
     /// Header must match regex pattern
@@ -135,15 +139,16 @@ pub fn validate_header(
                 return Err(ValidationError::MissingHeader { header: rule_config.header.clone() });
             }
         }
-        Rule::Equals { value, case_sensitive } => {
+        Rule::Equals { value, case_sensitive, prefix, suffix } => {
             let actual_value = header_value.and_then(|v| v.to_str().ok()).ok_or_else(|| {
                 ValidationError::MissingHeader { header: rule_config.header.clone() }
             })?;
 
+            let expected = super::enclose(value, prefix, suffix);
             let matches = if *case_sensitive {
-                actual_value == value
+                actual_value == expected
             } else {
-                actual_value.to_lowercase() == value.to_lowercase()
+                actual_value.to_lowercase() == expected.to_lowercase()
             };
 
             if !matches {
@@ -243,7 +248,12 @@ mod tests {
 
         let rule_config = HeaderRuleConfig {
             header: "Content-Type".to_string(),
-            rule: Rule::Equals { value: "application/json".to_string(), case_sensitive: true },
+            rule: Rule::Equals {
+                value: "application/json".to_string(),
+                case_sensitive: true,
+                prefix: String::new(),
+                suffix: String::new(),
+            },
         };
 
         assert!(validate_header(&headers, &rule_config, None).is_ok());
@@ -251,7 +261,12 @@ mod tests {
         // Test case insensitive
         let rule_config_insensitive = HeaderRuleConfig {
             header: "Content-Type".to_string(),
-            rule: Rule::Equals { value: "APPLICATION/JSON".to_string(), case_sensitive: false },
+            rule: Rule::Equals {
+                value: "APPLICATION/JSON".to_string(),
+                case_sensitive: false,
+                prefix: String::new(),
+                suffix: String::new(),
+            },
         };
 
         assert!(validate_header(&headers, &rule_config_insensitive, None).is_ok());
@@ -259,10 +274,68 @@ mod tests {
         // Test mismatch
         let rule_config_mismatch = HeaderRuleConfig {
             header: "Content-Type".to_string(),
-            rule: Rule::Equals { value: "text/plain".to_string(), case_sensitive: true },
+            rule: Rule::Equals {
+                value: "text/plain".to_string(),
+                case_sensitive: true,
+                prefix: String::new(),
+                suffix: String::new(),
+            },
         };
 
         assert!(validate_header(&headers, &rule_config_mismatch, None).is_err());
+    }
+
+    #[test]
+    fn test_rule_equals_with_prefix_and_suffix() {
+        let mut headers = HeaderMap::new();
+        headers.insert("Authorization", HeaderValue::from_static("Bearer token123"));
+
+        // Expected value is enclosed: "Bearer " + "token123"
+        let rule_config = HeaderRuleConfig {
+            header: "Authorization".to_string(),
+            rule: Rule::Equals {
+                value: "token123".to_string(),
+                case_sensitive: true,
+                prefix: "Bearer ".to_string(),
+                suffix: String::new(),
+            },
+        };
+        assert!(validate_header(&headers, &rule_config, None).is_ok());
+
+        // Bare value (no prefix) must not match the enclosed expectation
+        let rule_config_bare = HeaderRuleConfig {
+            header: "Authorization".to_string(),
+            rule: Rule::Equals {
+                value: "Bearer token123".to_string(),
+                case_sensitive: true,
+                prefix: "Bearer ".to_string(),
+                suffix: String::new(),
+            },
+        };
+        assert!(validate_header(&headers, &rule_config_bare, None).is_err());
+    }
+
+    #[test]
+    fn test_toml_parsing_equals_with_prefix_suffix() {
+        let toml_str = indoc! {r#"
+            header = "Authorization"
+
+            [rule]
+            type = "equals"
+            value = "token123"
+            prefix = "Bearer "
+            "#};
+
+        let config: HeaderRuleConfig = toml::from_str(toml_str).unwrap();
+        match config.rule {
+            Rule::Equals { value, case_sensitive, prefix, suffix } => {
+                assert_eq!(value, "token123");
+                assert!(case_sensitive);
+                assert_eq!(prefix, "Bearer ");
+                assert_eq!(suffix, "");
+            }
+            _ => panic!("Expected equals rule"),
+        }
     }
 
     #[test]
@@ -323,7 +396,12 @@ mod tests {
             },
             HeaderRuleConfig {
                 header: "Content-Type".to_string(),
-                rule: Rule::Equals { value: "application/json".to_string(), case_sensitive: true },
+                rule: Rule::Equals {
+                    value: "application/json".to_string(),
+                    case_sensitive: true,
+                    prefix: String::new(),
+                    suffix: String::new(),
+                },
             },
         ];
 
@@ -369,7 +447,7 @@ mod tests {
         let config: HeaderRuleConfig = toml::from_str(toml_str).unwrap();
         assert_eq!(config.header, "Content-Type");
         match config.rule {
-            Rule::Equals { value, case_sensitive } => {
+            Rule::Equals { value, case_sensitive, .. } => {
                 assert_eq!(value, "application/json");
                 assert!(!case_sensitive);
             }
@@ -439,7 +517,12 @@ mod tests {
         map.insert("Authorization".to_string(), Rule::Exists);
         map.insert(
             "Content-Type".to_string(),
-            Rule::Equals { value: "application/json".to_string(), case_sensitive: true },
+            Rule::Equals {
+                value: "application/json".to_string(),
+                case_sensitive: true,
+                prefix: String::new(),
+                suffix: String::new(),
+            },
         );
 
         let configs = header_rule_map_to_configs(&map);
@@ -452,7 +535,7 @@ mod tests {
         // Find the content-type rule
         let content_type_rule = configs.iter().find(|r| r.header == "Content-Type").unwrap();
         match &content_type_rule.rule {
-            Rule::Equals { value, case_sensitive } => {
+            Rule::Equals { value, case_sensitive, .. } => {
                 assert_eq!(value, "application/json");
                 assert!(*case_sensitive);
             }
@@ -485,7 +568,7 @@ mod tests {
 
         // Check X-API-Key rule
         match config.headers.get("X-API-Key").unwrap() {
-            Rule::Equals { value, case_sensitive } => {
+            Rule::Equals { value, case_sensitive, .. } => {
                 assert_eq!(value, "secret123");
                 assert!(*case_sensitive);
             }
@@ -855,7 +938,12 @@ mod tests {
         let headers = HeaderMap::new(); // no Content-Type
         let rule_config = HeaderRuleConfig {
             header: "Content-Type".to_string(),
-            rule: Rule::Equals { value: "application/json".to_string(), case_sensitive: true },
+            rule: Rule::Equals {
+                value: "application/json".to_string(),
+                case_sensitive: true,
+                prefix: String::new(),
+                suffix: String::new(),
+            },
         };
 
         let err = validate_header(&headers, &rule_config, None).unwrap_err();
@@ -951,7 +1039,12 @@ mod tests {
         );
         let rule_config = HeaderRuleConfig {
             header: config_name.to_string(),
-            rule: Rule::Equals { value: "expected-token".to_string(), case_sensitive: true },
+            rule: Rule::Equals {
+                value: "expected-token".to_string(),
+                case_sensitive: true,
+                prefix: String::new(),
+                suffix: String::new(),
+            },
         };
         assert!(
             validate_header(&headers, &rule_config, None).is_ok(),
