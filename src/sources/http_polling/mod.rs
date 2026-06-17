@@ -5,19 +5,22 @@ mod request;
 mod retry_after_middleware;
 
 use crate::errors::{IntoDiagnostic, Result};
+use crate::security::header::OutgoingHeaderConfig;
 use crate::security::header::{
     OutgoingHeaderMap, generate_headers, outgoing_header_map_to_configs,
 };
 use crate::sources::{EventSource, EventSourcePipe};
 use filter::TimeWindowFilter;
+use futures::stream::{FuturesUnordered, StreamExt};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use reqwest_tracing::TracingMiddleware;
 use retry_after_middleware::RetryAfterMiddleware;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::time::sleep;
+use tokio::time::{Instant, sleep};
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
@@ -41,9 +44,13 @@ pub(crate) struct Config {
     #[serde(default)]
     pub(crate) ts_before_limit: Option<jiff::Timestamp>,
 
-    /// VRL script that receives `{ metadata: { ts_after, ts_before, ... } }` and
-    /// must set `.url` (required), `.method`, `.headers`, `.body`, `.query`.
-    pub(crate) request_vrl: String,
+    /// VRL script driving the (multi-pass) request worklist. Invoked once at
+    /// bootstrap (with `.response = null`) to seed requests, then again for every
+    /// response whose `route` feeds back. It receives
+    /// `{ metadata, state, request, response }` and must set `.requests` to an
+    /// array of request objects; it may set `.state` (an immutable snapshot
+    /// carried into each request). See the module README for the full contract.
+    pub(crate) driver_vrl: String,
 
     /// Static/secret/signature headers merged into each request.
     #[serde(default)]
@@ -53,7 +60,9 @@ pub(crate) struct Config {
     #[serde(default = "default_retry_duration", with = "humantime_serde")]
     pub(crate) total_duration_of_retries: Duration,
 
-    /// How to parse the response body. Controls the `Accept` request header.
+    /// Default parser for response bodies routed to the pipeline. Overridable
+    /// per-request via the driver's `requests[].parser`. Controls the `Accept`
+    /// request header.
     #[serde(default)]
     pub(crate) parser: ParserConfig,
 
@@ -66,20 +75,42 @@ pub(crate) struct Config {
     #[serde(default = "default_user_agent")]
     pub(crate) user_agent: String,
 
-    /// Follow `Link: <url>; rel="next"` headers to consume all pages within a
-    /// single time window before advancing. Default: `false`.
-    #[serde(default)]
-    pub(crate) follow_link_header: bool,
-
-    /// Minimum delay between consecutive HTTP requests, including pagination
-    /// fetches. Useful for APIs without rate-limit headers (e.g. Jenkins).
-    /// Default: no delay.
+    /// Minimum delay between consecutive HTTP requests (the *start* of each
+    /// request is spaced by at least this much, across the whole worklist).
+    /// Useful for APIs without rate-limit headers (e.g. Jenkins). Default: none.
     #[serde(default, with = "humantime_serde::option")]
     pub(crate) min_request_interval: Option<Duration>,
+
+    /// Maximum number of requests fetched concurrently within one poll.
+    /// Default: 4.
+    #[serde(default = "default_max_concurrency")]
+    pub(crate) max_concurrency: usize,
+
+    /// Hard budget on the total number of requests issued in a single poll
+    /// (guards against runaway driver loops). Default: 1000.
+    #[serde(default = "default_max_requests")]
+    pub(crate) max_requests: u32,
+
+    /// Maximum feedback-chain depth (bootstrap requests are depth 0). Guards
+    /// against unbounded recursion. Default: 50.
+    #[serde(default = "default_max_depth")]
+    pub(crate) max_depth: u32,
 }
 
 fn default_user_agent() -> String {
     crate::DEFAULT_USER_AGENT.to_string()
+}
+
+fn default_max_concurrency() -> usize {
+    4
+}
+
+fn default_max_requests() -> u32 {
+    1000
+}
+
+fn default_max_depth() -> u32 {
+    50
 }
 
 /// Controls how the HTTP response body is split into [`EventSource`] instances.
@@ -165,47 +196,106 @@ impl ResolvedParser {
     }
 }
 
-/// Outcome of a single page fetch.
-enum PageOutcome {
-    /// Page fetched successfully. Inner value is the next page URL (if any).
-    Done(Option<String>),
-    /// Recoverable failure; already logged.
-    Failed,
+/// A pending request in the worklist, carrying its immutable state snapshot.
+struct RequestTask {
+    spec: request::RequestSpec,
+    /// Snapshot of the driver state at the time this request was emitted.
+    state_snapshot: serde_json::Value,
+    /// Feedback-chain depth (bootstrap requests are depth 0).
+    depth: u32,
 }
 
-/// Maximum number of pages to follow in a single `run_once` poll cycle.
-const MAX_PAGES: u32 = 1000;
+/// A fetched HTTP response, decoupled from parsing/routing.
+struct FetchedResponse {
+    status: u16,
+    headers: HashMap<String, String>,
+    content_type: Option<String>,
+    body_text: String,
+}
 
-/// Extract the `rel="next"` URL from a `Link` header, if present.
-///
-/// Handles the RFC 5988 format: `Link: <https://api.example.com/page2>; rel="next"`
-/// Multiple link entries separated by commas are supported.
-fn parse_link_next(headers: &reqwest::header::HeaderMap) -> Option<&str> {
-    let value = headers.get(reqwest::header::LINK)?.to_str().ok()?;
-    for part in value.split(',') {
-        let part = part.trim();
-        // Split into URL part and parameter segment(s)
-        let mut segments = part.splitn(2, ';');
-        let Some(url_segment) = segments.next() else { continue };
-        let url_part = url_segment.trim().trim_start_matches('<').trim_end_matches('>');
-        // Each ';'-separated param token is checked for exact "rel=next" match
-        // (RFC 5988 §5.3 — token must be exactly "next", not "nextpage" etc.)
-        let params = segments.next().unwrap_or("");
-        let is_next = params.split(';').map(str::trim).any(|p| {
-            let p = p.to_ascii_lowercase();
-            p == "rel=\"next\"" || p == "rel=next"
-        });
-        if is_next {
-            return Some(url_part);
+/// Send one HTTP request and read its response. Free function (borrows nothing
+/// from the extractor) so it can run inside a `FuturesUnordered` while the
+/// extractor is later borrowed mutably to emit events. Returns `Err(())` on any
+/// recoverable failure (already logged).
+async fn fetch(
+    client: &ClientWithMiddleware,
+    spec: &request::RequestSpec,
+    accept: &'static str,
+    header_configs: &[OutgoingHeaderConfig],
+) -> std::result::Result<FetchedResponse, ()> {
+    let Ok(method_val) = reqwest::Method::from_bytes(spec.method.to_uppercase().as_bytes()) else {
+        tracing::warn!(method = spec.method, "invalid HTTP method");
+        return Err(());
+    };
+
+    let mut url = match url::Url::parse(&spec.url) {
+        Ok(u) => u,
+        Err(err) => {
+            tracing::warn!(?err, url = spec.url, "invalid URL");
+            return Err(());
+        }
+    };
+    if !spec.query.is_empty() {
+        let mut pairs = url.query_pairs_mut();
+        for (k, v) in &spec.query {
+            pairs.append_pair(k, v);
         }
     }
-    None
+    let url_str = url.to_string();
+
+    let mut req = client.request(method_val, url);
+    req = req.header(reqwest::header::ACCEPT, accept);
+    for (name, value) in &spec.headers {
+        req = req.header(name.as_str(), value.as_str());
+    }
+    let body_bytes = spec.body.as_deref().unwrap_or(&[]);
+    match generate_headers(header_configs, Some(body_bytes)) {
+        Ok(headers) => req = req.headers(headers),
+        Err(err) => tracing::warn!(?err, "failed to generate static headers, skipping"),
+    }
+    if let Some(body) = &spec.body {
+        req = req.body(body.clone());
+    }
+
+    let response = match req.send().await {
+        Ok(r) => r,
+        Err(err) => {
+            tracing::warn!(?err, url = url_str, "HTTP polling request error");
+            return Err(());
+        }
+    };
+
+    let status = response.status();
+    if !status.is_success() {
+        tracing::warn!(status = status.as_u16(), url = url_str, "HTTP polling non-success status");
+        return Err(());
+    }
+
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    let headers: HashMap<String, String> = response
+        .headers()
+        .iter()
+        .filter_map(|(k, v)| v.to_str().ok().map(|s| (k.to_string(), s.to_string())))
+        .collect();
+    let body_text = match response.text().await {
+        Ok(t) => t,
+        Err(err) => {
+            tracing::warn!(?err, url = url_str, "failed to read response body");
+            return Err(());
+        }
+    };
+
+    Ok(FetchedResponse { status: status.as_u16(), headers, content_type, body_text })
 }
 
 pub(crate) struct HttpPollingExtractor {
     config: Config,
     filter: TimeWindowFilter,
-    request_program: request::RequestProgram,
+    driver_program: request::DriverProgram,
     client: ClientWithMiddleware,
     next: EventSourcePipe,
     source_name: String,
@@ -220,7 +310,7 @@ impl HttpPollingExtractor {
         state_config: Option<&crate::state::Config>,
         source_name: String,
     ) -> Result<Self> {
-        let request_program = request::RequestProgram::compile(&config.request_vrl)?;
+        let driver_program = request::DriverProgram::compile(&config.driver_vrl)?;
 
         let ts_after = config.ts_after.unwrap_or(jiff::Timestamp::MIN);
         let filter = TimeWindowFilter::new(ts_after, config.ts_before_limit);
@@ -254,7 +344,7 @@ impl HttpPollingExtractor {
         Ok(Self {
             config: config.clone(),
             filter,
-            request_program,
+            driver_program,
             client,
             next,
             source_name,
@@ -263,8 +353,9 @@ impl HttpPollingExtractor {
         })
     }
 
-    /// Build the VRL input object for request generation.
-    fn build_vrl_input(&self) -> serde_json::Value {
+    /// Build the time-window-aware base metadata object (config metadata merged
+    /// with `ts_after`/`ts_before`/`context`).
+    fn base_metadata(&self) -> serde_json::Map<String, serde_json::Value> {
         let mut metadata = self.config.metadata.clone();
         if !metadata.is_object() {
             metadata = serde_json::json!({});
@@ -277,203 +368,204 @@ impl HttpPollingExtractor {
                 obj.insert(k, v);
             }
         }
-        serde_json::json!({ "metadata": metadata })
+        match metadata {
+            serde_json::Value::Object(obj) => obj,
+            _ => serde_json::Map::new(),
+        }
     }
 
-    /// Build the `EventSource` metadata for events from this poll.
-    fn build_event_metadata(&self, url: &str, method: &str, status: u16) -> serde_json::Value {
-        let mut metadata = self.config.metadata.clone();
-        if !metadata.is_object() {
-            metadata = serde_json::json!({});
-        }
-        let ts_meta = self.filter.as_metadata();
-        if let (serde_json::Value::Object(obj), serde_json::Value::Object(ts_obj)) =
-            (&mut metadata, ts_meta)
-        {
-            for (k, v) in ts_obj {
-                obj.insert(k, v);
-            }
-            obj.insert(
-                "http_polling".to_string(),
-                serde_json::json!({ "url": url, "method": method, "status": status }),
-            );
-        }
-        metadata
+    /// Build the driver VRL input: `{ metadata, state, request, response }`.
+    /// `request`/`response` are `null` on the bootstrap call.
+    fn build_driver_input(
+        &self,
+        state: &serde_json::Value,
+        request: Option<&request::RequestSpec>,
+        response: Option<&FetchedResponse>,
+    ) -> serde_json::Value {
+        let request_json = request
+            .map(|s| serde_json::json!({ "url": s.url, "method": s.method, "headers": s.headers }));
+        let response_json = response.map(|r| {
+            // Best-effort: expose the body as parsed JSON so the driver can read
+            // cursors/ids; fall back to a raw string when it is not JSON.
+            let body = serde_json::from_str::<serde_json::Value>(&r.body_text)
+                .unwrap_or_else(|_| serde_json::Value::String(r.body_text.clone()));
+            serde_json::json!({ "status": r.status, "headers": r.headers, "body": body })
+        });
+        serde_json::json!({
+            "metadata": self.base_metadata(),
+            "state": state,
+            "request": request_json,
+            "response": response_json,
+        })
     }
 
-    /// Send one HTTP request and forward the parsed events downstream.
-    ///
-    /// Returns `Ok(PageOutcome::Done(next_url))` on success — `next_url` is `Some`
-    /// when a `Link: rel="next"` header indicates more pages, `None` for the last
-    /// page. Returns `Ok(PageOutcome::Failed)` on a recoverable failure (already
-    /// logged).
-    async fn fetch_page(
-        &mut self,
+    /// Build the `EventSource` metadata for an emitted event, including the
+    /// request's immutable state snapshot under `http_polling.state`.
+    fn build_event_metadata(
+        &self,
         url: &str,
         method: &str,
-        params_headers: &HashMap<String, String>,
-        params_body: Option<Vec<u8>>,
-    ) -> Result<PageOutcome> {
-        let method_val = reqwest::Method::from_bytes(method.to_uppercase().as_bytes())
-            .map_err(|_| miette::MietteDiagnostic::new(format!("invalid HTTP method: {method}")))?;
-
-        let mut req = self.client.request(method_val, url);
-        req = req.header(reqwest::header::ACCEPT, self.config.parser.accept_header());
-        for (name, value) in params_headers {
-            req = req.header(name.as_str(), value.as_str());
+        status: u16,
+        state: &serde_json::Value,
+    ) -> serde_json::Value {
+        let mut obj = self.base_metadata();
+        let mut http_polling =
+            serde_json::json!({ "url": url, "method": method, "status": status });
+        if !state.is_null()
+            && let serde_json::Value::Object(hp) = &mut http_polling
+        {
+            hp.insert("state".to_string(), state.clone());
         }
-
-        let header_configs = outgoing_header_map_to_configs(&self.config.headers);
-        let body_bytes = params_body.as_deref().unwrap_or(&[]);
-        match generate_headers(&header_configs, Some(body_bytes)) {
-            Ok(headers) => req = req.headers(headers),
-            Err(e) => tracing::warn!(err = ?e, "failed to generate static headers, skipping"),
-        }
-        if let Some(body) = params_body {
-            req = req.body(body);
-        }
-
-        let response = match req.send().await {
-            Ok(r) => r,
-            Err(err) => {
-                tracing::warn!(?err, url, "HTTP polling request error");
-                return Ok(PageOutcome::Failed);
-            }
-        };
-
-        let status = response.status();
-        if !status.is_success() {
-            tracing::warn!(status = status.as_u16(), url, "HTTP polling non-success status");
-            return Ok(PageOutcome::Failed);
-        }
-
-        let next_url = self
-            .config
-            .follow_link_header
-            .then(|| parse_link_next(response.headers()))
-            .flatten()
-            .map(str::to_string);
-
-        let content_type = response
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .map(str::to_string);
-        let response_headers: HashMap<String, String> = response
-            .headers()
-            .iter()
-            .filter_map(|(k, v)| v.to_str().ok().map(|s| (k.to_string(), s.to_string())))
-            .collect();
-        let body_text = match response.text().await {
-            Ok(t) => t,
-            Err(err) => {
-                tracing::warn!(?err, "failed to read response body");
-                return Ok(PageOutcome::Failed);
-            }
-        };
-
-        let resolved = self.config.parser.resolve(content_type.as_deref());
-        let body_values = match resolved.parse(&body_text) {
-            Ok(v) => v,
-            Err(err) => {
-                tracing::warn!(?err, url, "failed to parse response body");
-                return Ok(PageOutcome::Failed);
-            }
-        };
-
-        let metadata = self.build_event_metadata(url, method, status.as_u16());
-        for body_value in body_values {
-            let event = EventSource {
-                body: body_value,
-                metadata: metadata.clone(),
-                headers: response_headers.clone(),
-            };
-            if let Err(err) = self.next.send(event) {
-                tracing::warn!(?err, "failed to send event downstream");
-                return Ok(PageOutcome::Failed);
-            }
-        }
-
-        Ok(PageOutcome::Done(next_url))
+        obj.insert("http_polling".to_string(), http_polling);
+        serde_json::Value::Object(obj)
     }
 
-    /// Perform a single poll: build request via VRL, fetch all pages, forward events.
+    /// Invoke the driver and turn its output into worklist tasks at `depth`.
+    fn driver_tasks(&self, input: &serde_json::Value, depth: u32) -> Result<VecDeque<RequestTask>> {
+        let out = self.driver_program.execute(input)?;
+        let state = out.state;
+        Ok(out
+            .requests
+            .into_iter()
+            .map(|spec| RequestTask { spec, state_snapshot: state.clone(), depth })
+            .collect())
+    }
+
+    /// Perform a single poll: drive the request worklist to exhaustion, emitting
+    /// events for `pipeline`/`both` responses and feeding `feedback`/`both`
+    /// responses back into the driver for further requests.
     ///
-    /// Returns `Ok(true)` on success (caller should advance the time window),
-    /// `Ok(false)` on recoverable failure (already logged), or `Err` on hard failure.
-    ///
-    /// **Partial pagination failure:** if page N > 0 fails after pages 0..N-1 succeeded,
-    /// this still returns `Ok(true)` so the window advances past the already-emitted
-    /// events. The failed page's events are silently dropped. Sinks should be idempotent
-    /// if full consistency is required.
+    /// Returns `Ok(true)` when the worklist drained and the caller should advance
+    /// the time window. Returns `Ok(false)` (window stays put, retried next poll)
+    /// when the bootstrap driver call failed, or when requests were issued but
+    /// **none** fetched successfully (a transport/HTTP outage). A successful fetch
+    /// whose body fails to parse still counts as progress and advances the window
+    /// — re-polling the same window would not change a malformed 2xx body. Sinks
+    /// should be idempotent if strict consistency is required.
     #[instrument(skip(self), fields(source = %self.source_name))]
     async fn run_once(&mut self) -> Result<bool> {
-        // 1. Generate initial request params via VRL
-        let vrl_input = self.build_vrl_input();
-        let params = match self.request_program.execute(&vrl_input) {
-            Ok(p) => p,
+        // Bootstrap: seed the worklist (response = null).
+        let bootstrap = self.build_driver_input(&serde_json::Value::Null, None, None);
+        let mut queue = match self.driver_tasks(&bootstrap, 0) {
+            Ok(q) => q,
             Err(err) => {
-                tracing::warn!(?err, "VRL request generation failed");
+                tracing::warn!(?err, "driver bootstrap execution failed");
                 return Ok(false);
             }
         };
 
-        // 2. Build URL with query params
-        let mut initial_url = url::Url::parse(&params.url)
-            .map_err(|e| miette::MietteDiagnostic::new(format!("invalid URL: {e}")))?;
-        if !params.query.is_empty() {
-            let mut pairs = initial_url.query_pairs_mut();
-            for (k, v) in &params.query {
-                pairs.append_pair(k, v);
-            }
-        }
+        let header_configs = Arc::new(outgoing_header_map_to_configs(&self.config.headers));
+        let accept = self.config.parser.accept_header();
+        let concurrency = self.config.max_concurrency.max(1);
+        let mut inflight = FuturesUnordered::new();
+        let mut issued: u32 = 0;
+        let mut fetch_successes: u32 = 0;
+        let mut next_allowed: Option<Instant> = None;
 
-        // 3. Fetch first page (and follow pagination links if configured)
-        let mut current_url = initial_url.to_string();
-        let mut page_index: u32 = 0;
         loop {
-            if page_index > 0
-                && let Some(interval) = self.config.min_request_interval
-            {
-                sleep(interval).await;
-            }
-
-            if page_index >= MAX_PAGES {
-                tracing::warn!(
-                    MAX_PAGES,
-                    source = %self.source_name,
-                    "page limit reached; remaining pages skipped"
-                );
-                break;
-            }
-
-            match self
-                .fetch_page(&current_url, &params.method, &params.headers, params.body.clone())
-                .await?
-            {
-                PageOutcome::Done(Some(next)) => {
-                    current_url = next;
-                    page_index += 1;
-                }
-                PageOutcome::Done(None) => break,
-                PageOutcome::Failed if page_index == 0 => {
-                    // First page failed; do not advance window
-                    return Ok(false);
-                }
-                PageOutcome::Failed => {
-                    // Pages 0..page_index-1 succeeded; advancing the window prevents
-                    // re-emitting those events. Events from this page are dropped.
+            // Fill in-flight slots from the queue, honoring budget + rate limit.
+            while inflight.len() < concurrency {
+                let Some(task) = queue.pop_front() else { break };
+                if issued >= self.config.max_requests {
                     tracing::warn!(
-                        url = current_url,
+                        max_requests = self.config.max_requests,
                         source = %self.source_name,
-                        "pagination fetch failed; partial window processed"
+                        "request budget reached; remaining worklist dropped"
                     );
+                    queue.clear();
                     break;
                 }
+                issued += 1;
+
+                if let Some(interval) = self.config.min_request_interval {
+                    let now = Instant::now();
+                    let at = next_allowed.unwrap_or(now);
+                    if at > now {
+                        sleep(at - now).await;
+                    }
+                    next_allowed = Some(Instant::now() + interval);
+                }
+
+                let client = self.client.clone();
+                let configs = Arc::clone(&header_configs);
+                inflight.push(async move {
+                    let resp = fetch(&client, &task.spec, accept, &configs).await;
+                    (task, resp)
+                });
+            }
+
+            let Some((task, resp)) = inflight.next().await else {
+                if queue.is_empty() {
+                    break;
+                }
+                continue;
+            };
+
+            let Ok(resp) = resp else {
+                // Failure already logged in `fetch`.
+                continue;
+            };
+            fetch_successes += 1;
+
+            if task.spec.route.emits() {
+                self.emit_response(&task, &resp);
+            }
+
+            if task.spec.route.feeds_back() {
+                if task.depth >= self.config.max_depth {
+                    tracing::warn!(
+                        max_depth = self.config.max_depth,
+                        source = %self.source_name,
+                        "max feedback depth reached; not recursing"
+                    );
+                } else {
+                    let input = self.build_driver_input(
+                        &task.state_snapshot,
+                        Some(&task.spec),
+                        Some(&resp),
+                    );
+                    match self.driver_tasks(&input, task.depth + 1) {
+                        Ok(mut tasks) => queue.append(&mut tasks),
+                        Err(err) => tracing::warn!(?err, "driver feedback execution failed"),
+                    }
+                }
             }
         }
 
+        // Hold the window if we issued requests but none reached the server.
+        if issued > 0 && fetch_successes == 0 {
+            return Ok(false);
+        }
         Ok(true)
+    }
+
+    /// Parse a response routed to the pipeline and forward its events downstream.
+    fn emit_response(&mut self, task: &RequestTask, resp: &FetchedResponse) {
+        let parser = task.spec.parser.clone().unwrap_or_else(|| self.config.parser.clone());
+        let resolved = parser.resolve(resp.content_type.as_deref());
+        let body_values = match resolved.parse(&resp.body_text) {
+            Ok(v) => v,
+            Err(err) => {
+                tracing::warn!(?err, url = task.spec.url, "failed to parse response body");
+                return;
+            }
+        };
+        let metadata = self.build_event_metadata(
+            &task.spec.url,
+            &task.spec.method,
+            resp.status,
+            &task.state_snapshot,
+        );
+        for body_value in body_values {
+            let event = EventSource {
+                body: body_value,
+                metadata: metadata.clone(),
+                headers: resp.headers.clone(),
+            };
+            if let Err(err) = self.next.send(event) {
+                tracing::warn!(?err, "failed to send event downstream");
+            }
+        }
     }
 
     pub(crate) async fn run(&mut self, cancel_token: CancellationToken) -> Result<()> {
@@ -541,20 +633,28 @@ mod tests {
     use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    fn make_config(server_uri: &str, request_vrl: &str) -> Config {
+    /// Build a config from a full driver VRL script.
+    fn config_with_driver(driver_vrl: String) -> Config {
         Config {
             polling_interval: Duration::from_millis(50),
             ts_after: None,
             ts_before_limit: None,
-            request_vrl: format!(r#".url = "{server_uri}/data"; {request_vrl}"#),
+            driver_vrl,
             headers: OutgoingHeaderMap::new(),
             total_duration_of_retries: Duration::from_millis(100),
             parser: ParserConfig::Json,
             metadata: serde_json::json!({}),
             user_agent: default_user_agent(),
-            follow_link_header: false,
             min_request_interval: None,
+            max_concurrency: default_max_concurrency(),
+            max_requests: default_max_requests(),
+            max_depth: default_max_depth(),
         }
+    }
+
+    /// Config whose driver issues a single GET to `{uri}/data` (pipeline route).
+    fn make_config(server_uri: &str) -> Config {
+        config_with_driver(format!(r#".requests = [{{ "url": "{server_uri}/data" }}]"#))
     }
 
     fn make_extractor(config: &Config) -> (HttpPollingExtractor, Collector<EventSource>) {
@@ -578,12 +678,10 @@ mod tests {
             .mount(&server)
             .await;
 
-        let config = make_config(&server.uri(), "");
+        let config = make_config(&server.uri());
         let (mut extractor, collector) = make_extractor(&config);
 
-        let result = extractor.run_once().await;
-        assert!(result.is_ok());
-        assert!(result.unwrap()); // should advance
+        assert!(extractor.run_once().await.unwrap()); // should advance
 
         let events: Vec<_> = collector.try_into_iter().unwrap().collect();
         assert_eq!(events.len(), 1);
@@ -599,16 +697,17 @@ mod tests {
             .mount(&server)
             .await;
 
-        let config = make_config(&server.uri(), "");
+        let config = make_config(&server.uri());
         let (mut extractor, _collector) = make_extractor(&config);
 
-        let result = extractor.run_once().await;
-        assert!(result.is_ok());
-        assert!(!result.unwrap()); // should NOT advance
+        // The only issued request failed to fetch → window must NOT advance.
+        assert!(!extractor.run_once().await.unwrap());
     }
 
     #[tokio::test]
-    async fn test_parse_failure_does_not_advance() {
+    async fn test_parse_failure_still_advances() {
+        // A 2xx with an unparseable body is "progress": re-polling the same
+        // window won't fix the body, so the window advances (0 events emitted).
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/data"))
@@ -618,12 +717,11 @@ mod tests {
             .mount(&server)
             .await;
 
-        let config = make_config(&server.uri(), "");
-        let (mut extractor, _collector) = make_extractor(&config);
+        let config = make_config(&server.uri());
+        let (mut extractor, collector) = make_extractor(&config);
 
-        let result = extractor.run_once().await;
-        assert!(result.is_ok());
-        assert!(!result.unwrap()); // should NOT advance
+        assert!(extractor.run_once().await.unwrap()); // advances despite parse error
+        assert_eq!(collector.try_into_iter().unwrap().count(), 0);
     }
 
     #[tokio::test]
@@ -638,16 +736,35 @@ mod tests {
             .mount(&server)
             .await;
 
-        let mut config = make_config(&server.uri(), "");
+        let mut config = make_config(&server.uri());
         config.parser = ParserConfig::Jsonl;
         let (mut extractor, collector) = make_extractor(&config);
 
-        let result = extractor.run_once().await;
-        assert!(result.is_ok());
-        assert!(result.unwrap()); // should advance
+        assert!(extractor.run_once().await.unwrap());
+        assert_eq!(collector.try_into_iter().unwrap().count(), 2);
+    }
 
-        let events: Vec<_> = collector.try_into_iter().unwrap().collect();
-        assert_eq!(events.len(), 2);
+    #[tokio::test]
+    async fn test_per_request_parser_override() {
+        // Source default is Json, but the driver requests jsonl for this request.
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw("{\"a\":1}\n{\"b\":2}\n", "application/octet-stream"),
+            )
+            .mount(&server)
+            .await;
+
+        let config = config_with_driver(format!(
+            r#".requests = [{{ "url": "{}/data", "parser": "jsonl" }}]"#,
+            server.uri()
+        ));
+        let (mut extractor, collector) = make_extractor(&config);
+
+        assert!(extractor.run_once().await.unwrap());
+        assert_eq!(collector.try_into_iter().unwrap().count(), 2);
     }
 
     #[tokio::test]
@@ -659,54 +776,37 @@ mod tests {
             .mount(&server)
             .await;
 
-        let now = jiff::Timestamp::now();
-        // Set limit to now: ts_after starts at MIN which is < limit, but after first advance
-        // ts_after = ts_before which should be around now, reaching the limit.
-        let mut config = make_config(&server.uri(), "");
-        config.ts_before_limit = Some(now);
-        // Use MIN so ts_after starts before the limit
+        let mut config = make_config(&server.uri());
+        config.ts_before_limit = Some(jiff::Timestamp::now());
         config.ts_after = Some(jiff::Timestamp::MIN);
 
         let cancel_token = CancellationToken::new();
         let (mut extractor, _collector) = make_extractor(&config);
 
-        // Should finish quickly due to ts_before_limit
         let result = timeout(Duration::from_secs(2), extractor.run(cancel_token)).await;
         assert!(result.is_ok(), "run() should complete within timeout");
         assert!(result.unwrap().is_ok());
     }
 
     #[tokio::test]
-    async fn test_vrl_request_generation_includes_timestamps() {
+    async fn test_driver_reads_window_timestamps() {
         let server = MockServer::start().await;
+        // Match only when the `from` query param (from ts_after) is present.
         Mock::given(method("GET"))
             .and(path("/data"))
+            .and(wiremock::matchers::query_param("from", "2024-01-01T00:00:00Z"))
             .respond_with(ResponseTemplate::new(200).set_body_raw("{}", "application/json"))
+            .expect(1)
             .mount(&server)
             .await;
 
-        let config = Config {
-            polling_interval: Duration::from_millis(50),
-            ts_after: None,
-            ts_before_limit: None,
-            request_vrl: format!(
-                r#".url = "{}/data"; .query.from = to_string!(.metadata.ts_after)"#,
-                server.uri()
-            ),
-            headers: OutgoingHeaderMap::new(),
-            total_duration_of_retries: Duration::from_millis(100),
-            parser: ParserConfig::Json,
-            metadata: serde_json::json!({}),
-            user_agent: default_user_agent(),
-            follow_link_header: false,
-            min_request_interval: None,
-        };
+        let mut config = config_with_driver(format!(
+            r#".requests = [{{ "url": "{}/data", "query": {{ "from": to_string!(.metadata.ts_after) }} }}]"#,
+            server.uri()
+        ));
+        config.ts_after = Some("2024-01-01T00:00:00Z".parse().unwrap());
         let (mut extractor, _collector) = make_extractor(&config);
-
-        // run_once should succeed (server returns 200, but query params aren't
-        // validated by the mock - we're testing VRL doesn't panic)
-        let result = extractor.run_once().await;
-        assert!(result.is_ok());
+        assert!(extractor.run_once().await.unwrap());
     }
 
     #[tokio::test]
@@ -722,16 +822,14 @@ mod tests {
             .mount(&server)
             .await;
 
-        let mut config = make_config(&server.uri(), "");
+        let mut config = make_config(&server.uri());
         config.headers.insert(
             "x-api-key".to_string(),
             HeaderSource::Static { value: "test-secret".to_string() },
         );
 
         let (mut extractor, _collector) = make_extractor(&config);
-        let result = extractor.run_once().await;
-        assert!(result.is_ok());
-        assert!(result.unwrap());
+        assert!(extractor.run_once().await.unwrap());
     }
 
     #[tokio::test]
@@ -743,14 +841,11 @@ mod tests {
             .mount(&server)
             .await;
 
-        let mut config = make_config(&server.uri(), "");
+        let mut config = make_config(&server.uri());
         config.parser = ParserConfig::RawText;
         let (mut extractor, collector) = make_extractor(&config);
 
-        let result = extractor.run_once().await;
-        assert!(result.is_ok());
-        assert!(result.unwrap());
-
+        assert!(extractor.run_once().await.unwrap());
         let events: Vec<_> = collector.try_into_iter().unwrap().collect();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].body, serde_json::Value::String("hello world".to_string()));
@@ -765,23 +860,11 @@ mod tests {
             .mount(&server)
             .await;
 
-        let config = Config {
-            polling_interval: Duration::from_mins(1), // long interval
-            ts_after: None,
-            ts_before_limit: None,
-            request_vrl: format!(r#".url = "{}/data""#, server.uri()),
-            headers: OutgoingHeaderMap::new(),
-            total_duration_of_retries: Duration::from_millis(100),
-            parser: ParserConfig::Json,
-            metadata: serde_json::json!({}),
-            user_agent: default_user_agent(),
-            follow_link_header: false,
-            min_request_interval: None,
-        };
+        let mut config = make_config(&server.uri());
+        config.polling_interval = Duration::from_mins(1); // long interval
         let cancel_token = CancellationToken::new();
         let (mut extractor, _collector) = make_extractor(&config);
 
-        // Cancel after a short delay
         let ct = cancel_token.clone();
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -794,138 +877,233 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_pagination_follows_link_header() {
+    async fn test_bootstrap_emits_multiple_requests() {
+        // One bootstrap call can seed several pipeline requests.
         let server = MockServer::start().await;
+        for p in ["/a", "/b", "/c"] {
+            Mock::given(method("GET"))
+                .and(path(p))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_raw(format!(r#"{{"p":"{p}"}}"#), "application/json"),
+                )
+                .mount(&server)
+                .await;
+        }
 
-        // Page 1 — returns Link: rel="next" pointing to /page2
-        Mock::given(method("GET"))
-            .and(path("/data"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .insert_header(
-                        "link",
-                        format!("<{}/page2>; rel=\"next\"", server.uri()).as_str(),
-                    )
-                    .set_body_raw(r#"{"page":1}"#, "application/json"),
-            )
-            .mount(&server)
-            .await;
-
-        // Page 2 — no Link header
-        Mock::given(method("GET"))
-            .and(path("/page2"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_raw(r#"{"page":2}"#, "application/json"),
-            )
-            .mount(&server)
-            .await;
-
-        let mut config = make_config(&server.uri(), "");
-        config.follow_link_header = true;
+        let uri = server.uri();
+        let config = config_with_driver(format!(
+            r#".requests = [{{ "url": "{uri}/a" }}, {{ "url": "{uri}/b" }}, {{ "url": "{uri}/c" }}]"#
+        ));
         let (mut extractor, collector) = make_extractor(&config);
 
-        let result = extractor.run_once().await;
-        assert!(result.is_ok());
-        assert!(result.unwrap()); // should advance
-
-        let events: Vec<_> = collector.try_into_iter().unwrap().collect();
-        assert_eq!(events.len(), 2, "expected events from both pages");
-        assert_eq!(events[0].body["page"], 1);
-        assert_eq!(events[1].body["page"], 2);
+        assert!(extractor.run_once().await.unwrap());
+        assert_eq!(collector.try_into_iter().unwrap().count(), 3);
     }
 
     #[tokio::test]
-    async fn test_pagination_disabled_stops_at_first_page() {
+    async fn test_two_pass_discovery_then_detail() {
+        // Pass 1: discovery list (feedback only, not emitted).
+        // Pass 2: per-item detail fetch (pipeline), carrying discovery id in state.
         let server = MockServer::start().await;
-
         Mock::given(method("GET"))
-            .and(path("/data"))
+            .and(path("/list"))
             .respond_with(
-                ResponseTemplate::new(200)
-                    .insert_header(
-                        "link",
-                        format!("<{}/page2>; rel=\"next\"", server.uri()).as_str(),
-                    )
-                    .set_body_raw(r#"{"page":1}"#, "application/json"),
+                ResponseTemplate::new(200).set_body_raw(r#"["1","2"]"#, "application/json"),
             )
             .mount(&server)
             .await;
+        for id in ["1", "2"] {
+            Mock::given(method("GET"))
+                .and(path(format!("/item/{id}")))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_raw(
+                        format!(r#"{{"id":"{id}","detail":true}}"#),
+                        "application/json",
+                    ),
+                )
+                .mount(&server)
+                .await;
+        }
 
-        // follow_link_header is false (default) — page2 should never be requested
-        let config = make_config(&server.uri(), "");
+        let uri = server.uri();
+        let driver = format!(
+            r#"
+            if .response == null {{
+                # bootstrap: discovery request, feed result back
+                .requests = [{{ "url": "{uri}/list", "route": "feedback" }}]
+            }} else {{
+                # feedback: one detail request per discovered id, carry id in state
+                reqs = []
+                for_each(array!(.response.body)) -> |_i, id| {{
+                    reqs = push(reqs, {{
+                        "url": "{uri}/item/" + string!(id),
+                        "route": "pipeline",
+                    }})
+                }}
+                .requests = reqs
+            }}
+            "#
+        );
+        let config = config_with_driver(driver);
         let (mut extractor, collector) = make_extractor(&config);
 
-        let result = extractor.run_once().await;
-        assert!(result.unwrap());
+        assert!(extractor.run_once().await.unwrap());
+        let mut ids: Vec<String> = collector
+            .try_into_iter()
+            .unwrap()
+            .map(|e| e.body["id"].as_str().unwrap().to_string())
+            .collect();
+        ids.sort();
+        assert_eq!(ids, vec!["1".to_string(), "2".to_string()]);
+    }
 
+    #[tokio::test]
+    async fn test_state_snapshot_in_event_metadata() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw("{}", "application/json"))
+            .mount(&server)
+            .await;
+
+        let config = config_with_driver(format!(
+            r#"
+            .state = {{ "discovery_id": "abc" }}
+            .requests = [{{ "url": "{}/data" }}]
+            "#,
+            server.uri()
+        ));
+        let (mut extractor, collector) = make_extractor(&config);
+
+        assert!(extractor.run_once().await.unwrap());
         let events: Vec<_> = collector.try_into_iter().unwrap().collect();
-        assert_eq!(events.len(), 1, "should only fetch first page");
+        assert_eq!(events[0].metadata["http_polling"]["state"]["discovery_id"], "abc");
     }
 
-    #[test]
-    fn test_parse_link_next_basic() {
-        use reqwest::header::{HeaderMap, HeaderValue, LINK};
-        let mut h = HeaderMap::new();
-        h.insert(LINK, HeaderValue::from_static("<https://api.example.com/page2>; rel=\"next\""));
-        assert_eq!(parse_link_next(&h), Some("https://api.example.com/page2"));
-    }
+    #[tokio::test]
+    async fn test_graphql_both_cursor_loop() {
+        // `both` route: emit each page's node AND feed pageInfo back until the
+        // cursor is null. Three pages → three events, then the loop terminates.
+        let server = MockServer::start().await;
+        let pages = [
+            (r#"{"node":1,"next":"c2"}"#),
+            (r#"{"node":2,"next":"c3"}"#),
+            (r#"{"node":3,"next":null}"#),
+        ];
+        // page 1 has no cursor param; pages 2/3 are matched by cursor query.
+        Mock::given(method("GET"))
+            .and(path("/gql"))
+            .and(wiremock::matchers::query_param("cursor", "c2"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(pages[1], "application/json"))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/gql"))
+            .and(wiremock::matchers::query_param("cursor", "c3"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(pages[2], "application/json"))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/gql"))
+            .and(wiremock::matchers::query_param_is_missing("cursor"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(pages[0], "application/json"))
+            .mount(&server)
+            .await;
 
-    #[test]
-    fn test_parse_link_next_multiple_rels() {
-        use reqwest::header::{HeaderMap, HeaderValue, LINK};
-        let mut h = HeaderMap::new();
-        h.insert(
-            LINK,
-            HeaderValue::from_static(
-                "<https://api.example.com/page1>; rel=\"prev\", <https://api.example.com/page3>; rel=\"next\"",
-            ),
+        let uri = server.uri();
+        let driver = format!(
+            r#"
+            if .response == null {{
+                .requests = [{{ "url": "{uri}/gql", "route": "both" }}]
+            }} else {{
+                next = .response.body.next
+                if next != null {{
+                    .requests = [{{
+                        "url": "{uri}/gql",
+                        "query": {{ "cursor": next }},
+                        "route": "both",
+                    }}]
+                }} else {{
+                    .requests = []
+                }}
+            }}
+            "#
         );
-        assert_eq!(parse_link_next(&h), Some("https://api.example.com/page3"));
+        let config = config_with_driver(driver);
+        let (mut extractor, collector) = make_extractor(&config);
+
+        assert!(extractor.run_once().await.unwrap());
+        let mut nodes: Vec<i64> =
+            collector.try_into_iter().unwrap().map(|e| e.body["node"].as_i64().unwrap()).collect();
+        nodes.sort_unstable();
+        assert_eq!(nodes, vec![1, 2, 3]);
     }
 
-    #[test]
-    fn test_parse_link_next_absent() {
-        use reqwest::header::{HeaderMap, HeaderValue, LINK};
-        let mut h = HeaderMap::new();
-        h.insert(LINK, HeaderValue::from_static("<https://api.example.com/page1>; rel=\"prev\""));
-        assert_eq!(parse_link_next(&h), None);
+    #[tokio::test]
+    async fn test_max_depth_guard_stops_recursion() {
+        // Driver always asks to feed back; max_depth must stop the chain.
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/loop"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw("{}", "application/json"))
+            .expect(3) // depth 0 (bootstrap) + 2 feedback hops, then stop at depth 2
+            .mount(&server)
+            .await;
+
+        let mut config = config_with_driver(format!(
+            r#".requests = [{{ "url": "{}/loop", "route": "feedback" }}]"#,
+            server.uri()
+        ));
+        config.max_depth = 2;
+        let (mut extractor, _collector) = make_extractor(&config);
+
+        assert!(extractor.run_once().await.unwrap());
+        server.verify().await;
     }
 
-    #[test]
-    fn test_parse_link_next_no_header() {
-        use reqwest::header::HeaderMap;
-        assert_eq!(parse_link_next(&HeaderMap::new()), None);
+    #[tokio::test]
+    async fn test_max_requests_budget_caps_fetches() {
+        let server = MockServer::start().await;
+        // Bootstrap emits 10 requests but budget is 3.
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw("{}", "application/json"))
+            .expect(3)
+            .mount(&server)
+            .await;
+
+        let uri = server.uri();
+        let reqs = format!(r#"{{ "url": "{uri}/data" }},"#).repeat(10);
+        let mut config = config_with_driver(format!(".requests = [{reqs}]"));
+        config.max_requests = 3;
+        config.max_concurrency = 1;
+        let (mut extractor, _collector) = make_extractor(&config);
+
+        assert!(extractor.run_once().await.unwrap());
+        server.verify().await;
     }
 
-    #[test]
-    fn test_parse_link_next_does_not_match_partial_rel() {
-        // "rel=nextpage" must NOT match "rel=next"
-        use reqwest::header::{HeaderMap, HeaderValue, LINK};
-        let mut h = HeaderMap::new();
-        h.insert(LINK, HeaderValue::from_static("<https://api.example.com/page2>; rel=nextpage"));
-        assert_eq!(parse_link_next(&h), None);
-    }
+    #[tokio::test]
+    async fn test_min_request_interval_spaces_requests() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw("{}", "application/json"))
+            .mount(&server)
+            .await;
 
-    #[test]
-    fn test_parse_link_next_unquoted_rel() {
-        // rel=next (unquoted) is valid per RFC 5988
-        use reqwest::header::{HeaderMap, HeaderValue, LINK};
-        let mut h = HeaderMap::new();
-        h.insert(LINK, HeaderValue::from_static("<https://api.example.com/page2>; rel=next"));
-        assert_eq!(parse_link_next(&h), Some("https://api.example.com/page2"));
-    }
+        let uri = server.uri();
+        let mut config = config_with_driver(format!(
+            r#".requests = [{{ "url": "{uri}/data" }}, {{ "url": "{uri}/data" }}, {{ "url": "{uri}/data" }}]"#
+        ));
+        config.min_request_interval = Some(Duration::from_millis(100));
+        config.max_concurrency = 4; // even with concurrency, starts are spaced
+        let (mut extractor, _collector) = make_extractor(&config);
 
-    #[test]
-    fn test_parse_link_next_extra_params() {
-        // rel="next" with additional params like title="foo"
-        use reqwest::header::{HeaderMap, HeaderValue, LINK};
-        let mut h = HeaderMap::new();
-        h.insert(
-            LINK,
-            HeaderValue::from_static(
-                "<https://api.example.com/page2>; rel=\"next\"; title=\"Page 2\"",
-            ),
-        );
-        assert_eq!(parse_link_next(&h), Some("https://api.example.com/page2"));
+        let start = std::time::Instant::now();
+        assert!(extractor.run_once().await.unwrap());
+        // 3 requests spaced by ≥100ms → at least 200ms total.
+        assert!(start.elapsed() >= Duration::from_millis(200), "requests were not spaced");
     }
 }

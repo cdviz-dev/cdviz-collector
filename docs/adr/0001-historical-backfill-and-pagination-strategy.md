@@ -1,7 +1,16 @@
 # ADR 0001: Historical Backfill and Pagination Strategy
 
-**Status:** Accepted\
+**Status:** Accepted (pagination mechanism superseded by [ADR 0002](0002-multi-pass-http-polling-request-driver.md))\
 **Date:** 2026-06-02
+
+---
+
+> **Note (superseded in part):** The `follow_link_header` flag described below was
+> replaced by the VRL request driver in [ADR 0002](0002-multi-pass-http-polling-request-driver.md).
+> Link-header pagination is now expressed in the driver script (read the `Link`
+> header off `.response.headers` and emit the next request with `route = "both"`).
+> The backfill model, time-window strategy, and `RetryAfterMiddleware` from this
+> ADR are unchanged.
 
 ---
 

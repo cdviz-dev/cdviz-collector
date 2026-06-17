@@ -13,14 +13,13 @@ cdviz-collector collects SDLC/CI/CD events from various sources and dispatches t
 
 ## Operation Modes
 
-| Command                                   | Purpose                                             |
-| ----------------------------------------- | --------------------------------------------------- |
-| `cdviz-collector connect --config <file>`            | Long-running server: sources → transformers → sinks        |
-| `cdviz-collector send <event-type>`                  | One-shot event dispatch (testing/scripting)                |
-| `cdviz-collector transform --help`                   | Offline batch transformation of files                      |
-| `cdviz-collector config --config <file> --check`     | Validate config + compile VRL templates (pre-flight check) |
-| `cdviz-collector config --config <file> --print`     | Print resolved config as TOML (debug env var overrides)    |
-
+| Command                                          | Purpose                                                    |
+| ------------------------------------------------ | ---------------------------------------------------------- |
+| `cdviz-collector connect --config <file>`        | Long-running server: sources → transformers → sinks        |
+| `cdviz-collector send <event-type>`              | One-shot event dispatch (testing/scripting)                |
+| `cdviz-collector transform --help`               | Offline batch transformation of files                      |
+| `cdviz-collector config --config <file> --check` | Validate config + compile VRL templates (pre-flight check) |
+| `cdviz-collector config --config <file> --print` | Print resolved config as TOML (debug env var overrides)    |
 
 ---
 
@@ -167,17 +166,25 @@ recursive        = false
 path_patterns    = ["**/*.json"]
 parser           = "json"       # json | jsonl | csv_row | yaml | xml | tap | text
 
-# HTTP REST API polling (with pagination + rate-limit handling)
+# HTTP REST API polling (VRL request driver; multi-pass + pagination capable)
 [sources.github_api]
 enabled = true
 
 [sources.github_api.extractor]
 type                 = "http_polling"
-url                  = "https://api.github.com/repos/org/repo/events"
 polling_interval     = "60s"
-follow_link_header   = true     # follow RFC 5988 Link: next headers
-min_request_interval = "1s"     # rate limit guard
+min_request_interval = "1s"     # rate limit guard (spaces request starts)
 parser               = "jsonl"
+# driver sets `.requests`; `both` emits the page AND follows Link: rel="next"
+driver_vrl = """
+if .response == null {
+    .requests = [{ "url": "https://api.github.com/repos/org/repo/events", "route": "both" }]
+} else {
+    link = string(.response.headers.link) ?? ""
+    matched = parse_regex(link, r'<(?P<next>[^>]+)>;\\s*rel="next"') ?? {}
+    .requests = if exists(matched.next) { [{ "url": matched.next, "route": "both" }] } else { [] }
+}
+"""
 ```
 
 ### Sinks

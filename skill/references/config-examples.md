@@ -107,7 +107,12 @@ repo  = "my-repo"
 # token = "ghp_..."    # or env var GITHUB_TOKEN
 ```
 
-### http_polling — REST API with Pagination
+### http_polling — REST API with a VRL request driver
+
+The driver script builds a worklist of requests. `route = "both"` emits each page
+downstream AND feeds it back so the driver can follow the `Link: rel="next"`
+header. Multi-pass (discovery → per-item detail) is expressed the same way — see
+`src/sources/http_polling/README.md`.
 
 ```toml
 [sources.github_api]
@@ -116,12 +121,24 @@ transformer_refs = ["github_to_cdevents"]
 
 [sources.github_api.extractor]
 type                 = "http_polling"
-url                  = "https://api.github.com/repos/my-org/my-repo/events"
 polling_interval     = "60s"
-follow_link_header   = true    # follow RFC 5988 Link: <url>; rel="next"
-min_request_interval = "1s"    # min time between paginated requests
-parser               = "json"  # API returns JSON array → each item is one event
-# backfill_from = "2024-01-01T00:00:00Z"  # fetch history from this date on first run
+min_request_interval = "1s"    # min time between request starts
+parser               = "json"  # whole body → one event (transformer splits the array)
+ts_after             = "2024-01-01T00:00:00Z"  # bootstrap window start (backfill)
+
+driver_vrl = """
+if .response == null {
+    .requests = [{
+        "url": "https://api.github.com/repos/my-org/my-repo/events",
+        "query": { "per_page": "100" },
+        "route": "both"
+    }]
+} else {
+    link = string(.response.headers.link) ?? ""
+    matched = parse_regex(link, r'<(?P<next>[^>]+)>;\\s*rel="next"') ?? {}
+    .requests = if exists(matched.next) { [{ "url": matched.next, "route": "both" }] } else { [] }
+}
+"""
 
 [sources.github_api.extractor.headers]
 "Authorization"        = { type = "static", value = "Bearer ghp_mytoken" }
