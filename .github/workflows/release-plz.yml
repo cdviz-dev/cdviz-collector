@@ -20,7 +20,7 @@ jobs:
         with:
           private-key: ${{ secrets.INTBOT_PRIVATE_KEY }}
           app-id: ${{ secrets.INTBOT_APP_ID }}
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           token: ${{ steps.get_token.outputs.token }}
           fetch-depth: 0
@@ -44,7 +44,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Install Rust toolchain
