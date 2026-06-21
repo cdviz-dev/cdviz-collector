@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.43.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.42.0...0.43.0) - 2026-06-21
+
+### Added
+
+- *(security)* add prefix/suffix to header value rules
+
+### Other
+
+- *(deps)* update rust crate bytes to v1.12.0 ([#370](https://github.com/cdviz-dev/cdviz-collector/pull/370))
+- *(deps)* update actions/checkout action to v7 ([#371](https://github.com/cdviz-dev/cdviz-collector/pull/371))
+
 ## [0.42.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.41.0...0.42.0) - 2026-06-17
 
 ### Added
