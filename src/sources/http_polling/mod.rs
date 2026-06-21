@@ -95,6 +95,87 @@ pub(crate) struct Config {
     /// against unbounded recursion. Default: 50.
     #[serde(default = "default_max_depth")]
     pub(crate) max_depth: u32,
+
+    /// Per-status handling policy for non-2xx responses. See [`StatusPolicy`].
+    #[serde(default)]
+    pub(crate) on_status: StatusPolicy,
+}
+
+/// What to do with a non-2xx HTTP response (see [`StatusPolicy`]).
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Behavior {
+    /// Ignore the response; advance the time window (counts as progress).
+    Skip,
+    /// Hold the time window; retry the whole query sequence next poll.
+    Hold,
+    /// Retry this single request via the middleware (exponential backoff +
+    /// `total_duration_of_retries`); if still failing, degrade to [`Behavior::Hold`].
+    Retry,
+    /// Stop the source entirely (loud misconfiguration signal).
+    Abort,
+}
+
+/// Maps an HTTP status — an exact code (`"404"`) or a class (`"4xx"`) — to a
+/// [`Behavior`] for non-2xx responses. Also serves as the
+/// [`reqwest_retry::RetryableStrategy`], so `retry` statuses are retried by the
+/// middleware with the configured backoff/budget (the type owns both the policy
+/// data and how to apply it).
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(transparent)]
+pub(crate) struct StatusPolicy(HashMap<String, Behavior>);
+
+impl StatusPolicy {
+    /// Resolve the [`Behavior`] for a status: exact code → class → built-in default.
+    /// Built-in defaults are a function of the status (so they can't be a single
+    /// `Default` value, and live here rather than as seed entries that user config
+    /// would replace wholesale): `401`/`403` → `abort` (auth/permission misconfig
+    /// that won't self-heal), `5xx` → `hold` (transient), everything else → `skip`.
+    fn resolve(&self, status: u16) -> Behavior {
+        if let Some(b) = self.0.get(&status.to_string()) {
+            return *b;
+        }
+        if let Some(b) = self.0.get(&format!("{}xx", status / 100)) {
+            return *b;
+        }
+        match status {
+            401 | 403 => Behavior::Abort,
+            s if s >= 500 => Behavior::Hold,
+            _ => Behavior::Skip,
+        }
+    }
+}
+
+impl reqwest_retry::RetryableStrategy for StatusPolicy {
+    fn handle(
+        &self,
+        res: &std::result::Result<reqwest::Response, reqwest_middleware::Error>,
+    ) -> Option<reqwest_retry::Retryable> {
+        if let Ok(resp) = res
+            && self.resolve(resp.status().as_u16()) == Behavior::Retry
+        {
+            return Some(reqwest_retry::Retryable::Transient);
+        }
+        reqwest_retry::DefaultRetryableStrategy.handle(res)
+    }
+}
+
+/// Outcome of a single poll, deciding what `run()` does with the time window.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PollOutcome {
+    /// Advance the time window (and persist the checkpoint).
+    Advance,
+    /// Keep the window; retry the same window on the next poll.
+    Hold,
+    /// Stop the source entirely.
+    Abort,
+}
+
+impl PollOutcome {
+    #[cfg(test)]
+    fn advanced(self) -> bool {
+        matches!(self, Self::Advance)
+    }
 }
 
 fn default_user_agent() -> String {
@@ -266,11 +347,6 @@ async fn fetch(
     };
 
     let status = response.status();
-    if !status.is_success() {
-        tracing::warn!(status = status.as_u16(), url = url_str, "HTTP polling non-success status");
-        return Err(());
-    }
-
     let content_type = response
         .headers()
         .get(reqwest::header::CONTENT_TYPE)
@@ -328,7 +404,10 @@ impl HttpPollingExtractor {
         )
         .with(TracingMiddleware::default())
         .with(RetryAfterMiddleware)
-        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .with(RetryTransientMiddleware::new_with_policy_and_strategy(
+            retry_policy,
+            config.on_status.clone(),
+        ))
         .build();
 
         #[cfg(feature = "state")]
@@ -431,26 +510,47 @@ impl HttpPollingExtractor {
             .collect())
     }
 
+    /// Resolve and log the [`Behavior`] for a non-2xx response per `on_status`.
+    fn classify_non_success(&self, status: u16, url: &str) -> Behavior {
+        let behavior = self.config.on_status.resolve(status);
+        match behavior {
+            Behavior::Skip => {
+                tracing::warn!(status, url, source = %self.source_name, "non-success status, skipped");
+            }
+            Behavior::Hold | Behavior::Retry => {
+                tracing::warn!(status, url, source = %self.source_name, "non-success status, holding window");
+            }
+            Behavior::Abort => {
+                tracing::error!(status, url, source = %self.source_name, "non-success status, aborting source");
+            }
+        }
+        behavior
+    }
+
     /// Perform a single poll: drive the request worklist to exhaustion, emitting
     /// events for `pipeline`/`both` responses and feeding `feedback`/`both`
     /// responses back into the driver for further requests.
     ///
-    /// Returns `Ok(true)` when the worklist drained and the caller should advance
-    /// the time window. Returns `Ok(false)` (window stays put, retried next poll)
-    /// when the bootstrap driver call failed, or when requests were issued but
-    /// **none** fetched successfully (a transport/HTTP outage). A successful fetch
-    /// whose body fails to parse still counts as progress and advances the window
-    /// — re-polling the same window would not change a malformed 2xx body. Sinks
+    /// Returns [`PollOutcome::Advance`] when the worklist drained and the caller
+    /// should advance the time window. Returns [`PollOutcome::Hold`] (window stays
+    /// put, retried next poll) when the bootstrap driver call failed, or when
+    /// requests were issued but **none** made progress (a transport/HTTP outage, or
+    /// every response resolved to `hold`/exhausted `retry`). Returns
+    /// [`PollOutcome::Abort`] when a response resolved to [`Behavior::Abort`].
+    ///
+    /// A 2xx response whose body fails to parse still counts as progress and
+    /// advances the window — re-polling the same window would not change a malformed
+    /// body. A non-2xx response routed to `skip` also counts as progress. Sinks
     /// should be idempotent if strict consistency is required.
     #[instrument(skip(self), fields(source = %self.source_name))]
-    async fn run_once(&mut self) -> Result<bool> {
+    async fn run_once(&mut self) -> Result<PollOutcome> {
         // Bootstrap: seed the worklist (response = null).
         let bootstrap = self.build_driver_input(&serde_json::Value::Null, None, None);
         let mut queue = match self.driver_tasks(&bootstrap, 0) {
             Ok(q) => q,
             Err(err) => {
                 tracing::warn!(?err, "driver bootstrap execution failed");
-                return Ok(false);
+                return Ok(PollOutcome::Hold);
             }
         };
 
@@ -459,7 +559,7 @@ impl HttpPollingExtractor {
         let concurrency = self.config.max_concurrency.max(1);
         let mut inflight = FuturesUnordered::new();
         let mut issued: u32 = 0;
-        let mut fetch_successes: u32 = 0;
+        let mut progressed: u32 = 0;
         let mut next_allowed: Option<Instant> = None;
 
         loop {
@@ -502,10 +602,22 @@ impl HttpPollingExtractor {
             };
 
             let Ok(resp) = resp else {
-                // Failure already logged in `fetch`.
+                // Transport failure already logged in `fetch`; not progress.
                 continue;
             };
-            fetch_successes += 1;
+
+            // Non-2xx responses are handled by the status policy, not the driver.
+            if !(200..300).contains(&resp.status) {
+                match self.classify_non_success(resp.status, &task.spec.url) {
+                    Behavior::Skip => progressed += 1,
+                    // `Retry` reaching here means the middleware exhausted its retry
+                    // budget, so it degrades to `hold`.
+                    Behavior::Hold | Behavior::Retry => {}
+                    Behavior::Abort => return Ok(PollOutcome::Abort),
+                }
+                continue;
+            }
+            progressed += 1;
 
             if task.spec.route.emits() {
                 self.emit_response(&task, &resp);
@@ -532,11 +644,11 @@ impl HttpPollingExtractor {
             }
         }
 
-        // Hold the window if we issued requests but none reached the server.
-        if issued > 0 && fetch_successes == 0 {
-            return Ok(false);
+        // Hold the window if we issued requests but none made progress.
+        if issued > 0 && progressed == 0 {
+            return Ok(PollOutcome::Hold);
         }
-        Ok(true)
+        Ok(PollOutcome::Advance)
     }
 
     /// Parse a response routed to the pipeline and forward its events downstream.
@@ -587,7 +699,7 @@ impl HttpPollingExtractor {
             }
 
             match self.run_once().await {
-                Ok(true) => {
+                Ok(PollOutcome::Advance) => {
                     self.filter.advance();
                     #[cfg(feature = "state")]
                     if let Some(state_op) = &self.state_op
@@ -605,8 +717,13 @@ impl HttpPollingExtractor {
                         );
                     }
                 }
-                Ok(false) => {
+                Ok(PollOutcome::Hold) => {
                     // Soft failure already logged in run_once(); don't advance.
+                }
+                Ok(PollOutcome::Abort) => {
+                    // Abort already logged in run_once(); stop the source.
+                    tracing::error!(source = %self.source_name, "source aborting after status policy");
+                    break;
                 }
                 Err(err) => {
                     tracing::warn!(?err, source = %self.source_name, "polling error");
@@ -649,6 +766,7 @@ mod tests {
             max_concurrency: default_max_concurrency(),
             max_requests: default_max_requests(),
             max_depth: default_max_depth(),
+            on_status: StatusPolicy::default(),
         }
     }
 
@@ -681,7 +799,7 @@ mod tests {
         let config = make_config(&server.uri());
         let (mut extractor, collector) = make_extractor(&config);
 
-        assert!(extractor.run_once().await.unwrap()); // should advance
+        assert!(extractor.run_once().await.unwrap().advanced()); // should advance
 
         let events: Vec<_> = collector.try_into_iter().unwrap().collect();
         assert_eq!(events.len(), 1);
@@ -700,8 +818,105 @@ mod tests {
         let config = make_config(&server.uri());
         let (mut extractor, _collector) = make_extractor(&config);
 
-        // The only issued request failed to fetch → window must NOT advance.
-        assert!(!extractor.run_once().await.unwrap());
+        // 5xx → default `hold` behavior → no progress → window must NOT advance.
+        assert!(!extractor.run_once().await.unwrap().advanced());
+    }
+
+    #[tokio::test]
+    async fn test_4xx_skips_and_advances_by_default() {
+        // A definitive 4xx (404) is not a transient outage: with no `on_status`
+        // override it resolves to `skip`, so the window advances (no infinite loop)
+        // and nothing is emitted.
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        let config = make_config(&server.uri());
+        let (mut extractor, collector) = make_extractor(&config);
+
+        assert!(extractor.run_once().await.unwrap().advanced());
+        assert_eq!(collector.try_into_iter().unwrap().count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_4xx_hold_override_does_not_advance() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        let mut config = make_config(&server.uri());
+        config.on_status.0.insert("404".to_string(), Behavior::Hold);
+        let (mut extractor, _collector) = make_extractor(&config);
+
+        assert!(!extractor.run_once().await.unwrap().advanced());
+    }
+
+    #[tokio::test]
+    async fn test_abort_on_403_by_default() {
+        // 403 aborts the source by default (no on_status entry) — a loud signal for
+        // an auth/permission misconfiguration.
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(ResponseTemplate::new(403))
+            .mount(&server)
+            .await;
+
+        let config = make_config(&server.uri());
+        let (mut extractor, _collector) = make_extractor(&config);
+
+        assert_eq!(extractor.run_once().await.unwrap(), PollOutcome::Abort);
+    }
+
+    #[tokio::test]
+    async fn test_retry_then_hold() {
+        // `retry` lifts the status into the middleware's transient set, so the
+        // single query is re-attempted with backoff. The mock always 404s, so once
+        // the retry budget is exhausted the poll degrades to `hold` (no advance).
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(ResponseTemplate::new(404))
+            .expect(2..) // initial attempt + at least one middleware retry
+            .mount(&server)
+            .await;
+
+        let mut config = make_config(&server.uri());
+        config.on_status.0.insert("404".to_string(), Behavior::Retry);
+        // Budget must exceed the backoff's ~1s minimum retry interval so at least
+        // one retry actually fires.
+        config.total_duration_of_retries = Duration::from_secs(3);
+        let (mut extractor, _collector) = make_extractor(&config);
+
+        assert!(!extractor.run_once().await.unwrap().advanced());
+        server.verify().await;
+    }
+
+    #[test]
+    fn test_status_policy_resolve_precedence() {
+        let mut map = HashMap::new();
+        map.insert("404".to_string(), Behavior::Abort);
+        map.insert("4xx".to_string(), Behavior::Skip);
+        map.insert("5xx".to_string(), Behavior::Retry);
+        let policy = StatusPolicy(map);
+
+        // exact code wins over class
+        assert_eq!(policy.resolve(404), Behavior::Abort);
+        // class match
+        assert_eq!(policy.resolve(403), Behavior::Skip);
+        assert_eq!(policy.resolve(500), Behavior::Retry);
+        // built-in defaults (no entry): 401/403 → abort, 5xx → hold, else skip
+        let empty = StatusPolicy::default();
+        assert_eq!(empty.resolve(401), Behavior::Abort);
+        assert_eq!(empty.resolve(403), Behavior::Abort);
+        assert_eq!(empty.resolve(404), Behavior::Skip);
+        assert_eq!(empty.resolve(503), Behavior::Hold);
     }
 
     #[tokio::test]
@@ -720,7 +935,7 @@ mod tests {
         let config = make_config(&server.uri());
         let (mut extractor, collector) = make_extractor(&config);
 
-        assert!(extractor.run_once().await.unwrap()); // advances despite parse error
+        assert!(extractor.run_once().await.unwrap().advanced()); // advances despite parse error
         assert_eq!(collector.try_into_iter().unwrap().count(), 0);
     }
 
@@ -740,7 +955,7 @@ mod tests {
         config.parser = ParserConfig::Jsonl;
         let (mut extractor, collector) = make_extractor(&config);
 
-        assert!(extractor.run_once().await.unwrap());
+        assert!(extractor.run_once().await.unwrap().advanced());
         assert_eq!(collector.try_into_iter().unwrap().count(), 2);
     }
 
@@ -763,7 +978,7 @@ mod tests {
         ));
         let (mut extractor, collector) = make_extractor(&config);
 
-        assert!(extractor.run_once().await.unwrap());
+        assert!(extractor.run_once().await.unwrap().advanced());
         assert_eq!(collector.try_into_iter().unwrap().count(), 2);
     }
 
@@ -806,7 +1021,7 @@ mod tests {
         ));
         config.ts_after = Some("2024-01-01T00:00:00Z".parse().unwrap());
         let (mut extractor, _collector) = make_extractor(&config);
-        assert!(extractor.run_once().await.unwrap());
+        assert!(extractor.run_once().await.unwrap().advanced());
     }
 
     #[tokio::test]
@@ -833,7 +1048,7 @@ mod tests {
         );
 
         let (mut extractor, _collector) = make_extractor(&config);
-        assert!(extractor.run_once().await.unwrap());
+        assert!(extractor.run_once().await.unwrap().advanced());
     }
 
     #[tokio::test]
@@ -849,7 +1064,7 @@ mod tests {
         config.parser = ParserConfig::RawText;
         let (mut extractor, collector) = make_extractor(&config);
 
-        assert!(extractor.run_once().await.unwrap());
+        assert!(extractor.run_once().await.unwrap().advanced());
         let events: Vec<_> = collector.try_into_iter().unwrap().collect();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].body, serde_json::Value::String("hello world".to_string()));
@@ -901,7 +1116,7 @@ mod tests {
         ));
         let (mut extractor, collector) = make_extractor(&config);
 
-        assert!(extractor.run_once().await.unwrap());
+        assert!(extractor.run_once().await.unwrap().advanced());
         assert_eq!(collector.try_into_iter().unwrap().count(), 3);
     }
 
@@ -952,7 +1167,7 @@ mod tests {
         let config = config_with_driver(driver);
         let (mut extractor, collector) = make_extractor(&config);
 
-        assert!(extractor.run_once().await.unwrap());
+        assert!(extractor.run_once().await.unwrap().advanced());
         let mut ids: Vec<String> = collector
             .try_into_iter()
             .unwrap()
@@ -980,7 +1195,7 @@ mod tests {
         ));
         let (mut extractor, collector) = make_extractor(&config);
 
-        assert!(extractor.run_once().await.unwrap());
+        assert!(extractor.run_once().await.unwrap().advanced());
         let events: Vec<_> = collector.try_into_iter().unwrap().collect();
         assert_eq!(events[0].metadata["http_polling"]["state"]["discovery_id"], "abc");
     }
@@ -1037,7 +1252,7 @@ mod tests {
         let config = config_with_driver(driver);
         let (mut extractor, collector) = make_extractor(&config);
 
-        assert!(extractor.run_once().await.unwrap());
+        assert!(extractor.run_once().await.unwrap().advanced());
         let mut nodes: Vec<i64> =
             collector.try_into_iter().unwrap().map(|e| e.body["node"].as_i64().unwrap()).collect();
         nodes.sort_unstable();
@@ -1062,7 +1277,7 @@ mod tests {
         config.max_depth = 2;
         let (mut extractor, _collector) = make_extractor(&config);
 
-        assert!(extractor.run_once().await.unwrap());
+        assert!(extractor.run_once().await.unwrap().advanced());
         server.verify().await;
     }
 
@@ -1084,7 +1299,7 @@ mod tests {
         config.max_concurrency = 1;
         let (mut extractor, _collector) = make_extractor(&config);
 
-        assert!(extractor.run_once().await.unwrap());
+        assert!(extractor.run_once().await.unwrap().advanced());
         server.verify().await;
     }
 
@@ -1106,7 +1321,7 @@ mod tests {
         let (mut extractor, _collector) = make_extractor(&config);
 
         let start = std::time::Instant::now();
-        assert!(extractor.run_once().await.unwrap());
+        assert!(extractor.run_once().await.unwrap().advanced());
         // 3 requests spaced by ≥100ms → at least 200ms total.
         assert!(start.elapsed() >= Duration::from_millis(200), "requests were not spaced");
     }

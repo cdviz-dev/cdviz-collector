@@ -45,12 +45,13 @@ packages), or cursor pagination where the cursor lives in the response body
    [Guards](#guards-termination)).
 5. On success the time window advances: `ts_after` = old `ts_before`,
    `ts_before` = `now − 1 s`. The window does **not** advance if the bootstrap
-   driver call failed, or if requests were issued but none reached the server
-   (a transport/HTTP outage) — the next poll retries the same window. A
-   successful (2xx) response whose body fails to parse still advances the window
-   (re-polling would not fix a malformed body).
+   driver call failed, or if requests were issued but none made progress (a
+   transport outage, or every response resolved to `hold` — see
+   [Non-2xx Status Handling](#non-2xx-status-handling)) — the next poll retries the
+   same window. A 2xx response whose body fails to parse, and a non-2xx response
+   routed to `skip`, both count as progress and advance the window.
 6. When `ts_before_limit` is reached the source exits — useful for bounded
-   backfills.
+   backfills. A response routed to `abort` (via `on_status`) also stops the source.
 
 > **State is per-poll.** The driver `state` (below) is in-memory and reset at the
 > start of every poll. Only the `ts_after`/`ts_before` time window is persisted
@@ -270,6 +271,47 @@ A driver loop is bounded by three guards, all configurable:
 When `max_requests` or `max_depth` is reached the remaining work is dropped and
 logged; the poll still completes and the window advances.
 
+## Non-2xx Status Handling
+
+The driver script only deals with the **happy path** (`2xx`). Non-2xx responses
+are handled declaratively by the `on_status` policy, so a driver never has to
+branch on status codes. (Transient `3xx`/`429`/`503`/`5xx` retries and redirects
+are already handled automatically by the middleware — see
+[Rate Limiting and Retry-After](#rate-limiting-and-retry-after) — so `on_status`
+is about what to do once those are exhausted.)
+
+`on_status` maps a status — an exact code (`"404"`) or a class (`"4xx"`) — to one
+of four behaviors:
+
+| Behavior | Effect                                                                                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `skip`   | Ignore the response; the window **advances** (counts as progress). Source continues.                                                                         |
+| `hold`   | Don't advance the window; the **whole query sequence** is retried on the next poll. Source continues.                                                        |
+| `retry`  | Retry **this single request** via the middleware (exponential backoff + `total_duration_of_retries`). If still failing after the budget, degrades to `hold`. |
+| `abort`  | **Stop the source** — a loud signal for a misconfiguration that won't self-heal (e.g. `401`/`403`).                                                          |
+
+Resolution for a given status is: **exact code → class → built-in default**. The
+built-in defaults are:
+
+- `401` / `403` → `abort` — auth/permission misconfiguration that won't self-heal.
+- `5xx` → `hold` — transient; retried on the next poll.
+- everything else (e.g. `404`) → `skip` — advances the window, so a definitive
+  `4xx` never produces an infinite re-poll loop.
+
+Override any of these with an `on_status` entry:
+
+```toml
+[sources.my_source.extractor.on_status]
+"403" = "skip"    # this API legitimately 403s some resources — don't abort
+"404" = "retry"   # back off a few times; if still 404, hold the window
+"410" = "skip"    # gone for good → ignore and move on
+"5xx" = "hold"    # (already the default) transient → retry whole sequence next poll
+```
+
+> Non-2xx responses are **never** fed back to the driver, even for `feedback`/`both`
+> routes. A pagination chain therefore terminates naturally when a page fails (no
+> further requests are derived from it).
+
 ## Rate Limiting and Retry-After
 
 `cdviz-collector` automatically handles HTTP-level retry and redirect signals via
@@ -354,6 +396,14 @@ driver_vrl = """
 
 ## Retry budget for transient HTTP failures (humantime format). Default: 30s.
 # total_duration_of_retries = "30s"
+
+## Per-status handling policy for non-2xx responses. Keys are an exact code
+## ("404") or a class ("4xx"); values are "skip", "hold", "retry", or "abort".
+## Resolution: exact code → class → default (401/403 → abort, 5xx → hold,
+## otherwise skip). Add entries only to override a default.
+# [sources.my_source.extractor.on_status]
+# "403" = "skip"
+# "404" = "retry"
 
 ## Static or secret request headers (same format as the http sink).
 ## `static` and `secret` accept optional `prefix`/`suffix` that enclose `value`,
