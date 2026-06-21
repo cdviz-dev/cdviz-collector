@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.43.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.43.0...0.43.1) - 2026-06-21
+
+### Added
+
+- *(http_polling)* add on_status policy to stop loop on definitive
+
 ## [0.43.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.42.0...0.43.0) - 2026-06-21
 
 ### Added
