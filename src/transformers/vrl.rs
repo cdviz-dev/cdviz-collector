@@ -1,7 +1,7 @@
 use super::Pipe;
-use crate::errors::{IntoDiagnostic, Result};
+use crate::errors::{Error, IntoDiagnostic, Result};
 use crate::event::{Event as EventSource, EventPipe as EventSourcePipe};
-use miette::{LabeledSpan, MietteDiagnostic};
+use miette::MietteDiagnostic;
 use vrl::compiler::{Program, TargetValue};
 use vrl::core::Value;
 use vrl::diagnostic::{Diagnostic, Formatter};
@@ -39,24 +39,6 @@ impl Processor {
     }
 }
 
-/// Converts a byte offset in `source` to a 1-based `(line, col)` pair.
-fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
-    let mut line = 1usize;
-    let mut col = 1usize;
-    for (i, ch) in source.char_indices() {
-        if i >= offset {
-            break;
-        }
-        if ch == '\n' {
-            line += 1;
-            col = 1;
-        } else {
-            col += 1;
-        }
-    }
-    (line, col)
-}
-
 impl Pipe for Processor {
     type Input = EventSource;
     //TODO optimize: EventSource currently round-trips through serde_json::Value to enter/exit the
@@ -84,38 +66,14 @@ impl Pipe for Processor {
         let mut ctx = Context::new(&mut target, &mut state, &timezone);
 
         // This executes the VRL program, making any modifications to the target, and returning a result.
+        // A runtime failure here is treated as a rejection of this specific payload, not an
+        // internal server error: the program is compiled once at startup, so a per-request
+        // failure is almost always the payload not matching the transform's contract.
         let res = self.renderer.resolve(&mut ctx).map_err(|cause| {
             let vrl_diag = Diagnostic::from(cause);
-            // Extract before consuming vrl_diag with Formatter
-            let severity = vrl_diag.severity;
-            let labels: Vec<_> = vrl_diag
-                .labels
-                .iter()
-                .map(|label| {
-                    let start = label.span.start();
-                    let len = label.span.end() - start;
-                    let (line, col) = byte_offset_to_line_col(&self.source, start);
-                    (format!("line {line}:{col} - {}", label.message), start, len)
-                })
-                .collect();
-            let help =
-                vrl_diag.notes.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
             // Formatter converts byte offsets to line/col in the main message
             let message = Formatter::new(&self.source, vec![vrl_diag]).to_string();
-            MietteDiagnostic::new(message)
-                .with_severity(match severity {
-                    vrl::diagnostic::Severity::Error => miette::Severity::Error,
-                    vrl::diagnostic::Severity::Warning | vrl::diagnostic::Severity::Bug => {
-                        miette::Severity::Warning
-                    }
-                    vrl::diagnostic::Severity::Note => miette::Severity::Advice,
-                })
-                .with_labels(
-                    labels
-                        .into_iter()
-                        .map(|(msg, offset, len)| LabeledSpan::new(Some(msg), offset, len)),
-                )
-                .with_help(help)
+            Error::Rejected { reason: message }
         })?;
 
         let output: Option<Vec<EventSource>> =
@@ -239,7 +197,11 @@ mod tests {
             body: serde_json::json!({"not_a_number": "hello"}),
         };
         let result = processor.send(input);
-        assert!(result.is_err(), "runtime VRL error should propagate as Err");
+        let err = result.expect_err("runtime VRL error should propagate as Err");
+        assert!(
+            err.downcast_ref::<Error>().is_some_and(|e| matches!(e, Error::Rejected { .. })),
+            "runtime VRL error should downcast to Error::Rejected so it maps to a 4xx response"
+        );
     }
 
     #[test_trace::test]
@@ -267,7 +229,7 @@ mod tests {
     #[test_trace::test]
     fn test_runtime_error_diagnostic_contains_location() {
         // Verify the error message produced by a runtime failure carries location info
-        // from byte_offset_to_line_col (non-empty message with the offending source).
+        // (non-empty message with the offending source).
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let src = ".body.x = to_int!(.body.not_a_number)\n[.]";
         let mut processor = Processor::new(src, Box::new(collector.create_pipe())).unwrap();
@@ -284,41 +246,5 @@ mod tests {
             msg.contains("to_int") || msg.contains("not_a_number") || msg.contains("1:"),
             "diagnostic should reference the error location or relevant source; got: {msg}"
         );
-    }
-
-    // ── byte_offset_to_line_col unit tests ──────────────────────────────────
-
-    #[test_trace::test]
-    fn test_byte_offset_to_line_col_first_char() {
-        assert_eq!(byte_offset_to_line_col("abc", 0), (1, 1));
-    }
-
-    #[test_trace::test]
-    fn test_byte_offset_to_line_col_second_line() {
-        assert_eq!(byte_offset_to_line_col("abc\ndef", 4), (2, 1));
-    }
-
-    #[test_trace::test]
-    fn test_byte_offset_to_line_col_mid_line() {
-        assert_eq!(byte_offset_to_line_col("abc\ndef", 5), (2, 2));
-    }
-
-    #[test_trace::test]
-    fn test_byte_offset_to_line_col_offset_past_end() {
-        // Offsets beyond the source length return the position after the last char.
-        let (line, col) = byte_offset_to_line_col("ab", 99);
-        assert_eq!(line, 1);
-        assert_eq!(col, 3); // one past "ab"
-    }
-
-    #[test_trace::test]
-    fn test_byte_offset_to_line_col_empty_source() {
-        assert_eq!(byte_offset_to_line_col("", 0), (1, 1));
-    }
-
-    #[test_trace::test]
-    fn test_byte_offset_to_line_col_col_resets_after_newline() {
-        // "a\nb\nc" — offset 4 is 'c' at line 3, col 1
-        assert_eq!(byte_offset_to_line_col("a\nb\nc", 4), (3, 1));
     }
 }

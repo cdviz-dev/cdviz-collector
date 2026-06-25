@@ -26,10 +26,16 @@ pub(crate) enum Error {
         #[label("{source}")]
         location: SourceOffset,
     },
+    #[from(ignore)]
+    #[display("{reason}")]
+    Rejected {
+        #[error(ignore)]
+        reason: String,
+    },
 }
 
 #[derive(Debug, derive_more::Display, derive_more::From)]
-pub(crate) struct ReportWrapper(Report);
+pub(crate) struct ReportWrapper(pub(crate) Report);
 
 impl Error {
     /// Takes the input and the `serde_json::Error` and returns a `Error::Serde`
@@ -41,5 +47,16 @@ impl Error {
         let input = input.into();
         let location = SourceOffset::from_location(&input, cause.line(), cause.column());
         Self::Serde { source: cause, input, location }
+    }
+
+    /// Maps an error variant to the HTTP status code it should be reported as.
+    /// Variants caused by the caller's payload (schema mismatch, transform
+    /// rejection) map to a 4xx; anything else is treated as an internal failure.
+    pub(crate) fn status_code(&self) -> axum::http::StatusCode {
+        match self {
+            Self::Serde { .. } => axum::http::StatusCode::BAD_REQUEST,
+            Self::Rejected { .. } => axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+            _ => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        }
     }
 }

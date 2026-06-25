@@ -133,6 +133,60 @@ mod tests_handler {
     }
 
     #[tokio::test]
+    async fn test_webhook_rejected_by_loader_returns_400() {
+        // No transformer chain: the terminal `send_cdevents::Processor` validates the body
+        // against the CDEvents schema directly, so an arbitrary payload fails there.
+        let config = Config { id: "test".to_string(), ..Default::default() };
+        let (tx, _rx) = tokio::sync::broadcast::channel(10);
+        let terminal: EventSourcePipe =
+            Box::new(crate::sources::send_cdevents::Processor::new(tx, "http://test/".to_string()));
+        let router = make_route(&config, terminal);
+
+        let request = Request::builder()
+            .uri("/webhook/test")
+            .method("POST")
+            .header("content-type", "application/json")
+            .body(Body::from(json!({"not": "a cdevent"}).to_string()))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(body["detail"].as_str().is_some_and(|d| !d.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn test_webhook_rejected_by_transformer_returns_422() {
+        use crate::transformers;
+
+        let config = Config { id: "test".to_string(), ..Default::default() };
+        let collector = collect_to_vec::Collector::<EventSource>::new();
+        // `to_int!()` on a non-numeric field raises a VRL runtime error.
+        let vrl_config = transformers::Config::Vrl {
+            template: indoc::indoc! { r"
+            .body.x = to_int!(.body.not_a_number)
+            [.]"}
+            .to_string(),
+        };
+        let pipe = vrl_config.make_transformer(Box::new(collector.create_pipe())).unwrap();
+        let router = make_route(&config, pipe);
+
+        let request = Request::builder()
+            .uri("/webhook/test")
+            .method("POST")
+            .header("content-type", "application/json")
+            .body(Body::from(json!({"not_a_number": "hello"}).to_string()))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(body["detail"].as_str().is_some_and(|d| !d.is_empty()));
+    }
+
+    #[tokio::test]
     async fn test_webhook_invalid_path() {
         let config = Config { id: "test".to_string(), ..Default::default() };
         let collector = collect_to_vec::Collector::<EventSource>::new();

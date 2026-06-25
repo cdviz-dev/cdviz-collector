@@ -129,18 +129,25 @@ async fn health() -> impl IntoResponse {
 // try to follow [RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457.html)
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
-        // let (status, error_message) = match self {
-        //     Error::Db(e) => (http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-        //     _ => (http::StatusCode::INTERNAL_SERVER_ERROR, "".to_string()),
-        // };
         let trace_id = find_current_trace_id();
         tracing::warn!(error = ?self);
-        let body = Json(json!({
-            "title": http::StatusCode::INTERNAL_SERVER_ERROR.as_str(),
-            "status": http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-            "trace_id": trace_id,
-        }));
-        (http::StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+        let status = self.status_code();
+        // Detail is only surfaced for client-caused (4xx) rejections; 5xx stays opaque.
+        let body = if status.is_client_error() {
+            Json(json!({
+                "title": status.as_str(),
+                "status": status.as_u16(),
+                "detail": self.to_string(),
+                "trace_id": trace_id,
+            }))
+        } else {
+            Json(json!({
+                "title": status.as_str(),
+                "status": status.as_u16(),
+                "trace_id": trace_id,
+            }))
+        };
+        (status, body).into_response()
     }
 }
 
@@ -149,13 +156,26 @@ impl IntoResponse for ReportWrapper {
     fn into_response(self) -> axum::response::Response {
         let trace_id = find_current_trace_id();
         tracing::warn!(error = ?self);
-        let body = Json(json!({
-            "title": http::StatusCode::INTERNAL_SERVER_ERROR.as_str(),
-            "status": http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-            "trace_id": trace_id,
-        }));
-
-        (http::StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+        match self.0.downcast_ref::<Error>() {
+            Some(err) if err.status_code().is_client_error() => {
+                let status = err.status_code();
+                let body = Json(json!({
+                    "title": status.as_str(),
+                    "status": status.as_u16(),
+                    "detail": err.to_string(),
+                    "trace_id": trace_id,
+                }));
+                (status, body).into_response()
+            }
+            _ => {
+                let body = Json(json!({
+                    "title": http::StatusCode::INTERNAL_SERVER_ERROR.as_str(),
+                    "status": http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                    "trace_id": trace_id,
+                }));
+                (http::StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+            }
+        }
     }
 }
 
