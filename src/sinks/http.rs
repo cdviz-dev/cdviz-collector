@@ -31,6 +31,9 @@ pub(crate) struct Config {
     /// Timeout for message production (default 30m)
     #[serde(with = "humantime_serde", default = "default_total_duration_of_retries")]
     pub(crate) total_duration_of_retries: Duration,
+    /// Log a warning when the server returns a non-2xx status. Defaults to true.
+    #[serde(default = "default_true")]
+    log_errors: bool,
     /// Log the full HTTP response (headers + body) when the server returns a non-2xx status.
     /// Useful for debugging in CI; defaults to false.
     #[serde(default)]
@@ -54,6 +57,10 @@ impl Config {
 
 fn default_user_agent() -> String {
     crate::DEFAULT_USER_AGENT.to_string()
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_total_duration_of_retries() -> Duration {
@@ -81,6 +88,7 @@ impl TryFrom<Config> for HttpSink {
             dest: value.destination,
             client,
             headers: value.headers,
+            log_errors: value.log_errors,
             log_full_response_on_error: value.log_full_response_on_error,
             transformer_chain,
             event_collector,
@@ -92,6 +100,7 @@ pub(crate) struct HttpSink {
     client: ClientWithMiddleware,
     dest: Url,
     headers: OutgoingHeaderMap,
+    log_errors: bool,
     log_full_response_on_error: bool,
     transformer_chain: transformers::TransformerChain,
     event_collector: collect_to_vec::Collector<Event>,
@@ -101,6 +110,7 @@ impl std::fmt::Debug for HttpSink {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HttpSink")
             .field("dest", &self.dest)
+            .field("log_errors", &self.log_errors)
             .field("log_full_response_on_error", &self.log_full_response_on_error)
             .finish_non_exhaustive()
     }
@@ -124,7 +134,7 @@ impl HttpSink {
         req = add_trace_context_headers(req, trace_context);
         req = self.add_headers(req, &body_bytes)?.body(body_bytes);
         let response = req.send().await.into_diagnostic()?;
-        if !response.status().is_success() {
+        if !response.status().is_success() && self.log_errors {
             let http_status = response.status().as_u16();
             let destination = self.dest.as_str();
             if self.log_full_response_on_error {
@@ -293,6 +303,7 @@ mod tests {
             destination: Url::parse(url).unwrap(),
             headers: OutgoingHeaderMap::new(),
             total_duration_of_retries: Duration::from_secs(1),
+            log_errors: true,
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
             chain: TransformerChainConfig::default(),
@@ -452,6 +463,7 @@ mod tests {
                 map
             },
             total_duration_of_retries: Duration::from_secs(1),
+            log_errors: true,
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
             chain: TransformerChainConfig::default(),
@@ -575,6 +587,7 @@ mod tests {
                 map
             },
             total_duration_of_retries: Duration::from_secs(1),
+            log_errors: true,
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
             chain: TransformerChainConfig::default(),
@@ -695,6 +708,7 @@ mod tests {
                 map
             },
             total_duration_of_retries: Duration::from_secs(1),
+            log_errors: true,
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
             chain: TransformerChainConfig::default(),
@@ -775,6 +789,7 @@ mod tests {
                 map
             },
             total_duration_of_retries: Duration::from_secs(1),
+            log_errors: true,
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
             chain: TransformerChainConfig::default(),

@@ -3,6 +3,11 @@ host = "0.0.0.0"
 port = 8080
 root_url = "http://cdviz-collector.example.com"
 
+[http.access_log]
+# List of exact status codes ("404") or class patterns ("4xx", "5xx") to log.
+# Empty list disables access logging entirely.
+filter = ["4xx", "5xx"]
+
 [pipeline]
 queue_capacity = 1024
 

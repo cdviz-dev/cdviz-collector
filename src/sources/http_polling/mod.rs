@@ -99,6 +99,10 @@ pub(crate) struct Config {
     /// Per-status handling policy for non-2xx responses. See [`StatusPolicy`].
     #[serde(default)]
     pub(crate) on_status: StatusPolicy,
+
+    /// Log a warning when a non-2xx response is received. Defaults to true.
+    #[serde(default = "default_true")]
+    pub(crate) log_errors: bool,
 }
 
 /// What to do with a non-2xx HTTP response (see [`StatusPolicy`]).
@@ -180,6 +184,10 @@ impl PollOutcome {
 
 fn default_user_agent() -> String {
     crate::DEFAULT_USER_AGENT.to_string()
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_max_concurrency() -> usize {
@@ -513,15 +521,17 @@ impl HttpPollingExtractor {
     /// Resolve and log the [`Behavior`] for a non-2xx response per `on_status`.
     fn classify_non_success(&self, status: u16, url: &str) -> Behavior {
         let behavior = self.config.on_status.resolve(status);
-        match behavior {
-            Behavior::Skip => {
-                tracing::warn!(status, url, source = %self.source_name, "non-success status, skipped");
-            }
-            Behavior::Hold | Behavior::Retry => {
-                tracing::warn!(status, url, source = %self.source_name, "non-success status, holding window");
-            }
-            Behavior::Abort => {
-                tracing::error!(status, url, source = %self.source_name, "non-success status, aborting source");
+        if self.config.log_errors {
+            match behavior {
+                Behavior::Skip => {
+                    tracing::warn!(status, url, source = %self.source_name, "non-success status, skipped");
+                }
+                Behavior::Hold | Behavior::Retry => {
+                    tracing::warn!(status, url, source = %self.source_name, "non-success status, holding window");
+                }
+                Behavior::Abort => {
+                    tracing::error!(status, url, source = %self.source_name, "non-success status, aborting source");
+                }
             }
         }
         behavior
@@ -767,6 +777,7 @@ mod tests {
             max_requests: default_max_requests(),
             max_depth: default_max_depth(),
             on_status: StatusPolicy::default(),
+            log_errors: true,
         }
     }
 

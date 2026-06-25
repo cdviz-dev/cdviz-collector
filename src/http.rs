@@ -5,8 +5,9 @@ use crate::errors::{Error, IntoDiagnostic, ReportWrapper, Result};
 /// Applied globally to all HTTP routes including webhooks. Override per-route with
 /// [`axum::extract::DefaultBodyLimit`] if a source needs a different limit.
 const DEFAULT_BODY_LIMIT_BYTES: usize = 1024 * 1024;
+use axum::middleware::{self, Next};
 use axum::Extension;
-use axum::{Json, Router, extract::DefaultBodyLimit, http, response::IntoResponse, routing::get};
+use axum::{Json, Router, extract::{DefaultBodyLimit, Request, State}, http, response::IntoResponse, routing::get};
 use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -24,6 +25,47 @@ use tower_http::{
 };
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
+/// Status filter patterns for access logging.
+/// Each entry is an exact status code (`"404"`) or a class (`"4xx"`, `"5xx"`).
+/// An empty list disables logging.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct AccessLogConfig {
+    #[serde(default = "default_access_log_filter")]
+    pub(crate) filter: Vec<String>,
+}
+
+fn default_access_log_filter() -> Vec<String> {
+    vec!["4xx".into(), "5xx".into()]
+}
+
+impl Default for AccessLogConfig {
+    fn default() -> Self {
+        Self { filter: default_access_log_filter() }
+    }
+}
+
+fn status_matches_filter(status: u16, filter: &[String]) -> bool {
+    let class = format!("{}xx", status / 100);
+    let exact = status.to_string();
+    filter.iter().any(|p| p == &exact || p == &class)
+}
+
+async fn access_log_middleware(
+    State(filter): State<Vec<String>>,
+    req: Request,
+    next: Next,
+) -> axum::response::Response {
+    let uri = req.uri().to_string();
+    let method = req.method().to_string();
+    let resp = next.run(req).await;
+    let status = resp.status().as_u16();
+    if status_matches_filter(status, &filter) {
+        let trace_id = find_current_trace_id();
+        tracing::warn!(http_status = status, uri, method, ?trace_id, "access");
+    }
+    resp
+}
+
 /// The http server config
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct Config {
@@ -37,6 +79,10 @@ pub(crate) struct Config {
     /// Must be a valid absolute URL. Will be validated at deserialization time.
     #[serde(default = "default_root_url")]
     pub(crate) root_url: url::Url,
+
+    /// Access log configuration: which HTTP responses to log.
+    #[serde(default)]
+    pub(crate) access_log: AccessLogConfig,
 }
 
 #[allow(clippy::expect_used)]
@@ -51,6 +97,7 @@ impl Default for Config {
             host: IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
             port: 8080,
             root_url: default_root_url(),
+            access_log: AccessLogConfig::default(),
         }
     }
 }
@@ -61,8 +108,9 @@ pub(crate) fn launch(
     shutdown_token: CancellationToken,
 ) -> JoinHandle<Result<()>> {
     let addr = SocketAddr::new(config.host, config.port);
+    let access_log = config.access_log.clone();
     tokio::spawn(async move {
-        let app = app(routes, shutdown_token.clone());
+        let app = app(access_log, routes, shutdown_token.clone());
         // run it
         tracing::warn!("listening on {}", addr);
         let listener = tokio::net::TcpListener::bind(addr).await.into_diagnostic()?;
@@ -78,7 +126,7 @@ pub(crate) fn launch(
     })
 }
 
-fn app(routes: Vec<Router>, shutdown_token: CancellationToken) -> Router {
+fn app(access_log: AccessLogConfig, routes: Vec<Router>, shutdown_token: CancellationToken) -> Router {
     // build our application with a route
     let mut app = Router::new();
     for route in routes {
@@ -92,9 +140,22 @@ fn app(routes: Vec<Router>, shutdown_token: CancellationToken) -> Router {
         // allow requests from any origin
         .allow_origin(Any);
 
-    app
+    // TimeoutLayer lives inside the OTel span so access_log (which is also inside the span)
+    // receives the 408 response and can log it with a valid trace_id.
+    let inner = app
         // include trace context as header into the response
         .layer(OtelInResponseLayer)
+        // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
+        // requests don't hang forever.
+        .layer(TimeoutLayer::with_status_code(http::StatusCode::REQUEST_TIMEOUT, Duration::from_secs(3)));
+
+    let inner = if access_log.filter.is_empty() {
+        inner
+    } else {
+        inner.layer(middleware::from_fn_with_state(access_log.filter, access_log_middleware))
+    };
+
+    inner
         //start OpenTelemetry trace on incoming request
         .layer(OtelAxumLayer::default())
         // request processed without span / trace
@@ -107,9 +168,6 @@ fn app(routes: Vec<Router>, shutdown_token: CancellationToken) -> Router {
             ValidateRequestHeaderLayer::accept("application/json"),
             RequestDecompressionLayer::new(),
             CompressionLayer::new(),
-            // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
-            // requests don't hang forever.
-            TimeoutLayer::with_status_code(http::StatusCode::REQUEST_TIMEOUT, Duration::from_secs(3)),
             DefaultBodyLimit::max(DEFAULT_BODY_LIMIT_BYTES),
         ))
 }
@@ -195,7 +253,7 @@ mod tests {
     // test health endpoint
     async fn test_readyz() {
         let shutdown_token = CancellationToken::new();
-        let app = app(vec![], shutdown_token.clone());
+        let app = app(AccessLogConfig::default(), vec![], shutdown_token.clone());
         let response = app
             .clone()
             .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
@@ -215,7 +273,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     // test health endpoint
     async fn test_call_option_for_cors() {
-        let app = app(vec![], CancellationToken::new());
+        let app = app(AccessLogConfig::default(), vec![], CancellationToken::new());
         let response = app
             .oneshot(
                 Request::builder()
@@ -244,7 +302,7 @@ mod tests {
     #[rstest]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_post_webhook_not_found() {
-        let app = app(vec![], CancellationToken::new());
+        let app = app(AccessLogConfig::default(), vec![], CancellationToken::new());
 
         let response = app
             .oneshot(
