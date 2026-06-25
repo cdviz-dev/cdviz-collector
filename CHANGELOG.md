@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.43.1...0.44.0) - 2026-06-25
+
+### Added
+
+- add configuration to log on http error (input & output)
+
 ## [0.43.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.43.0...0.43.1) - 2026-06-21
 
 ### Added
