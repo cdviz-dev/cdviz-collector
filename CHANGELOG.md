@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.43.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.43.1...0.43.2) - 2026-06-25
+
+### Added
+
+- *(http)* return 4xx with detail when a webhook event is rejected by
+
+### Fixed
+
+- *(deps)* update cdevents-sdk,...
+
+### Other
+
+- allow explicit version bump by commit message
+
 ## [0.43.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.43.0...0.43.1) - 2026-06-21
 
 ### Added
