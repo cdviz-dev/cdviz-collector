@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.46.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.45.0...0.46.0) - 2026-06-26
+
+### Added
+
+- add more info into the http accesslog
+- add an explicit 404 fallback on axum route
+
+### Fixed
+
+- *(webhook)* replace async mutex by std mutex + add debug log
+
 ## [0.45.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.44.0...0.45.0) - 2026-06-26
 
 ### Added
