@@ -73,6 +73,9 @@ async fn webhook(
     body: axum::body::Bytes,
 ) -> impl IntoResponse {
     //tracing::trace!(?body, "received");
+    // Marks that the handler was actually entered (body fully buffered by axum). Its absence
+    // alongside a 408 in the access log means the request timed out during body read.
+    tracing::debug!(body_len = body.len(), "webhook handler entered");
 
     // Validate headers if any rules are configured
     if !state.headers.is_empty()

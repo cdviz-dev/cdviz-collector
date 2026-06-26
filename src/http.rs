@@ -56,6 +56,10 @@ fn status_matches_filter(status: u16, filter: &[String]) -> bool {
     filter.iter().any(|p| p == &exact || p == &class)
 }
 
+fn header_str(req: &Request, name: http::HeaderName) -> Option<String> {
+    req.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_owned)
+}
+
 async fn access_log_middleware(
     State(filter): State<Vec<String>>,
     req: Request,
@@ -63,11 +67,31 @@ async fn access_log_middleware(
 ) -> axum::response::Response {
     let uri = req.uri().to_string();
     let method = req.method().to_string();
+    // Capture what the client claims about the body so a 408 (timeout before the handler
+    // runs) can be diagnosed: never-finished body, compressed/chunked transfer, or a
+    // pending `Expect: 100-continue` negotiation.
+    let content_length = header_str(&req, http::header::CONTENT_LENGTH);
+    let content_encoding = header_str(&req, http::header::CONTENT_ENCODING);
+    let transfer_encoding = header_str(&req, http::header::TRANSFER_ENCODING);
+    let expect = header_str(&req, http::header::EXPECT);
+    let start = std::time::Instant::now();
     let resp = next.run(req).await;
     let status = resp.status().as_u16();
     if status_matches_filter(status, &filter) {
         let trace_id = find_current_trace_id();
-        tracing::warn!(http_status = status, uri, method, ?trace_id, "access");
+        let elapsed_ms = start.elapsed().as_millis();
+        tracing::warn!(
+            http_status = status,
+            uri,
+            method,
+            ?trace_id,
+            elapsed_ms,
+            content_length,
+            content_encoding,
+            transfer_encoding,
+            expect,
+            "access"
+        );
     }
     resp
 }
