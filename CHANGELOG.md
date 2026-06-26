@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.45.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.44.0...0.45.0) - 2026-06-26
+
+### Added
+
+- instrument otel tracing from extractor to sink
+- *(http)* the timeout for http incoming request is configurable (default 30s, previously 3s)
+
 ## [0.44.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.43.1...0.44.0) - 2026-06-25
 
 ### Added
