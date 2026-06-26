@@ -5,9 +5,15 @@ use crate::errors::{Error, IntoDiagnostic, ReportWrapper, Result};
 /// Applied globally to all HTTP routes including webhooks. Override per-route with
 /// [`axum::extract::DefaultBodyLimit`] if a source needs a different limit.
 const DEFAULT_BODY_LIMIT_BYTES: usize = 1024 * 1024;
-use axum::middleware::{self, Next};
 use axum::Extension;
-use axum::{Json, Router, extract::{DefaultBodyLimit, Request, State}, http, response::IntoResponse, routing::get};
+use axum::middleware::{self, Next};
+use axum::{
+    Json, Router,
+    extract::{DefaultBodyLimit, Request, State},
+    http,
+    response::IntoResponse,
+    routing::get,
+};
 use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -83,12 +89,21 @@ pub(crate) struct Config {
     /// Access log configuration: which HTTP responses to log.
     #[serde(default)]
     pub(crate) access_log: AccessLogConfig,
+
+    /// Per-request timeout (e.g. "30s"); requests exceeding it return 408.
+    /// Keeps a bound so requests don't hang forever during graceful shutdown.
+    #[serde(default = "default_request_timeout", with = "humantime_serde")]
+    pub(crate) request_timeout: Duration,
 }
 
 #[allow(clippy::expect_used)]
 fn default_root_url() -> url::Url {
     url::Url::parse("http://cdviz-collector.example.com")
         .expect("default root_url should be a valid URL")
+}
+
+fn default_request_timeout() -> Duration {
+    Duration::from_secs(30)
 }
 
 impl Default for Config {
@@ -98,6 +113,7 @@ impl Default for Config {
             port: 8080,
             root_url: default_root_url(),
             access_log: AccessLogConfig::default(),
+            request_timeout: default_request_timeout(),
         }
     }
 }
@@ -109,8 +125,9 @@ pub(crate) fn launch(
 ) -> JoinHandle<Result<()>> {
     let addr = SocketAddr::new(config.host, config.port);
     let access_log = config.access_log.clone();
+    let request_timeout = config.request_timeout;
     tokio::spawn(async move {
-        let app = app(access_log, routes, shutdown_token.clone());
+        let app = app(access_log, request_timeout, routes, shutdown_token.clone());
         // run it
         tracing::warn!("listening on {}", addr);
         let listener = tokio::net::TcpListener::bind(addr).await.into_diagnostic()?;
@@ -126,7 +143,12 @@ pub(crate) fn launch(
     })
 }
 
-fn app(access_log: AccessLogConfig, routes: Vec<Router>, shutdown_token: CancellationToken) -> Router {
+fn app(
+    access_log: AccessLogConfig,
+    request_timeout: Duration,
+    routes: Vec<Router>,
+    shutdown_token: CancellationToken,
+) -> Router {
     // build our application with a route
     let mut app = Router::new();
     for route in routes {
@@ -147,7 +169,7 @@ fn app(access_log: AccessLogConfig, routes: Vec<Router>, shutdown_token: Cancell
         .layer(OtelInResponseLayer)
         // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
         // requests don't hang forever.
-        .layer(TimeoutLayer::with_status_code(http::StatusCode::REQUEST_TIMEOUT, Duration::from_secs(3)));
+        .layer(TimeoutLayer::with_status_code(http::StatusCode::REQUEST_TIMEOUT, request_timeout));
 
     let inner = if access_log.filter.is_empty() {
         inner
@@ -253,7 +275,12 @@ mod tests {
     // test health endpoint
     async fn test_readyz() {
         let shutdown_token = CancellationToken::new();
-        let app = app(AccessLogConfig::default(), vec![], shutdown_token.clone());
+        let app = app(
+            AccessLogConfig::default(),
+            default_request_timeout(),
+            vec![],
+            shutdown_token.clone(),
+        );
         let response = app
             .clone()
             .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
@@ -273,7 +300,12 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     // test health endpoint
     async fn test_call_option_for_cors() {
-        let app = app(AccessLogConfig::default(), vec![], CancellationToken::new());
+        let app = app(
+            AccessLogConfig::default(),
+            default_request_timeout(),
+            vec![],
+            CancellationToken::new(),
+        );
         let response = app
             .oneshot(
                 Request::builder()
@@ -302,7 +334,12 @@ mod tests {
     #[rstest]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_post_webhook_not_found() {
-        let app = app(AccessLogConfig::default(), vec![], CancellationToken::new());
+        let app = app(
+            AccessLogConfig::default(),
+            default_request_timeout(),
+            vec![],
+            CancellationToken::new(),
+        );
 
         let response = app
             .oneshot(
@@ -316,5 +353,30 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[rstest]
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_request_timeout_returns_408() {
+        use axum::routing::get;
+        // a route slower than the configured timeout must yield 408
+        let slow = Router::new().route(
+            "/slow",
+            get(|| async {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                StatusCode::OK
+            }),
+        );
+        let app = app(
+            AccessLogConfig::default(),
+            Duration::from_millis(1),
+            vec![slow],
+            CancellationToken::new(),
+        );
+        let response = app
+            .oneshot(Request::builder().uri("/slow").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::REQUEST_TIMEOUT);
     }
 }
