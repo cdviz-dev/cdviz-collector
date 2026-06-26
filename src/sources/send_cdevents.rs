@@ -31,8 +31,11 @@ impl Pipe for Processor {
         }
         let cdevent = CDEvent::try_from(input.clone())?;
 
-        // Include headers from EventSource into the message and capture trace context
-        let message = Message::with_trace_context(cdevent, input.headers);
+        // Carry the source trace context across the broadcast queue by injecting the current
+        // span's W3C `traceparent` into the message headers (extracted on the sink side).
+        let mut headers = input.headers;
+        crate::otel::inject_current_context(&mut headers);
+        let message = Message::new(cdevent, headers);
 
         self.next.send(message).into_diagnostic()?;
         Ok(())

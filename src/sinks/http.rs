@@ -10,9 +10,6 @@ use crate::security::header::{
 };
 use crate::transformers;
 use crate::transformers::collect_to_vec;
-use init_tracing_opentelemetry::opentelemetry::propagation::Injector;
-use init_tracing_opentelemetry::opentelemetry::trace::TraceContextExt;
-use init_tracing_opentelemetry::opentelemetry::{Context, global};
 use reqwest::Url;
 use reqwest::header::CONTENT_TYPE;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
@@ -117,11 +114,7 @@ impl std::fmt::Debug for HttpSink {
 }
 
 impl HttpSink {
-    async fn send_event(
-        &self,
-        event: &Event,
-        trace_context: Option<&crate::message::TraceContext>,
-    ) -> Result<()> {
+    async fn send_event(&self, event: &Event) -> Result<()> {
         let body_bytes = serde_json::to_vec(&event.body).into_diagnostic()?;
         let mut req = self.client.post(self.dest.clone());
         // Content-Type is set first so event.headers (from VRL) can override it.
@@ -131,7 +124,7 @@ impl HttpSink {
         for (name, value) in &event.headers {
             req = req.header(name.as_str(), value.as_str());
         }
-        req = add_trace_context_headers(req, trace_context);
+        req = add_trace_context_headers(req);
         req = self.add_headers(req, &body_bytes)?.body(body_bytes);
         let response = req.send().await.into_diagnostic()?;
         if !response.status().is_success() && self.log_errors {
@@ -206,65 +199,16 @@ fn add_cloudevents_headers(mut req: RequestBuilder, event: &Event) -> RequestBui
     req
 }
 
-/// Add W3C Trace Context headers using OpenTelemetry propagation
-fn add_trace_context_headers(
-    mut req: RequestBuilder,
-    trace_context: Option<&crate::message::TraceContext>,
-) -> RequestBuilder {
-    if let Some(trace_ctx) = trace_context {
-        // Create OpenTelemetry context with trace information
-        use init_tracing_opentelemetry::opentelemetry::trace::{
-            SpanContext, TraceFlags, TraceState,
-        };
-
-        let span_context = SpanContext::new(
-            trace_ctx.trace_id,
-            trace_ctx.span_id,
-            TraceFlags::new(trace_ctx.trace_flags),
-            false,
-            TraceState::NONE,
-        );
-
-        // Create context with the remote span context for propagation
-        let context = Context::current().with_remote_span_context(span_context);
-
-        // Create a header injector for the request
-        let mut header_injector = HeaderInjector::new();
-
-        // Use the global text map propagator to inject headers
-        global::get_text_map_propagator(|propagator| {
-            propagator.inject_context(&context, &mut header_injector);
-        });
-
-        // Add all injected headers to the request
-        for (key, value) in header_injector.headers {
-            req = req.header(key, value);
-        }
-
-        tracing::debug!(
-            trace_id = %trace_ctx.trace_id,
-            span_id = %trace_ctx.span_id,
-            "Added trace context headers to outgoing HTTP request using OpenTelemetry propagation"
-        );
+/// Inject the current span's W3C trace context into the outgoing request, so the receiving
+/// service continues the same trace as a child of this sink span. Runs inside the `sink`
+/// span (see `sinks::start`), which is itself parented to the source trace.
+fn add_trace_context_headers(mut req: RequestBuilder) -> RequestBuilder {
+    let mut headers = std::collections::HashMap::new();
+    crate::otel::inject_current_context(&mut headers);
+    for (key, value) in headers {
+        req = req.header(key, value);
     }
     req
-}
-
-/// Header injector for OpenTelemetry propagation
-struct HeaderInjector {
-    headers: std::collections::HashMap<String, String>,
-}
-
-impl HeaderInjector {
-    fn new() -> Self {
-        Self { headers: std::collections::HashMap::new() }
-    }
-}
-
-impl Injector for HeaderInjector {
-    fn set(&mut self, key: &str, value: String) {
-        self.headers.insert(key.to_string(), value);
-    }
 }
 
 impl Sink for HttpSink {
@@ -281,7 +225,7 @@ impl Sink for HttpSink {
         let events = self.event_collector.drain()?;
         push_res?;
         for event in events {
-            self.send_event(&event, msg.trace_context.as_ref()).await?;
+            self.send_event(&event).await?;
         }
         Ok(())
     }
@@ -497,7 +441,7 @@ mod tests {
         };
 
         let cdevent = CDEvent::try_from(event_source).unwrap();
-        let message = Message { cdevent, headers: source_headers, trace_context: None };
+        let message = Message::new(cdevent, source_headers);
 
         assert2::assert!(let Ok(()) = sink.send(&message).await);
         // wiremock verifies all 4 matchers on MockServer drop (via .expect(1))
@@ -669,7 +613,7 @@ mod tests {
         };
 
         let cdevent = CDEvent::try_from(event_source).unwrap();
-        let message = Message { cdevent, headers: source_headers, trace_context: None };
+        let message = Message::new(cdevent, source_headers);
 
         assert2::assert!(let Ok(()) = sink.send(&message).await);
     }
@@ -746,7 +690,7 @@ mod tests {
         };
 
         let cdevent = CDEvent::try_from(event_source).unwrap();
-        let message = Message { cdevent, headers: source_headers, trace_context: None };
+        let message = Message::new(cdevent, source_headers);
 
         assert2::assert!(let Ok(()) = sink.send(&message).await);
     }
@@ -819,8 +763,7 @@ mod tests {
             }),
         };
         let cdevent = CDEvent::try_from(event_source).unwrap();
-        let message =
-            Message { cdevent, headers: std::collections::HashMap::new(), trace_context: None };
+        let message = Message::new(cdevent, std::collections::HashMap::new());
 
         assert2::assert!(let Ok(()) = sink.send(&message).await);
 

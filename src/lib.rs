@@ -7,6 +7,7 @@ mod errors;
 pub mod event;
 mod http;
 mod message;
+mod otel;
 mod pipeline;
 #[cfg(feature = "reqwest-eventsource")]
 mod reqwest_eventsource;
@@ -121,6 +122,13 @@ fn init_log(verbosity: Verbosity, disable_otel: bool) -> Result<Guard> {
         .with_otel(!disable_otel)
         .init_subscriber()
         .into_diagnostic()?;
+    if !disable_otel {
+        // The `TracingConfig` builder path does not register a global text-map propagator
+        // (only the standalone `init_subscribers()` does), leaving it Noop — which silently
+        // disables W3C trace-context inject/extract across every boundary (HTTP, Kafka, the
+        // in-memory queue). Register it via the crate's API, honoring `OTEL_PROPAGATORS`.
+        init_tracing_opentelemetry::init_propagator().into_diagnostic()?;
+    }
     Ok(guard)
 }
 

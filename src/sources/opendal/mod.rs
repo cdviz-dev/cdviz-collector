@@ -15,7 +15,6 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tracing::instrument;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct Config {
@@ -69,7 +68,9 @@ impl OpendalExtractor {
         })
     }
 
-    #[instrument(skip(self))]
+    // Not instrumented: this scan runs every `polling_interval` and is usually idle, so a
+    // per-scan span would create empty spans. The trace originates only when a message is
+    // emitted, via the source `SpanPipe` reached through `parser.parse(...) -> next.send`.
     pub(crate) async fn run_once(&mut self) -> Result<usize> {
         let op = &self.op;
         let filter = &self.filter;

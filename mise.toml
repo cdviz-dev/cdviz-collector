@@ -214,6 +214,29 @@ run = [
 description = "stop & delete a local db"
 run = ["docker rm -f postgres"]
 
+[tasks."otel:start"]
+description = "start otel-desktop-viewer (OTLP collector + web UI on http://localhost:8000)"
+shell = "bash -c"
+run = [
+  "docker rm -f otel-desktop-viewer || true",
+  """
+    docker run --name otel-desktop-viewer \
+        -p 8000:8000 -p 4317:4317 -p 4318:4318 -d \
+        ghcr.io/ctrlspice/otel-desktop-viewer:latest
+    """,
+  "echo 'UI: http://localhost:8000  |  OTLP grpc: localhost:4317, http: localhost:4318'",
+]
+
+[tasks."otel:stop"]
+description = "stop & delete the local otel-desktop-viewer"
+run = ["docker rm -f otel-desktop-viewer"]
+
+[tasks."run:otel"]
+description = "run the local server exporting traces to otel-desktop-viewer (run otel:start first)"
+run = [
+  "CDVIZ_COLLECTOR__SINKS__DEBUG__ENABLED=true OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 cargo run -- connect -vv --config cdviz-collector.toml --directory ./examples/assets",
+]
+
 [tasks."db:prepare-offline"]
 depends = ["install:sqlx-cli"]
 description = "update db definition to be able compile sqlx code"

@@ -14,7 +14,6 @@ use filter::TimeWindowFilter;
 use futures::stream::{FuturesUnordered, StreamExt};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
-use reqwest_tracing::TracingMiddleware;
 use retry_after_middleware::RetryAfterMiddleware;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
@@ -22,7 +21,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::{Instant, sleep};
 use tokio_util::sync::CancellationToken;
-use tracing::instrument;
 
 fn default_retry_duration() -> Duration {
     Duration::from_secs(30)
@@ -410,7 +408,9 @@ impl HttpPollingExtractor {
                 .build()
                 .into_diagnostic()?,
         )
-        .with(TracingMiddleware::default())
+        // No TracingMiddleware here: polls run every interval and are usually idle, so a span
+        // per HTTP request would be noise. The trace originates only when a message is emitted
+        // (the source span in `emit_response`). Retry middleware is independent of tracing.
         .with(RetryAfterMiddleware)
         .with(RetryTransientMiddleware::new_with_policy_and_strategy(
             retry_policy,
@@ -552,14 +552,17 @@ impl HttpPollingExtractor {
     /// advances the window — re-polling the same window would not change a malformed
     /// body. A non-2xx response routed to `skip` also counts as progress. Sinks
     /// should be idempotent if strict consistency is required.
-    #[instrument(skip(self), fields(source = %self.source_name))]
+    // Deliberately NOT instrumented: a poll runs every interval and is usually idle, so a
+    // per-poll span would create a "bunch of empty spans". The trace originates instead at the
+    // source `SpanPipe` (in `emit_response → self.next.send`), i.e. only when a message is
+    // actually emitted. Inner logs carry `source` explicitly to keep diagnostics.
     async fn run_once(&mut self) -> Result<PollOutcome> {
         // Bootstrap: seed the worklist (response = null).
         let bootstrap = self.build_driver_input(&serde_json::Value::Null, None, None);
         let mut queue = match self.driver_tasks(&bootstrap, 0) {
             Ok(q) => q,
             Err(err) => {
-                tracing::warn!(?err, "driver bootstrap execution failed");
+                tracing::warn!(?err, source = %self.source_name, "driver bootstrap execution failed");
                 return Ok(PollOutcome::Hold);
             }
         };
@@ -648,7 +651,9 @@ impl HttpPollingExtractor {
                     );
                     match self.driver_tasks(&input, task.depth + 1) {
                         Ok(mut tasks) => queue.append(&mut tasks),
-                        Err(err) => tracing::warn!(?err, "driver feedback execution failed"),
+                        Err(err) => {
+                            tracing::warn!(?err, source = %self.source_name, "driver feedback execution failed");
+                        }
                     }
                 }
             }
@@ -668,7 +673,7 @@ impl HttpPollingExtractor {
         let body_values = match resolved.parse(&resp.body_text) {
             Ok(v) => v,
             Err(err) => {
-                tracing::warn!(?err, url = task.spec.url, "failed to parse response body");
+                tracing::warn!(?err, source = %self.source_name, url = task.spec.url, "failed to parse response body");
                 return;
             }
         };
@@ -685,7 +690,7 @@ impl HttpPollingExtractor {
                 headers: resp.headers.clone(),
             };
             if let Err(err) = self.next.send(event) {
-                tracing::warn!(?err, "failed to send event downstream");
+                tracing::warn!(?err, source = %self.source_name, "failed to send event downstream");
             }
         }
     }

@@ -60,7 +60,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) transformer_refs: Vec<String>,
     /// Populated during config resolution, not from TOML directly
     #[serde(default, skip_serializing)]
-    pub(crate) transformers: Vec<transformers::Config>,
+    pub(crate) transformers: Vec<transformers::NamedConfig>,
 }
 
 impl Default for PipelineConfig {

@@ -52,7 +52,7 @@ impl Config {
         self.chain.resolve(configs)
     }
 
-    pub(crate) fn append_transformers(&mut self, extra: &[transformers::Config]) {
+    pub(crate) fn append_transformers(&mut self, extra: &[transformers::NamedConfig]) {
         self.chain.append(extra);
     }
 
@@ -79,6 +79,11 @@ pub(crate) fn make(
     let terminal: EventSourcePipe =
         Box::new(send_cdevents::Processor::new(tx, default_source.to_string()));
     let pipe = transformers::build_transformer_chain(&config.chain.transformers, terminal)?;
+    // Originate (or continue, for webhook) the trace: one span per emitted event,
+    // named after the source, so transformers nest under it and the trace context
+    // captured at the terminal is valid for sinks to link back to.
+    let pipe: EventSourcePipe =
+        Box::new(transformers::SpanPipe::new(pipe, "source", name.to_string()));
     config.extractor.make_extractor(name, pipe, cancel_token, state_config)
 }
 

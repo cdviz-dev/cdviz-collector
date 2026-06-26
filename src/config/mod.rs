@@ -226,8 +226,8 @@ impl ConfigBuilder {
             sink_config.resolve_transformers(&config.transformers)
         })?;
 
-        // Resolve pipeline-level global transformer chain
-        let global_transformers = transformers::resolve_transformer_refs(
+        // Resolve pipeline-level global transformer chain (keyed by ref name)
+        let global_transformers = transformers::resolve_transformer_refs_named(
             &config.pipeline.transformer_refs,
             &config.transformers,
         )?;

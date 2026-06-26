@@ -40,6 +40,7 @@ use sse::SseSink;
 use std::collections::HashMap;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
+use tracing::Instrument;
 
 type SinkHandlesAndRoutes = (Vec<JoinHandle<Result<()>>>, Vec<Router>);
 
@@ -178,10 +179,17 @@ pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> Join
         loop {
             match rx.recv().await {
                 Ok(msg) => {
-                    tracing::debug!(name, event_id = ?msg.cdevent.id(), "sending");
-                    if let Err(err) = sink.send(&msg).await {
-                        tracing::warn!(name, kind = "sink", event_id = ?msg.cdevent.id(), ?err, "fail during sending of event");
+                    // Parent the sink span to the source trace context carried by the message,
+                    // so the whole journey (source → transformers → queue → sink) shares one trace_id.
+                    let span = msg.processing_span(&name);
+                    async {
+                        tracing::debug!(name, event_id = ?msg.cdevent.id(), "sending");
+                        if let Err(err) = sink.send(&msg).await {
+                            tracing::warn!(name, kind = "sink", event_id = ?msg.cdevent.id(), ?err, "fail during sending of event");
+                        }
                     }
+                    .instrument(span)
+                    .await;
                 }
                 Err(RecvError::Lagged(_)) => {
                     tracing::warn!(name, kind = "sink", "message queue lagged (event dropped)");

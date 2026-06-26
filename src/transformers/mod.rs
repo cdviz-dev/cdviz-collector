@@ -37,6 +37,47 @@ impl<I, T: Pipe<Input = I> + ?Sized> Pipe for Box<T> {
     }
 }
 
+/// Wraps a pipe so each `send` runs inside a tracing span.
+///
+/// The source-side pipe chain is fully synchronous within one `send` call, so the
+/// `span.enter()` guard nests correctly and the trace context captured at the terminal
+/// (`send_cdevents`) reflects the innermost span. The span macro name is static; the
+/// human-readable name (source name or transformer name) is carried in the `name` field.
+pub(crate) struct SpanPipe<P> {
+    next: P,
+    kind: &'static str,
+    name: String,
+}
+
+impl<P> SpanPipe<P> {
+    pub(crate) fn new(next: P, kind: &'static str, name: String) -> Self {
+        Self { next, kind, name }
+    }
+}
+
+impl<P: Pipe> Pipe for SpanPipe<P> {
+    type Input = P::Input;
+    fn send(&mut self, input: Self::Input) -> Result<()> {
+        // `otel.status_code`/`error` are declared Empty so they can be recorded on failure:
+        // marks the span as errored (red in trace viewers) and attaches the error message to
+        // the span itself — without re-logging to stderr (the extractor still logs the skip).
+        let span = tracing::info_span!(
+            "pipe",
+            kind = self.kind,
+            name = %self.name,
+            otel.status_code = tracing::field::Empty,
+            error = tracing::field::Empty,
+        );
+        let _g = span.enter();
+        let res = self.next.send(input);
+        if let Err(ref err) = res {
+            span.record("otel.status_code", "error");
+            span.record("error", tracing::field::display(err));
+        }
+        res
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(tag = "type")]
 pub(crate) enum Config {
@@ -55,6 +96,18 @@ pub(crate) enum Config {
 }
 
 impl Config {
+    /// Stable type label used to name spans / derive default transformer names.
+    pub(crate) fn type_name(&self) -> &'static str {
+        match self {
+            Config::Passthrough => "passthrough",
+            Config::Log(_) => "log",
+            Config::Deduplicate(_) => "deduplicate",
+            Config::DiscardAll => "discard_all",
+            #[cfg(feature = "transformer_vrl")]
+            Config::Vrl { .. } => "vrl",
+        }
+    }
+
     pub(crate) fn make_transformer(&self, next: EventPipe) -> Result<EventPipe> {
         let out: EventPipe = match &self {
             Config::Passthrough => Box::new(passthrough::Processor::new(next)),
@@ -68,13 +121,34 @@ impl Config {
     }
 }
 
+/// A transformer config plus its derived key — the ref name for referenced transformers,
+/// `None` for inline ones (which key off their `type`). The key is set programmatically
+/// during resolution, never authored in TOML (so the `type` tag + variant fields stay flat).
+/// The span / log name is `key#position`; position disambiguates the same transformer
+/// appearing several times in one chain.
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub(crate) struct NamedConfig {
+    #[serde(skip)]
+    pub(crate) key: Option<String>,
+    #[serde(flatten)]
+    pub(crate) config: Config,
+}
+
+impl NamedConfig {
+    fn span_name(&self, index: usize) -> String {
+        let key = self.key.as_deref().unwrap_or_else(|| self.config.type_name());
+        format!("{key}#{index}")
+    }
+}
+
 pub(crate) fn build_transformer_chain(
-    configs: &[Config],
+    configs: &[NamedConfig],
     terminal: EventPipe,
 ) -> Result<EventPipe> {
     let mut pipe = terminal;
-    for config in configs.iter().rev() {
-        pipe = config.make_transformer(pipe)?;
+    for (i, nc) in configs.iter().enumerate().rev() {
+        let inner = nc.config.make_transformer(pipe)?;
+        pipe = Box::new(SpanPipe::new(inner, "transformer", nc.span_name(i)));
     }
     Ok(pipe)
 }
@@ -96,23 +170,41 @@ pub fn resolve_transformer_refs(
     Ok(transformers)
 }
 
+/// Like `resolve_transformer_refs`, but keys each resolved transformer by its ref name.
+pub fn resolve_transformer_refs_named(
+    transformer_refs: &[String],
+    configs: &HashMap<String, Config>,
+) -> Result<Vec<NamedConfig>> {
+    transformer_refs
+        .iter()
+        .map(|name| {
+            configs
+                .get(name)
+                .cloned()
+                .map(|config| NamedConfig { key: Some(name.clone()), config })
+                .ok_or_else(|| Error::ConfigTransformerNotFound(name.clone()))
+                .into_diagnostic()
+        })
+        .collect()
+}
+
 /// Shared config for transformer chains used by both sources and sinks.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub(crate) struct TransformerChainConfig {
     #[serde(default)]
     pub(crate) transformer_refs: Vec<String>,
     #[serde(default)]
-    pub(crate) transformers: Vec<Config>,
+    pub(crate) transformers: Vec<NamedConfig>,
 }
 
 impl TransformerChainConfig {
     pub(crate) fn resolve(&mut self, configs: &HashMap<String, Config>) -> Result<()> {
-        let mut tconfigs = resolve_transformer_refs(&self.transformer_refs, configs)?;
-        self.transformers.append(&mut tconfigs);
+        let mut named = resolve_transformer_refs_named(&self.transformer_refs, configs)?;
+        self.transformers.append(&mut named);
         Ok(())
     }
 
-    pub(crate) fn append(&mut self, extra: &[Config]) {
+    pub(crate) fn append(&mut self, extra: &[NamedConfig]) {
         self.transformers.extend_from_slice(extra);
     }
 }
@@ -129,7 +221,7 @@ impl std::fmt::Debug for TransformerChain {
 }
 
 impl TransformerChain {
-    pub(crate) fn try_new(configs: &[Config], terminal: EventPipe) -> Result<Self> {
+    pub(crate) fn try_new(configs: &[NamedConfig], terminal: EventPipe) -> Result<Self> {
         let chain = build_transformer_chain(configs, terminal)?;
         Ok(Self(Arc::new(Mutex::new(chain))))
     }
@@ -145,15 +237,51 @@ mod tests {
     use crate::transformers::collect_to_vec;
     use serde_json::json;
 
+    fn named(configs: &[Config]) -> Vec<NamedConfig> {
+        configs.iter().map(|c| NamedConfig { key: None, config: c.clone() }).collect()
+    }
+
     fn make_chain(configs: &[Config]) -> (TransformerChain, collect_to_vec::Collector<Event>) {
         let collector = collect_to_vec::Collector::<Event>::new();
         let terminal: EventPipe = Box::new(collector.create_pipe());
-        let chain = TransformerChain::try_new(configs, terminal).unwrap();
+        let chain = TransformerChain::try_new(&named(configs), terminal).unwrap();
         (chain, collector)
     }
 
     fn sample_event() -> Event {
         Event { metadata: json!({}), body: json!({"key": "value"}), ..Default::default() }
+    }
+
+    #[test]
+    fn span_pipe_propagates_inner_error() {
+        struct Failing;
+        impl Pipe for Failing {
+            type Input = Event;
+            fn send(&mut self, _input: Event) -> Result<()> {
+                Err(miette!("boom"))
+            }
+        }
+        let mut pipe = SpanPipe::new(Failing, "transformer", "x#0".to_string());
+        // SpanPipe records error status on the span but must NOT swallow the error.
+        let err = pipe.send(sample_event()).unwrap_err();
+        assert!(err.to_string().contains("boom"));
+    }
+
+    #[test]
+    fn span_name_is_key_then_position() {
+        let mut chain = TransformerChainConfig {
+            transformers: named(&[Config::Passthrough]), // inline -> keys off its type
+            transformer_refs: vec!["my_github".to_string(), "my_github".to_string()],
+        };
+        let mut registry = HashMap::new();
+        registry.insert("my_github".to_string(), Config::DiscardAll);
+        chain.resolve(&registry).unwrap(); // append the two refs
+        chain.append(&named(&[Config::Passthrough])); // an inline-keyed global
+
+        let names: Vec<String> =
+            chain.transformers.iter().enumerate().map(|(i, nc)| nc.span_name(i)).collect();
+        // inline -> type#pos; the same ref twice -> disambiguated by position; global -> type#pos
+        assert_eq!(names, vec!["passthrough#0", "my_github#1", "my_github#2", "passthrough#3"]);
     }
 
     #[test]

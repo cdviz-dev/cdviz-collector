@@ -134,14 +134,14 @@ pub(crate) async fn config_cmd(args: ConfigArgs) -> Result<bool> {
                 }
 
                 for (i, tconfig) in config.pipeline.transformers.iter().enumerate() {
-                    try_compile(format!("pipeline transformer [{i}]"), tconfig);
+                    try_compile(format!("pipeline transformer [{i}]"), &tconfig.config);
                 }
 
                 let mut source_names: Vec<_> = config.sources.keys().collect();
                 source_names.sort();
                 for name in source_names {
                     for (i, tconfig) in config.sources[name].chain.transformers.iter().enumerate() {
-                        try_compile(format!("source '{name}' transformer [{i}]"), tconfig);
+                        try_compile(format!("source '{name}' transformer [{i}]"), &tconfig.config);
                     }
                 }
 
