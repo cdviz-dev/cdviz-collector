@@ -11,10 +11,9 @@ use axum::extract::State;
 use axum::http::{HeaderMap, HeaderName};
 use axum::response::IntoResponse;
 use axum::routing::{Router, post};
-use futures::lock::Mutex;
 use serde::Deserialize;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// The webhook config
 #[derive(Clone, Debug, Deserialize, Default)]
@@ -85,14 +84,22 @@ async fn webhook(
         return validation_error.into_response();
     }
 
+    tracing::debug!("webhook json from_bytes");
     let maybe_json = Json::from_bytes(&body);
     if let Err(err) = maybe_json {
         return err.into_response();
     }
+
+    tracing::debug!("webhook deser json");
     let Json(body): Json<serde_json::Value> = maybe_json.unwrap_or_default();
     let headers = filter_http_headers(&headers, &state.headers_to_keep);
     let event = EventSource { metadata: state.base_metadata.clone(), headers, body };
-    if let Err(err) = state.next.lock().await.send(event) {
+    // `send()` is fully synchronous, so a plain std Mutex suffices (no async lock needed).
+    // `into_inner` recovers the guard if a previous `send` panicked (poisoned the lock).
+    tracing::debug!("webhook state.next.send(...)");
+    let send_result =
+        state.next.lock().unwrap_or_else(std::sync::PoisonError::into_inner).send(event);
+    if let Err(err) = send_result {
         return ReportWrapper::from(err).into_response();
     }
     (axum::http::StatusCode::CREATED).into_response()
