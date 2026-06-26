@@ -183,6 +183,7 @@ fn app(
         // request processed without span / trace
         .route("/healthz", get(health))
         .route("/readyz", get(ready))
+        .fallback(fallback)
         .layer(Extension(shutdown_token))
         .layer((
             cors,
@@ -204,6 +205,10 @@ async fn ready(shutdown_token: Extension<CancellationToken>) -> impl IntoRespons
 
 async fn health() -> impl IntoResponse {
     http::StatusCode::OK
+}
+
+async fn fallback() -> impl IntoResponse {
+    http::StatusCode::NOT_FOUND
 }
 
 // try to follow [RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457.html)
