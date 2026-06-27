@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.46.0...0.47.0) - 2026-06-27
+
+### Added
+
+- *(http_polling)* [**breaking**] whitelist response headers forwarded to the pipe
+
+### Fixed
+
+- *(http)* http sink should manage "framing" header to avoid create invalid/problematic http request
+
+### Other
+
+- *(http)* decrease default timeout on http incoming request from 30s to 3s
+
 ## [0.46.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.45.0...0.46.0) - 2026-06-26
 
 ### Added
