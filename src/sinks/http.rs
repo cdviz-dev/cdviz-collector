@@ -113,15 +113,32 @@ impl std::fmt::Debug for HttpSink {
     }
 }
 
+/// Connection/body framing headers the HTTP client must own; never forwarded from
+/// `event.headers` (a stale value such as an upstream response's `Content-Length`
+/// would corrupt the request and stall the receiver).
+const MANAGED_HEADERS: &[&str] =
+    &["host", "content-length", "transfer-encoding", "connection", "content-encoding"];
+
 impl HttpSink {
     async fn send_event(&self, event: &Event) -> Result<()> {
         let body_bytes = serde_json::to_vec(&event.body).into_diagnostic()?;
         let mut req = self.client.post(self.dest.clone());
-        // Content-Type is set first so event.headers (from VRL) can override it.
+        // Only set the default Content-Type when the event doesn't supply one, so a
+        // forwarded/VRL content-type overrides cleanly instead of producing a duplicate
+        // (reqwest's `.header()` appends, never replaces).
         // add_headers (HMAC) runs last so it signs the final body bytes.
-        req = req.header(CONTENT_TYPE, "application/json");
+        let has_content_type = event.headers.keys().any(|k| k.eq_ignore_ascii_case("content-type"));
+        if !has_content_type {
+            req = req.header(CONTENT_TYPE, "application/json");
+        }
         req = add_cloudevents_headers(req, event);
         for (name, value) in &event.headers {
+            // Headers that frame the connection/body are owned by the HTTP client.
+            // Forwarding a stale value (e.g. an upstream response's Content-Length)
+            // corrupts the request and stalls the receiver. Everything else is forwarded.
+            if MANAGED_HEADERS.contains(&name.to_ascii_lowercase().as_str()) {
+                continue;
+            }
             req = req.header(name.as_str(), value.as_str());
         }
         req = add_trace_context_headers(req);
@@ -795,5 +812,83 @@ mod tests {
             signature_header, expected,
             "x-signature header must be HMAC of the actual request body bytes"
         );
+    }
+
+    /// Regression: framing headers leaked from an upstream response (e.g. GitHub's
+    /// stale `Content-Length`) must NOT be forwarded onto the outgoing request, or the
+    /// receiver hangs waiting for bytes that never arrive (timeout -> 408). A forwarded
+    /// `content-type` must override cleanly (single value), and custom headers pass through.
+    #[tokio::test]
+    async fn test_http_sink_strips_framing_headers() {
+        use crate::sources::EventSource;
+        use cdevents_sdk::CDEvent;
+        use serde_json::json;
+        use std::collections::HashMap;
+
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&mock_server)
+            .await;
+
+        let config = build_config(&format!("{}/events", mock_server.uri()));
+        let sink = HttpSink::try_from(config).unwrap();
+
+        let mut source_headers = HashMap::new();
+        source_headers.insert("content-length".to_string(), "4295".to_string()); // stale -> the hang
+        source_headers.insert("host".to_string(), "evil.example.com".to_string());
+        source_headers.insert("transfer-encoding".to_string(), "chunked".to_string());
+        source_headers
+            .insert("content-type".to_string(), "application/json; charset=utf-8".to_string());
+        source_headers.insert("x-custom".to_string(), "keep-me".to_string());
+
+        let event_source = EventSource {
+            metadata: json!({}),
+            headers: source_headers.clone(),
+            body: json!({
+                "context": {
+                    "version": "0.4.0",
+                    "id": "test-framing-headers",
+                    "source": "test-source",
+                    "type": "dev.cdevents.service.deployed.0.1.1",
+                    "timestamp": "2024-03-14T10:30:00Z"
+                },
+                "subject": {
+                    "id": "test-subject",
+                    "source": "test-source",
+                    "type": "service",
+                    "content": {
+                        "environment": { "id": "test-env" },
+                        "artifactId": "pkg:test/artifact@1.0.0"
+                    }
+                }
+            }),
+        };
+
+        let cdevent = CDEvent::try_from(event_source).unwrap();
+        let message = Message::new(cdevent, source_headers);
+
+        assert2::assert!(let Ok(()) = sink.send(&message).await);
+
+        let received =
+            mock_server.received_requests().await.expect("request recording must be enabled");
+        assert_eq!(received.len(), 1, "expected exactly one request");
+        let req = &received[0];
+        let header = |name: &str| req.headers.get(name).and_then(|v| v.to_str().ok());
+
+        // content-length is set by the client from the real body, not the stale 4295.
+        assert_eq!(
+            header("content-length"),
+            Some(req.body.len().to_string().as_str()),
+            "content-length must match the actual body, not the forwarded stale value"
+        );
+        // host comes from the destination URL, not the forwarded value.
+        assert_ne!(header("host"), Some("evil.example.com"));
+        assert_eq!(req.headers.get("transfer-encoding"), None);
+        // content-type overrides cleanly to a single value (no duplicate join).
+        assert_eq!(header("content-type"), Some("application/json; charset=utf-8"));
+        // custom headers still flow through.
+        assert_eq!(header("x-custom"), Some("keep-me"));
     }
 }
