@@ -258,6 +258,13 @@ of the static `metadata` config value):
 request that produced the event — use it to carry discovery/parent data into a
 downstream transformer.
 
+The `EventSource` `headers` field carries only the response headers listed in
+the `headers_to_keep` whitelist (case-insensitive, empty by default — see the
+[Configuration Reference](#configuration-reference)). This keeps the polled
+API's response headers from leaking into requests later issued by the http
+sink/send. The VRL driver is unaffected: it always receives the full set of
+response headers via `.response.headers`.
+
 ## Guards (termination)
 
 A driver loop is bounded by three guards, all configurable:
@@ -404,6 +411,13 @@ driver_vrl = """
 # [sources.my_source.extractor.on_status]
 # "403" = "skip"
 # "404" = "retry"
+
+## Response headers forwarded into the pipeline (transformers + sinks).
+## Case-insensitive whitelist. Default: empty — no response headers are
+## forwarded downstream (this prevents the polled API's response headers from
+## leaking into requests issued by the http sink/send). The VRL driver always
+## sees the full set of response headers regardless of this setting.
+# headers_to_keep = ["content-type"]
 
 ## Static or secret request headers (same format as the http sink).
 ## `static` and `secret` accept optional `prefix`/`suffix` that enclose `value`,

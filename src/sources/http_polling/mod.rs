@@ -7,16 +7,18 @@ mod retry_after_middleware;
 use crate::errors::{IntoDiagnostic, Result};
 use crate::security::header::OutgoingHeaderConfig;
 use crate::security::header::{
-    OutgoingHeaderMap, generate_headers, outgoing_header_map_to_configs,
+    OutgoingHeaderMap, filter_http_headers, generate_headers, outgoing_header_map_to_configs,
 };
 use crate::sources::{EventSource, EventSourcePipe};
 use filter::TimeWindowFilter;
 use futures::stream::{FuturesUnordered, StreamExt};
+use reqwest::header::{HeaderMap, HeaderName};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use retry_after_middleware::RetryAfterMiddleware;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::{Instant, sleep};
@@ -53,6 +55,13 @@ pub(crate) struct Config {
     /// Static/secret/signature headers merged into each request.
     #[serde(default)]
     pub(crate) headers: OutgoingHeaderMap,
+
+    /// Response headers to forward into the pipeline (transformers + sinks).
+    /// Case-insensitive whitelist, mirroring the webhook source's `headers_to_keep`.
+    /// Default: empty — no response headers are forwarded downstream. The VRL
+    /// driver always sees the full set of response headers regardless of this.
+    #[serde(default)]
+    pub(crate) headers_to_keep: Vec<String>,
 
     /// Retry duration for transient HTTP failures.
     #[serde(default = "default_retry_duration", with = "humantime_serde")]
@@ -295,7 +304,7 @@ struct RequestTask {
 /// A fetched HTTP response, decoupled from parsing/routing.
 struct FetchedResponse {
     status: u16,
-    headers: HashMap<String, String>,
+    headers: HeaderMap,
     content_type: Option<String>,
     body_text: String,
 }
@@ -358,11 +367,7 @@ async fn fetch(
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
-    let headers: HashMap<String, String> = response
-        .headers()
-        .iter()
-        .filter_map(|(k, v)| v.to_str().ok().map(|s| (k.to_string(), s.to_string())))
-        .collect();
+    let headers = response.headers().clone();
     let body_text = match response.text().await {
         Ok(t) => t,
         Err(err) => {
@@ -381,6 +386,8 @@ pub(crate) struct HttpPollingExtractor {
     client: ClientWithMiddleware,
     next: EventSourcePipe,
     source_name: String,
+    /// Whitelist of response header names forwarded into the pipe.
+    headers_to_keep: Vec<HeaderName>,
     #[cfg(feature = "state")]
     state_op: Option<opendal::Operator>,
 }
@@ -428,6 +435,12 @@ impl HttpPollingExtractor {
         #[cfg(not(feature = "state"))]
         let _ = state_config; // suppress unused variable warning
 
+        let headers_to_keep = config
+            .headers_to_keep
+            .iter()
+            .filter_map(|name| HeaderName::from_str(name).ok())
+            .collect();
+
         Ok(Self {
             config: config.clone(),
             filter,
@@ -435,6 +448,7 @@ impl HttpPollingExtractor {
             client,
             next,
             source_name,
+            headers_to_keep,
             #[cfg(feature = "state")]
             state_op,
         })
@@ -476,7 +490,14 @@ impl HttpPollingExtractor {
             // cursors/ids; fall back to a raw string when it is not JSON.
             let body = serde_json::from_str::<serde_json::Value>(&r.body_text)
                 .unwrap_or_else(|_| serde_json::Value::String(r.body_text.clone()));
-            serde_json::json!({ "status": r.status, "headers": r.headers, "body": body })
+            // The driver sees ALL response headers (e.g. for Link/cursor pagination),
+            // independent of the `headers_to_keep` whitelist applied to the pipe.
+            let headers: HashMap<String, String> = r
+                .headers
+                .iter()
+                .filter_map(|(k, v)| v.to_str().ok().map(|s| (k.to_string(), s.to_string())))
+                .collect();
+            serde_json::json!({ "status": r.status, "headers": headers, "body": body })
         });
         serde_json::json!({
             "metadata": self.base_metadata(),
@@ -683,11 +704,12 @@ impl HttpPollingExtractor {
             resp.status,
             &task.state_snapshot,
         );
+        let headers = filter_http_headers(&resp.headers, &self.headers_to_keep);
         for body_value in body_values {
             let event = EventSource {
                 body: body_value,
                 metadata: metadata.clone(),
-                headers: resp.headers.clone(),
+                headers: headers.clone(),
             };
             if let Err(err) = self.next.send(event) {
                 tracing::warn!(?err, source = %self.source_name, "failed to send event downstream");
@@ -773,6 +795,7 @@ mod tests {
             ts_before_limit: None,
             driver_vrl,
             headers: OutgoingHeaderMap::new(),
+            headers_to_keep: Vec::new(),
             total_duration_of_retries: Duration::from_millis(100),
             parser: ParserConfig::Json,
             metadata: serde_json::json!({}),
@@ -820,6 +843,40 @@ mod tests {
         let events: Vec<_> = collector.try_into_iter().unwrap().collect();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].body, serde_json::json!({"key": "value"}));
+    }
+
+    #[tokio::test]
+    async fn test_response_headers_whitelist_to_pipe() {
+        // The response carries two headers; only the whitelisted one (case-insensitive)
+        // reaches the pipe, while the driver still sees all of them.
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "application/json")
+                    .insert_header("x-secret", "leak-me-not")
+                    .set_body_raw(r#"{"key":"value"}"#, "application/json"),
+            )
+            .mount(&server)
+            .await;
+
+        let mut config = make_config(&server.uri());
+        config.headers_to_keep = vec!["Content-Type".to_string()]; // mixed case on purpose
+        let (mut extractor, collector) = make_extractor(&config);
+
+        assert!(extractor.run_once().await.unwrap().advanced());
+
+        let events: Vec<_> = collector.try_into_iter().unwrap().collect();
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0].headers.get("content-type").map(String::as_str),
+            Some("application/json")
+        );
+        assert!(
+            !events[0].headers.contains_key("x-secret"),
+            "non-whitelisted header must not reach the pipe"
+        );
     }
 
     #[tokio::test]
