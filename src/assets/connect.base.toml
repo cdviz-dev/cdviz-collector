@@ -3,7 +3,7 @@ host = "0.0.0.0"
 port = 8080
 root_url = "http://cdviz-collector.example.com"
 # Per-request timeout (humantime, e.g. "30s"); requests exceeding it return 408.
-request_timeout = "30s"
+request_timeout = "3s"
 
 [http.access_log]
 # List of exact status codes ("404") or class patterns ("4xx", "5xx") to log.

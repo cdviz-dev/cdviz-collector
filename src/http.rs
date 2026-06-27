@@ -114,8 +114,9 @@ pub(crate) struct Config {
     #[serde(default)]
     pub(crate) access_log: AccessLogConfig,
 
-    /// Per-request timeout (e.g. "30s"); requests exceeding it return 408.
-    /// Keeps a bound so requests don't hang forever during graceful shutdown.
+    /// Per-request timeout (e.g. "3s"); requests exceeding it return 408.
+    /// Keeps a tight bound so a stalled or malformed request (e.g. a wrong
+    /// `Content-Length`) is rejected fast instead of hanging until shutdown.
     #[serde(default = "default_request_timeout", with = "humantime_serde")]
     pub(crate) request_timeout: Duration,
 }
@@ -127,7 +128,7 @@ fn default_root_url() -> url::Url {
 }
 
 fn default_request_timeout() -> Duration {
-    Duration::from_secs(30)
+    Duration::from_secs(3)
 }
 
 impl Default for Config {
