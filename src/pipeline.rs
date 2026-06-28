@@ -166,12 +166,15 @@ impl PipelineBuilder {
         // Optionally start HTTP server
         if enable_http_server {
             // Combine all routes and start HTTP server
+            let has_handles_in_routes = !sink_routes.is_empty() || !source_routes.is_empty();
             let mut routes = Vec::new();
             routes.extend(sink_routes);
             routes.extend(source_routes);
-
+            // server launches maybe without routes for sink & sources but for healthcheck,...
             let server_handle = crate::http::launch(&self.config.http, routes, shutdown_token);
-            all_handles.push(server_handle);
+            if has_handles_in_routes {
+                all_handles.push(server_handle);
+            }
         }
 
         // Drop the sender to allow graceful shutdown when sources finish
