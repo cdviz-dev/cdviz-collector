@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.48.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.47.1...0.48.0) - 2026-07-06
+
+### Added
+
+- toml config accept `$now` as alias for current date time
+- *(sources/opendal)* add support for ts_before_limit to to stop processing after a datetime (like http polling)
+
+### Fixed
+
+- *(deps)* update deps
+
+### Other
+
+- add debug log on opendal
+
 ## [0.47.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.47.0...0.47.1) - 2026-06-28
 
 ### Fixed
