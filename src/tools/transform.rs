@@ -319,6 +319,7 @@ pub(crate) async fn transform(args: TransformArgs) -> Result<bool> {
         parameters: HashMap::from([("root".to_string(), args.input.to_string_lossy().to_string())]),
         recursive: true,
         path_patterns: args.parser.path_patterns(),
+        ts_before_limit: None,
         parser: args.parser.to_parser_config(),
         try_read_headers_json: true,
         metadata: serde_json::json!({

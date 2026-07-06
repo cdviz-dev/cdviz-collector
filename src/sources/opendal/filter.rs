@@ -8,16 +8,33 @@ use std::time::Duration;
 pub(crate) struct Filter {
     ts_after: Timestamp,
     ts_before: Timestamp,
+    ts_before_limit: Option<Timestamp>,
     #[debug(skip)]
     path_patterns: FilePatternMatcher,
 }
 
 const TIME_MARGIN: Duration = Duration::from_secs(1);
 
+fn compute_ts_before(limit: Option<Timestamp>) -> Timestamp {
+    let now_minus_margin = Timestamp::now() - TIME_MARGIN;
+    match limit {
+        Some(lim) if now_minus_margin > lim => lim,
+        _ => now_minus_margin,
+    }
+}
+
 impl Filter {
-    pub(crate) fn from_patterns(path_patterns: FilePatternMatcher) -> Self {
-        let ts_before = Timestamp::now() - TIME_MARGIN;
-        Filter { ts_after: Timestamp::MIN, ts_before, path_patterns }
+    pub(crate) fn from_patterns(
+        path_patterns: FilePatternMatcher,
+        ts_before_limit: Option<Timestamp>,
+    ) -> Self {
+        let ts_before = compute_ts_before(ts_before_limit);
+        Filter { ts_after: Timestamp::MIN, ts_before, ts_before_limit, path_patterns }
+    }
+
+    /// Returns `true` if `ts_after` has reached or passed `ts_before_limit`.
+    pub(crate) fn is_at_limit(&self) -> bool {
+        self.ts_before_limit.is_some_and(|limit| self.ts_after >= limit)
     }
 
     pub(crate) fn accept(&self, resource: &Resource) -> bool {
@@ -41,7 +58,7 @@ impl Filter {
 
     pub(crate) fn jump_to_next_ts_window(&mut self) {
         self.ts_after = self.ts_before;
-        self.ts_before = Timestamp::now() - TIME_MARGIN;
+        self.ts_before = compute_ts_before(self.ts_before_limit);
     }
 
     pub(crate) fn set_ts_after(&mut self, ts: Timestamp) {
@@ -113,6 +130,30 @@ impl FilePatternMatcher {
 mod tests {
     use super::*;
     use rstest::*;
+
+    fn empty_matcher() -> FilePatternMatcher {
+        FilePatternMatcher::new(None, None)
+    }
+
+    #[test]
+    fn test_is_at_limit_no_limit() {
+        let f = Filter::from_patterns(empty_matcher(), None);
+        assert!(!f.is_at_limit());
+    }
+
+    #[test]
+    fn test_is_at_limit_past_limit() {
+        let limit = Timestamp::MIN;
+        let f = Filter::from_patterns(empty_matcher(), Some(limit));
+        assert!(f.is_at_limit());
+    }
+
+    #[test]
+    fn test_ts_before_capped_at_limit() {
+        let limit = Timestamp::MIN + Duration::from_secs(100);
+        let f = Filter::from_patterns(empty_matcher(), Some(limit));
+        assert!(f.ts_before <= limit);
+    }
 
     #[rstest]
     #[case(vec![], "foo.json")]

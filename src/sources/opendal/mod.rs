@@ -24,6 +24,9 @@ pub(crate) struct Config {
     pub(crate) parameters: HashMap<String, String>,
     pub(crate) recursive: bool,
     pub(crate) path_patterns: Vec<String>,
+    /// Optional upper cap. Once `ts_after` reaches this value the source stops.
+    #[serde(default)]
+    pub(crate) ts_before_limit: Option<jiff::Timestamp>,
     pub(crate) parser: parsers::Config,
     #[serde(default)]
     pub(crate) try_read_headers_json: bool,
@@ -53,7 +56,10 @@ impl OpendalExtractor {
     ) -> Result<Self> {
         let op: Operator =
             Operator::via_iter(&config.kind, config.parameters.clone()).into_diagnostic()?;
-        let filter = Filter::from_patterns(FilePatternMatcher::from(&config.path_patterns)?);
+        let filter = Filter::from_patterns(
+            FilePatternMatcher::from(&config.path_patterns)?,
+            config.ts_before_limit,
+        );
         let parser = config.parser.make_parser(config.metadata.clone(), next)?;
         let try_read_headers_json = config.try_read_headers_json;
         Ok(Self {
@@ -103,6 +109,10 @@ impl OpendalExtractor {
             self.filter.set_ts_after(ts);
         }
         while !cancel_token.is_cancelled() {
+            if self.filter.is_at_limit() {
+                tracing::info!(source = %self.source_name, "reached ts_before_limit, source stopping");
+                break;
+            }
             if let Err(err) = self.run_once().await {
                 tracing::warn!(?err, scheme =? self.op.info().scheme(), root =? self.op.info().root(), "fail during scanning");
             }
@@ -120,5 +130,60 @@ impl OpendalExtractor {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sources::EventSource;
+    use crate::transformers::collect_to_vec::Collector;
+    use tokio::time::timeout;
+
+    fn make_config(root: &str, ts_before_limit: Option<jiff::Timestamp>) -> Config {
+        Config {
+            polling_interval: Duration::from_millis(10),
+            kind: "fs".to_string(),
+            parameters: HashMap::from([("root".to_string(), root.to_string())]),
+            recursive: false,
+            path_patterns: Vec::new(),
+            ts_before_limit,
+            parser: parsers::Config::Metadata,
+            try_read_headers_json: false,
+            metadata: serde_json::json!({}),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ts_before_limit_stops_source() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config = make_config(&dir.path().to_string_lossy(), Some(jiff::Timestamp::MIN));
+
+        let collector = Collector::<EventSource>::new();
+        let pipe = Box::new(collector.create_pipe());
+        let mut extractor =
+            OpendalExtractor::try_from(&config, pipe, None, "test".to_string()).unwrap();
+
+        let cancel_token = CancellationToken::new();
+        let result = timeout(Duration::from_secs(2), extractor.run(cancel_token)).await;
+        assert!(result.is_ok(), "run() should complete within timeout");
+        assert!(result.unwrap().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_no_ts_before_limit_keeps_running() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config = make_config(&dir.path().to_string_lossy(), None);
+
+        let collector = Collector::<EventSource>::new();
+        let pipe = Box::new(collector.create_pipe());
+        let mut extractor =
+            OpendalExtractor::try_from(&config, pipe, None, "test".to_string()).unwrap();
+
+        let cancel_token = CancellationToken::new();
+        cancel_token.cancel();
+        let result = timeout(Duration::from_secs(2), extractor.run(cancel_token)).await;
+        assert!(result.is_ok(), "run() should complete within timeout once cancelled");
+        assert!(result.unwrap().is_ok());
     }
 }

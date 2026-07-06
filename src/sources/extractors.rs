@@ -196,6 +196,7 @@ mod tests {
             parameters: std::collections::HashMap::new(), // Invalid - missing required params
             recursive: false,
             path_patterns: Vec::new(),
+            ts_before_limit: None,
             parser: opendal::parsers::Config::Metadata,
             try_read_headers_json: false,
             metadata: serde_json::json!({}),
