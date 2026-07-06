@@ -113,8 +113,13 @@ impl OpendalExtractor {
                 tracing::info!(source = %self.source_name, "reached ts_before_limit, source stopping");
                 break;
             }
-            if let Err(err) = self.run_once().await {
-                tracing::warn!(?err, scheme =? self.op.info().scheme(), root =? self.op.info().root(), "fail during scanning");
+            match self.run_once().await {
+                Err(err) => {
+                    tracing::warn!(?err, scheme =? self.op.info().scheme(), root =? self.op.info().root(), "fail during scanning");
+                }
+                Ok(count) => {
+                    tracing::debug!(count, scheme =? self.op.info().scheme(), root =? self.op.info().root(), "scanning accepted counted resources");
+                }
             }
             tokio::select! {
                 () = sleep(self.polling_interval) => {},
