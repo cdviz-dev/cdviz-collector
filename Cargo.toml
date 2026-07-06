@@ -81,7 +81,7 @@ opendal = { version = "0.57", default-features = false, features = [
 ], optional = true }
 packageurl = "0.6"
 pin-project-lite = { version = "0.2", optional = true }
-quick-xml-to-json = "0.2"
+quick-xml-to-json = "0.3"
 rdkafka = { version = "0.39", default-features = false, features = [
   "cmake-build",
   "curl-static",

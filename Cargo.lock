@@ -4702,15 +4702,6 @@ checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quick-xml"
-version = "0.38.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
-dependencies = [
- "memchr",
-]
-
-[[package]]
-name = "quick-xml"
 version = "0.39.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdcc8dd4e2f670d309a5f0e83fe36dfdc05af317008fea29144da1a2ac858e5e"
@@ -4730,14 +4721,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "quick-xml-to-json"
-version = "0.2.0"
+name = "quick-xml"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69d6493dd76b1c22edc62a090aef64f65fb57087f0c5a42b1d780443d8373513"
+checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
 dependencies = [
- "quick-xml 0.38.4",
- "serde",
- "serde_json",
+ "memchr",
+]
+
+[[package]]
+name = "quick-xml-to-json"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81a939efba375fe084fded3aedc1b2fc50f94d404501abcc7e740387dae36a3f"
+dependencies = [
+ "quick-xml 0.41.0",
+ "simdutf8",
  "thiserror 2.0.18",
 ]
 
