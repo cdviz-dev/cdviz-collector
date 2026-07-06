@@ -84,6 +84,8 @@ ignore = [
   # { id = "RUSTSEC-2025-0134", reason = "paste 1.0.15 is used by async-nats v0.37.0 -> ... -> rustls-pemfile v2.2.0" },
   # { id = "RUSTSEC-2026-0049", reason = "rustls-webpki 0.102.8 is used by async-nats v0.46.0" },
   # { id = "RUSTSEC-2026-0145", reason = "astral-tokio-tar v0.6.1 is used by testcontainers v0.27.3" },
+  { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.40.1 is used by opendal v0.57.0" },
+  { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.40.1 is used by opendal v0.57.0" },
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
