@@ -185,6 +185,10 @@ impl ConfigBuilder {
         let raw = self.build_raw_figment();
         let raw_value: toml::Value = raw.extract().into_diagnostic()?;
         let raw_toml = toml::to_string(&raw_value).into_diagnostic()?;
+        // `$now` resolves once, at config-load time, to the current RFC3339 timestamp —
+        // e.g. `ts_before_limit = "$now"`. Plain text substitution so it works in any
+        // timestamp-typed field without per-field wiring.
+        let raw_toml = raw_toml.replace("$now", &jiff::Timestamp::now().to_string());
 
         // Phase 2: apply adapters once on the fully merged config
         let provider = FileAdapter::wrap(Toml::string(&raw_toml));
@@ -426,6 +430,25 @@ mod tests {
     #[test]
     fn join_toml_fragments_invalid_fragment_is_error() {
         assert!(join_toml_fragments(&["no-equals-sign".to_string()]).is_err());
+    }
+
+    #[test]
+    fn now_placeholder_is_substituted_at_config_load() {
+        let toml = r#"
+            [dummy]
+            ts = "$now"
+        "#;
+        let figment = ConfigBuilder::new()
+            .with_base_config("")
+            .with_config_text(Some(toml.to_string()))
+            .with_env_vars(false)
+            .build_figment()
+            .unwrap();
+        let value: toml::Value = figment.extract().unwrap();
+        let ts_str = value["dummy"]["ts"].as_str().unwrap();
+        let ts: jiff::Timestamp = ts_str.parse().unwrap();
+        assert!(ts > jiff::Timestamp::now() - std::time::Duration::from_secs(5));
+        assert!(ts <= jiff::Timestamp::now());
     }
 
     #[rstest]

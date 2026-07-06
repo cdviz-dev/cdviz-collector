@@ -25,6 +25,8 @@ pub(crate) struct Config {
     pub(crate) recursive: bool,
     pub(crate) path_patterns: Vec<String>,
     /// Optional upper cap. Once `ts_after` reaches this value the source stops.
+    /// Accepts an RFC3339 timestamp, or `"$now"` which is substituted with the
+    /// current timestamp once, at config-load time (see `ConfigBuilder::build_figment`).
     #[serde(default)]
     pub(crate) ts_before_limit: Option<jiff::Timestamp>,
     pub(crate) parser: parsers::Config,
