@@ -27,6 +27,8 @@ post-announce-jobs = ["./release-after"]
 github-custom-job-permissions = { "release-after" = { packages = "write", contents = "read" } }
 # Whether CI should trigger releases with dispatches instead of tag pushes
 dispatch-releases = false
+# Sign release artifacts with GitHub Artifact Attestations (SLSA provenance)
+github-attestations = true
 
 [dist.github-custom-runners]
 # see https://github.com/axodotdev/cargo-dist/issues/1760
