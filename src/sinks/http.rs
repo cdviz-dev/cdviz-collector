@@ -286,7 +286,7 @@ mod tests {
         .mount(&mock_server)
         .await;
 
-        let config = build_config(&format!("{}/events", &mock_server.uri()));
+        let config = build_config(&format!("{}/events", mock_server.uri()));
 
         let sink = HttpSink::try_from(config).unwrap();
 

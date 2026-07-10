@@ -311,8 +311,8 @@ mod tests {
             assert!(env.output_dir.exists());
             assert!(env.config_dir.exists());
 
-            let event1_path = env.input_dir.join(format!("{}.json", &events[0].id()));
-            let event2_path = env.input_dir.join(format!("{}.json", &events[1].id()));
+            let event1_path = env.input_dir.join(format!("{}.json", events[0].id()));
+            let event2_path = env.input_dir.join(format!("{}.json", events[1].id()));
 
             assert!(event1_path.exists());
             assert!(event2_path.exists());

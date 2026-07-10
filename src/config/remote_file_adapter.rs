@@ -181,7 +181,7 @@ impl<T: Provider> RemoteFileAdapter<T> {
         let mut keys_to_process = Vec::new();
 
         // Find keys ending with the suffix
-        for (key, _) in dict.iter() {
+        for key in dict.keys() {
             if key.ends_with(&self.suffix) {
                 keys_to_process.push(key.clone());
             }
@@ -223,7 +223,7 @@ impl<T: Provider> RemoteFileAdapter<T> {
         }
 
         // Recursively process nested dictionaries
-        for (_, value) in dict.iter_mut() {
+        for value in dict.values_mut() {
             if let Value::Dict(_, nested_dict) = value {
                 self.process_dict(nested_dict, remote_configs)?;
             }

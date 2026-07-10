@@ -115,7 +115,7 @@ impl Difference {
                 if *expected && !actual {
                     if crate::tools::ui::ask_to_update_sample(&format!(
                         "Accept to remove existing {}?",
-                        &comparison.label
+                        comparison.label
                     ))? {
                         std::fs::remove_file(&comparison.expected).into_diagnostic()?;
                         true
@@ -124,7 +124,7 @@ impl Difference {
                     }
                 } else if crate::tools::ui::ask_to_update_sample(&format!(
                     "Accept to add new {}?",
-                    &comparison.label
+                    comparison.label
                 ))? {
                     std::fs::rename(&comparison.actual, &comparison.expected).into_diagnostic()?;
                     true
