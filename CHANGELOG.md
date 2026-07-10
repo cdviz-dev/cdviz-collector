@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.48.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.48.1...0.48.2) - 2026-07-10
+
+### Fixed
+
+- *(deps)* bump Rust to 1.97.0
+
 ## [0.48.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.48.0...0.48.1) - 2026-07-07
 
 ### Other
