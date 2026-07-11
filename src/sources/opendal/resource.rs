@@ -110,7 +110,7 @@ mod tests {
         // Create fs backend builder.
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/assets/inputs");
         let builder = opendal::services::Fs::default().root(&root.to_string_lossy());
-        let op: Operator = Operator::new(builder).unwrap().finish();
+        let op: Operator = Operator::new(builder).unwrap();
         let mut entries = op.lister_with(prefix).await.unwrap();
         assert2::assert!(let Ok(Some(entry)) = entries.try_next().await);
         let resource = Resource::from_entry(&op, entry, true).await;

@@ -448,7 +448,7 @@ async fn list_output_files(path: &Path) -> Result<Vec<PathBuf>> {
         .root(&path.to_string_lossy());
 
     // `Accessor` provides the low level APIs, we will use `Operator` normally.
-    let op: Operator = Operator::new(builder).into_diagnostic()?.finish();
+    let op: Operator = Operator::new(builder).into_diagnostic()?;
     let result = op
         .list_with("")
         .recursive(true)

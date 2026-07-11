@@ -592,7 +592,7 @@ mod tests {
     async fn make_op_and_resource(prefix: &str) -> (Operator, Resource) {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/assets/inputs");
         let builder = opendal::services::Fs::default().root(&root.to_string_lossy());
-        let op = Operator::new(builder).unwrap().finish();
+        let op = Operator::new(builder).unwrap();
         let mut entries = op.lister_with(prefix).await.unwrap();
         let entry = entries.try_next().await.unwrap().expect("at least one entry for prefix");
         let resource = Resource::from_entry(&op, entry, false).await;
@@ -612,7 +612,7 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(dir.path().join(filename), content).unwrap();
         let builder = opendal::services::Fs::default().root(dir.path().to_string_lossy().as_ref());
-        let op = Operator::new(builder).unwrap().finish();
+        let op = Operator::new(builder).unwrap();
         let mut entries = op.lister_with(filename).await.unwrap();
         let entry =
             entries.try_next().await.unwrap().expect("temp dir should have the written file");

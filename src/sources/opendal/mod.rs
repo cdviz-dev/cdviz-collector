@@ -56,6 +56,7 @@ impl OpendalExtractor {
         state_op: Option<Operator>,
         source_name: String,
     ) -> Result<Self> {
+        opendal::install_default();
         let op: Operator =
             Operator::via_iter(&config.kind, config.parameters.clone()).into_diagnostic()?;
         let filter = Filter::from_patterns(

@@ -151,6 +151,7 @@ impl<T: Provider> RemoteFileAdapter<T> {
                 .collect();
             return Ok(Operator::via_iter(base_uri, extra)?);
         }
+        opendal::install_default();
         Ok(Operator::via_iter(&remote_config.service_type, remote_config.parameters.clone())?)
     }
 
@@ -432,7 +433,8 @@ mod tests {
             "transformers": {
                 "test_http_transformer": {
                     "type" : "vrl",
-                    "template_rfile": "raw_github:///cdviz-dev/cdviz-collector/refs/tags/0.10.0/transformers/github_events/transformer.vrl"
+                    // "template_rfile": "raw_github:///cdviz-dev/cdviz-collector/refs/tags/0.10.0/transformers/github_events/transformer.vrl"
+                    "template_rfile": "raw_github:///cdviz-dev/transformers-community/refs/tags/0.20260711.0/github_events/to_v0_5.vrl"
                 }
             }
         });
