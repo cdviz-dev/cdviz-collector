@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.48.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.48.2...0.48.3) - 2026-07-14
+
+### Fixed
+
+- *(deps)* update rust crate vrl to 0.34 ([#387](https://github.com/cdviz-dev/cdviz-collector/pull/387))
+- *(deps)* update rust crate opendal to 0.58
+
 ## [0.48.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.48.1...0.48.2) - 2026-07-10
 
 ### Fixed
