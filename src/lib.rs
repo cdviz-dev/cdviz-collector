@@ -45,7 +45,7 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
     version,
     about,
     long_about = "cdviz-collector provides a configurable pipeline architecture that can receive events \
-from various sources (webhooks, files, SSE), transform them using VRL or Handlebars, and send them \
+from various sources (webhooks, files, SSE), transform them using VRL, and send them \
 to multiple destinations (HTTP endpoints, databases, files). It supports real-time event processing \
 with CloudEvents format and CDEvents specification compliance."
 )]

@@ -14,3 +14,6 @@ disallowed-macros = [
 ]
 disallowed-methods = []
 disallowed-types = []
+# README.md is included as crate doc (`#![doc = include_str!("../README.md")]`), so `doc_markdown`
+# lints its prose. These are product/standard names, not code identifiers: `..` extends the defaults.
+doc-valid-idents = ["ArgoCD", "CDEvent", "CDEvents", "ClickHouse", "PostgreSQL", ".."]

@@ -9,7 +9,15 @@
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
   </p>
   <p><strong>keywords:</strong> <code>cdevents</code> · <code>sdlc</code> · <code>cicd</code> · <code>observability</code> · <code>devops</code></p>
-  <p>A service &amp; CLI to collect SDLC/CI/CD events from any source and dispatch them as <a href="https://cdevents.dev/">CDEvents</a>.</p>
+
+  <h3>Turn any tool into a <a href="https://cdevents.dev/">CDEvents</a> producer.</h3>
+
+  <p>
+    Receive a webhook. Poll a REST API. Watch a folder or S3 bucket.<br>
+    Or just wrap a command. Any of these gets you CDEvents —<br>
+    no plugin code, no recompile.
+  </p>
+
   <p>
     <strong><a href="https://cdviz.dev/docs/cdviz-collector/">Documentation</a></strong> |
     <a href="https://cdviz.dev/docs/cdviz-collector/quick-start">Quick Start</a> |
@@ -19,152 +27,163 @@
 
 ---
 
-## Features
+## Try it in 30 seconds
 
-**Sources**
+```bash
+cargo install cdviz-collector   # or a binary, Docker image, mise — see Install below
+```
 
-- Push (inbound): HTTP webhook, HTTP SSE, Kafka, NATS
-- Pull (polling): File system, S3, `HTTP` polling (any REST/JSON API — `Jenkins`, `Jira`, custom web APIs, …)
+Now put `cdviz-collector` in front of a test command you already run:
 
-**Sinks**: `HTTP` webhook · `HTTP` SSE · File system · `Kafka` · `NATS` · `PostgreSQL` · `ClickHouse`
+```bash
+cdviz-collector send --run testsuiterun_junit -- pytest --junitxml=report.xml
+```
 
-**Parsers**: `JSON` · `JSONL` · `CSV` · `XML` · `YAML` · `TAP` · `text` / `text_line`
+That emits a `testsuiterun.started` CDEvent before your tests, runs them, then emits `testsuiterun.finished` with the parsed results and the outcome. A failing test run still fails the step, so it is safe to leave in a pipeline.
 
-**Transformations**: [VRL](https://vector.dev/docs/reference/vrl/) (Vector Remap Language) — reshape, filter, split, enrich events before dispatch
+In GitHub Actions, GitLab CI, or Jenkins it needs no configuration at all: it reads the repository, run id, job, and workflow straight from the CI environment.
 
-**Three CLI modes**: `connect` (long-running server) · `send` (one-shot or wrap a command) · `transform` (batch offline)
+Built-in run types: `testsuiterun_junit`, `testsuiterun_tap`, `testsuiterun_sarif`, `taskrun`.
 
-## Use Cases
+## Why normalize events at all
 
-- **Capture CI/CD pipeline events** from GitHub Actions, GitLab CI, Jenkins → normalized `CDEvents`
-- **Wrap test commands** — emit `testsuiterun` started/finished events with JUnit/TAP/SARIF results
-- **Poll REST APIs** (Jenkins, Jira, any HTTP endpoint) and forward changes as `CDEvents`
-- **Bridge message streams** — consume Kafka/NATS topics, re-publish as `CDEvents` to `PostgreSQL` or `ClickHouse`
-- **Observe deployments & artifacts** — track environment changes and artifact publications
-- **Feed [CDviz](https://cdviz.dev) dashboards** with normalized SDLC telemetry
+Every tool in your pipeline emits events, and none of them agree on what an event looks like. A GitHub `workflow_run`, a Jenkins build, and an ArgoCD sync all describe "something ran" in three shapes that share nothing.
 
-## Installation
+[CDEvents](https://cdevents.dev/) is the CDF standard that settles the shape. Once your tools speak it, questions that used to need a spreadsheet turn into ordinary queries against one table: how often do we really deploy, how long does a commit take to reach production, what shipped last night, which change landed just before that incident. One timeline across every tool, instead of ten tabs and a guess.
 
-- **Pre-built binaries** for Linux and macOS → [GitHub Releases](https://github.com/cdviz-dev/cdviz-collector/releases)
-- **Docker image** → `ghcr.io/cdviz-dev/cdviz-collector`
-- **Helm chart** for Kubernetes
-- **Cargo** → `cargo install cdviz-collector`
-- **Mise** → `mise install "github:cdviz-dev/cdviz-collector"`
+The usual way to get there is a bespoke webhook receiver per tool, each one a small service to write, deploy, and keep alive. Here the mapping is a [VRL](https://vector.dev/docs/reference/vrl/) script in a config file. Change a mapping without shipping a binary.
+
+> **This does not sign you up for anything.** cdviz-collector is standalone: it writes to PostgreSQL, ClickHouse, plain HTTP, or files you already run, and CDEvents is an open [CDF](https://cd.foundation/) standard rather than a format we invented. [CDviz](https://cdviz.dev) is one thing you can point the data at. It is not a requirement.
+
+## The swiss knife
+
+| | |
+| --- | --- |
+| **Receive** | HTTP webhook (with HMAC signature verification), SSE, NATS, Kafka |
+| **Poll** | REST/GraphQL APIs, filesystem, S3, GCS, SFTP, GitHub |
+| **Wrap** | any command — exit code plus JUnit/TAP/SARIF reports |
+| **Transform** | VRL — reshape, filter, enrich, deduplicate, split one input into N events |
+| **Ship to** | PostgreSQL, ClickHouse, HTTP, SSE, NATS, Kafka, files/S3, stdout |
+
+Sinks fan out: one source can feed all of them at once.
+
+**Parsers:** `JSON` · `JSONL` · `CSV` · `XML` · `YAML` · `TAP` · `text` (plus `auto` detection)
+
+> **Kafka** works as both source and sink, but is not in the default build (it needs native libraries). Build with `--features source_kafka,sink_kafka`.
+
+## Works with your tools today
+
+Ready-made transformers live in [transformers-community](https://github.com/cdviz-dev/transformers-community), each with sample inputs and expected outputs:
+
+| Transformer | Converts |
+| --- | --- |
+| [`github_events`](https://github.com/cdviz-dev/transformers-community/tree/main/github_events) | GitHub webhooks: workflow runs, jobs, releases, pull requests, issues |
+| [`github_rest_api`](https://github.com/cdviz-dev/transformers-community/tree/main/github_rest_api) | GitHub REST API, for backfill or polling-only setups |
+| [`argocd_notifications`](https://github.com/cdviz-dev/transformers-community/tree/main/argocd_notifications) | ArgoCD application lifecycle events |
+| [`kubewatch_cloudevents`](https://github.com/cdviz-dev/transformers-community/tree/main/kubewatch_cloudevents) | Kubernetes events, via Kubewatch |
+| [`cdevents`](https://github.com/cdviz-dev/transformers-community/tree/main/cdevents) | CDEvents from one spec version to the next |
+
+Import them straight from GitHub. No clone, no vendoring:
+
+```toml
+[remote.transformers-community]
+type = "github://cdviz-dev/transformers-community"
+
+[transformers]
+github_events = { type = "vrl", template_rfile = "transformers-community:///github_events/to_v0_5.vrl" }
+```
+
+GitLab, Jenkins, and Jira transformers are part of the commercial offering — see [cdviz.dev](https://cdviz.dev).
+
+Nothing there for your tool? Write a VRL script. That is the whole extension mechanism — no plugin API to learn.
+
+For REST APIs without webhooks, the [`http_polling`](./src/sources/http_polling/README.md) source drives requests from a VRL script, covering time-windowed polling, Link-header and GraphQL cursor pagination, multi-pass discovery, `Retry-After` handling, and resumable backfill.
+
+## Install
+
+| | |
+| --- | --- |
+| **Binaries** (Linux, macOS) | [GitHub Releases](https://github.com/cdviz-dev/cdviz-collector/releases) |
+| **Docker** | `ghcr.io/cdviz-dev/cdviz-collector` |
+| **Cargo** | `cargo install cdviz-collector` |
+| **Mise** | `mise install "github:cdviz-dev/cdviz-collector"` |
+| **Kubernetes** | Helm chart |
 
 See the [Installation Guide](https://cdviz.dev/docs/cdviz-collector/install).
 
-## Getting Started
+## Commands
 
-See the [Quick Start Guide](https://cdviz.dev/docs/cdviz-collector/quick-start) for a 5-minute walkthrough.
+| Command | Purpose |
+| --- | --- |
+| [`connect`](https://cdviz.dev/docs/cdviz-collector/connect) | Long-running server: sources → transformers → sinks |
+| [`send`](https://cdviz.dev/docs/cdviz-collector/send) | Send one event, or wrap a command with `--run` |
+| [`transform`](https://cdviz.dev/docs/cdviz-collector/transform) | Transform files offline, in batch |
+| `config --check` | Validate config and compile every VRL template — run it in CI |
+
+```bash
+# Serve
+cdviz-collector connect --config cdviz-collector.toml
+
+# Send raw JSON to a sink
+cdviz-collector send --url https://api.example.com/webhook --data '{"test": "value"}'
+
+# Validate config and compile every VRL template
+cdviz-collector config --check --config cdviz-collector.toml
+```
+
+Full options: `cdviz-collector <command> --help`.
 
 ## Architecture
 
-Pipeline: **sources** → in-memory queue → multiple **sinks** (fan-out).
+Sources → transformers → in-memory queue → sinks (fan-out).
 
-![Archi Overview](./overview.gif)
+![Pipeline overview: sources feeding transformers, then fanning out to multiple sinks](./overview.gif)
+
+Events carry OpenTelemetry trace context end to end, so one `trace_id` spans the whole journey from source to sink.
 
 ## Configuration
 
-TOML files with environment variable overrides:
+TOML, layered, with `CDVIZ_COLLECTOR__SECTION__KEY` environment overrides. `--config` accepts a local path or an HTTP(S) URL.
 
-- **Example:** [examples/assets/cdviz-collector.toml](examples/assets/cdviz-collector.toml)
-- **Base config:** [src/assets/cdviz-collector.base.toml](src/assets/cdviz-collector.base.toml)
-- **Env override pattern:** `CDVIZ_COLLECTOR__SECTION__KEY__VALUE`
+- Example: [examples/assets/cdviz-collector.toml](examples/assets/cdviz-collector.toml)
+- Defaults: [src/assets/connect.base.toml](src/assets/connect.base.toml), [src/assets/send.base.toml](src/assets/send.base.toml)
+- [Configuration Guide](https://cdviz.dev/docs/cdviz-collector/configuration)
 
-See the [Configuration Guide](https://cdviz.dev/docs/cdviz-collector/configuration).
+## AI assistant skill
 
-## Usage
-
-### `connect` — Run as a Service
-
-Long-running server connecting sources to sinks.
-
-```bash
-cdviz-collector connect --config cdviz-collector.toml
-```
-
-See [connect docs](https://cdviz.dev/docs/cdviz-collector/connect).
-
-### `send` — One-Shot or Wrap a Command
-
-Send JSON directly to a sink, or wrap a command to emit lifecycle `CDEvents` automatically.
-
-```bash
-# Send raw JSON
-cdviz-collector send --url https://api.example.com/webhook --data '{"test": "value"}'
-
-# Wrap a test run — emits testsuiterun started + finished CDEvents with JUnit results
-cdviz-collector send --run testsuiterun-junit -- pytest --junitxml=report.xml
-
-# Wrap any task — emits taskrun started + finished CDEvents
-cdviz-collector send --run taskrun -- ./deploy.sh
-```
-
-`--run` captures exit code and output artifacts, then emits lifecycle `CDEvents` (started → finished). Built-in run types: `testsuiterun-junit`, `testsuiterun-tap`, `taskrun`.
-
-See [send docs](https://cdviz.dev/docs/cdviz-collector/send).
-
-### `transform` — Batch File Transformation
-
-Offline transformation of local files using configured VRL transformers.
-
-```bash
-cdviz-collector transform --input ./input --output ./output --transformer-refs github_events
-```
-
-See [transform docs](https://cdviz.dev/docs/cdviz-collector/transform).
-
----
-
-For all options: `cdviz-collector --help` or `cdviz-collector <command> --help`.
-
-## Related Projects
-
-| Project                                                     | Role                                                                          |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [CDviz](https://cdviz.dev)                                  | SDLC observability dashboard — consumes `CDEvents` produced by this collector |
-| [send-cdevents](https://github.com/cdviz-dev/send-cdevents) | GitHub Action wrapping `cdviz-collector send`                                 |
-| [CDEvents spec](https://cdevents.dev)                       | CloudEvents-based open standard for SDLC events                               |
-| [VRL](https://vector.dev/docs/reference/vrl/)               | Transformation language used by transformers                                  |
-
-## AI Assistant Skill
-
-Install the [agent skill](https://agentskills.io) for help configuring pipelines, writing VRL transformers, mapping `CDEvent` types, and debugging. Works with Claude Code, GitHub Copilot, Cursor, and [other supported agents](https://github.com/vercel-labs/skills).
+Get help configuring pipelines, writing VRL transformers, and mapping CDEvent types. Works with Claude Code, GitHub Copilot, Cursor, and [other agents](https://github.com/vercel-labs/skills).
 
 ```bash
 npx skills add cdviz-dev/cdviz-collector
 ```
 
-In Claude Code, invoke with `/cdviz-collector`.
+## Related projects
 
-## Development
+| Project | Role |
+| --- | --- |
+| [CDviz](https://cdviz.dev) | SDLC observability dashboard — consumes the CDEvents this produces |
+| [send-cdevents](https://github.com/cdviz-dev/send-cdevents) | GitHub Action wrapping `cdviz-collector send` |
+| [CDEvents](https://cdevents.dev) | The CloudEvents-based standard for SDLC events |
+| [VRL](https://vector.dev/docs/reference/vrl/) | The transformation language |
 
-Uses [mise](https://mise.jdx.dev/) for task management:
+## Start collecting
+
+Wrap one test command and watch the CDEvents come out:
 
 ```bash
-mise install          # Setup environment
-mise run build        # Build project
-mise run test         # Run tests
-mise run lint         # Run linting
-mise run ci           # Full CI pipeline
+cargo install cdviz-collector
+cdviz-collector send --run testsuiterun_junit -- pytest --junitxml=report.xml
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## License
-
-Apache Software License 2.0 ([ASL-2.0](LICENSE)). Commercial support: <https://cdviz.dev>.
-
-- **Built-in scripts** (this repo): Apache-2.0
-- **User-provided scripts** (loaded at runtime): any license
-
-See [LICENSING.md](LICENSING.md) for exceptions.
+Then read the [Quick Start](https://cdviz.dev/docs/cdviz-collector/quick-start) to point it at a real sink. If this saved you a webhook receiver, a star helps other people find it.
 
 ## Contributing
 
-Contributions welcome — see [Contributing Guide](./CONTRIBUTING.md) and [CLA](https://cla-assistant.io/cdviz-dev/cdviz-collector).
+Contributions welcome. See the [Contributing Guide](./CONTRIBUTING.md) and [CLA](https://cla-assistant.io/cdviz-dev/cdviz-collector). The project uses [mise](https://mise.jdx.dev/): `mise install && mise run ci`.
 
-[cdevents]: https://cdevents.dev/
+## License
+
+Apache-2.0 ([LICENSE](LICENSE)), with exceptions in [LICENSING.md](LICENSING.md). User-provided scripts loaded at runtime keep any license you like. Commercial support: <https://cdviz.dev>.
 
 ## Downloads
 
