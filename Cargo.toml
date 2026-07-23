@@ -80,7 +80,7 @@ opendal = { version = "0.58", default-features = false, features = [
   "services-s3",
   "services-sftp",
 ], optional = true }
-packageurl = "0.6"
+packageurl = "0.7"
 pin-project-lite = { version = "0.2", optional = true }
 quick-xml-to-json = "0.3"
 rdkafka = { version = "0.39", default-features = false, features = [
