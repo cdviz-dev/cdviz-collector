@@ -131,7 +131,7 @@ tracing-opentelemetry-instrumentation-sdk = { version = "0.38" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 url = "2.5.7"
 uuid = { version = "1", optional = true }
-vrl = { version = "0.34", default-features = false, features = [
+vrl = { version = "0.35", default-features = false, features = [
   "compiler",
   "enable_crypto_functions",
   "enable_env_functions",
