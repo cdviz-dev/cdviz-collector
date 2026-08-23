@@ -10,15 +10,15 @@
   </p>
   <p><strong>keywords:</strong> <code>cdevents</code> · <code>sdlc</code> · <code>cicd</code> · <code>observability</code> · <code>devops</code></p>
 
-  <h3>Turn any tool into a <a href="https://cdevents.dev/">CDEvents</a> producer.</h3>
+<h3>Turn any tool into a <a href="https://cdevents.dev/">CDEvents</a> producer.</h3>
 
-  <p>
+<p>
     Receive a webhook. Poll a REST API. Watch a folder or S3 bucket.<br>
     Or just wrap a command. Any of these gets you CDEvents —<br>
     no plugin code, no recompile.
   </p>
 
-  <p>
+<p>
     <strong><a href="https://cdviz.dev/docs/cdviz-collector/">Documentation</a></strong> |
     <a href="https://cdviz.dev/docs/cdviz-collector/quick-start">Quick Start</a> |
     <a href="https://cdviz.dev/docs/cdviz-collector/install">Installation</a>
@@ -57,13 +57,13 @@ The usual way to get there is a bespoke webhook receiver per tool, each one a sm
 
 ## The swiss knife
 
-| | |
-| --- | --- |
-| **Receive** | HTTP webhook (with HMAC signature verification), SSE, NATS, Kafka |
-| **Poll** | REST/GraphQL APIs, filesystem, S3, GCS, SFTP, GitHub |
-| **Wrap** | any command — exit code plus JUnit/TAP/SARIF reports |
+|               |                                                                           |
+| ------------- | ------------------------------------------------------------------------- |
+| **Receive**   | HTTP webhook (with HMAC signature verification), SSE, NATS, Kafka         |
+| **Poll**      | REST/GraphQL APIs, filesystem, S3, GCS, SFTP, GitHub                      |
+| **Wrap**      | any command — exit code plus JUnit/TAP/SARIF reports                      |
 | **Transform** | VRL — reshape, filter, enrich, deduplicate, split one input into N events |
-| **Ship to** | PostgreSQL, ClickHouse, HTTP, SSE, NATS, Kafka, files/S3, stdout |
+| **Ship to**   | PostgreSQL, ClickHouse, HTTP, SSE, NATS, Kafka, files/S3, stdout          |
 
 Sinks fan out: one source can feed all of them at once.
 
@@ -75,13 +75,13 @@ Sinks fan out: one source can feed all of them at once.
 
 Ready-made transformers live in [transformers-community](https://github.com/cdviz-dev/transformers-community), each with sample inputs and expected outputs:
 
-| Transformer | Converts |
-| --- | --- |
-| [`github_events`](https://github.com/cdviz-dev/transformers-community/tree/main/github_events) | GitHub webhooks: workflow runs, jobs, releases, pull requests, issues |
-| [`github_rest_api`](https://github.com/cdviz-dev/transformers-community/tree/main/github_rest_api) | GitHub REST API, for backfill or polling-only setups |
-| [`argocd_notifications`](https://github.com/cdviz-dev/transformers-community/tree/main/argocd_notifications) | ArgoCD application lifecycle events |
-| [`kubewatch_cloudevents`](https://github.com/cdviz-dev/transformers-community/tree/main/kubewatch_cloudevents) | Kubernetes events, via Kubewatch |
-| [`cdevents`](https://github.com/cdviz-dev/transformers-community/tree/main/cdevents) | CDEvents from one spec version to the next |
+| Transformer                                                                                                    | Converts                                                              |
+| -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [`github_events`](https://github.com/cdviz-dev/transformers-community/tree/main/github_events)                 | GitHub webhooks: workflow runs, jobs, releases, pull requests, issues |
+| [`github_rest_api`](https://github.com/cdviz-dev/transformers-community/tree/main/github_rest_api)             | GitHub REST API, for backfill or polling-only setups                  |
+| [`argocd_notifications`](https://github.com/cdviz-dev/transformers-community/tree/main/argocd_notifications)   | ArgoCD application lifecycle events                                   |
+| [`kubewatch_cloudevents`](https://github.com/cdviz-dev/transformers-community/tree/main/kubewatch_cloudevents) | Kubernetes events, via Kubewatch                                      |
+| [`cdevents`](https://github.com/cdviz-dev/transformers-community/tree/main/cdevents)                           | CDEvents from one spec version to the next                            |
 
 Import them straight from GitHub. No clone, no vendoring:
 
@@ -101,24 +101,24 @@ For REST APIs without webhooks, the [`http_polling`](./src/sources/http_polling/
 
 ## Install
 
-| | |
-| --- | --- |
+|                             |                                                                          |
+| --------------------------- | ------------------------------------------------------------------------ |
 | **Binaries** (Linux, macOS) | [GitHub Releases](https://github.com/cdviz-dev/cdviz-collector/releases) |
-| **Docker** | `ghcr.io/cdviz-dev/cdviz-collector` |
-| **Cargo** | `cargo install cdviz-collector` |
-| **Mise** | `mise install "github:cdviz-dev/cdviz-collector"` |
-| **Kubernetes** | Helm chart |
+| **Docker**                  | `ghcr.io/cdviz-dev/cdviz-collector`                                      |
+| **Cargo**                   | `cargo install cdviz-collector`                                          |
+| **Mise**                    | `mise install "github:cdviz-dev/cdviz-collector"`                        |
+| **Kubernetes**              | Helm chart                                                               |
 
 See the [Installation Guide](https://cdviz.dev/docs/cdviz-collector/install).
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| [`connect`](https://cdviz.dev/docs/cdviz-collector/connect) | Long-running server: sources → transformers → sinks |
-| [`send`](https://cdviz.dev/docs/cdviz-collector/send) | Send one event, or wrap a command with `--run` |
-| [`transform`](https://cdviz.dev/docs/cdviz-collector/transform) | Transform files offline, in batch |
-| `config --check` | Validate config and compile every VRL template — run it in CI |
+| Command                                                         | Purpose                                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------------- |
+| [`connect`](https://cdviz.dev/docs/cdviz-collector/connect)     | Long-running server: sources → transformers → sinks           |
+| [`send`](https://cdviz.dev/docs/cdviz-collector/send)           | Send one event, or wrap a command with `--run`                |
+| [`transform`](https://cdviz.dev/docs/cdviz-collector/transform) | Transform files offline, in batch                             |
+| `config --check`                                                | Validate config and compile every VRL template — run it in CI |
 
 ```bash
 # Serve
@@ -159,12 +159,12 @@ npx skills add cdviz-dev/cdviz-collector
 
 ## Related projects
 
-| Project | Role |
-| --- | --- |
-| [CDviz](https://cdviz.dev) | SDLC observability dashboard — consumes the CDEvents this produces |
-| [send-cdevents](https://github.com/cdviz-dev/send-cdevents) | GitHub Action wrapping `cdviz-collector send` |
-| [CDEvents](https://cdevents.dev) | The CloudEvents-based standard for SDLC events |
-| [VRL](https://vector.dev/docs/reference/vrl/) | The transformation language |
+| Project                                                     | Role                                                               |
+| ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| [CDviz](https://cdviz.dev)                                  | SDLC observability dashboard — consumes the CDEvents this produces |
+| [send-cdevents](https://github.com/cdviz-dev/send-cdevents) | GitHub Action wrapping `cdviz-collector send`                      |
+| [CDEvents](https://cdevents.dev)                            | The CloudEvents-based standard for SDLC events                     |
+| [VRL](https://vector.dev/docs/reference/vrl/)               | The transformation language                                        |
 
 ## Start collecting
 

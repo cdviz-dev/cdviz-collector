@@ -74,7 +74,7 @@ impl MetadataParser {
 }
 
 impl Parser for MetadataParser {
-    async fn parse(&mut self, _op: &Operator, resource: &Resource) -> Result<()> {
+    fn parse(&mut self, _op: &Operator, resource: &Resource) -> impl Future<Output = Result<()>> {
         let resource_metadata = resource.as_json_metadata();
         // Merge base_metadata with resource metadata
         let mut metadata = self.base_metadata.clone();
@@ -86,7 +86,7 @@ impl Parser for MetadataParser {
             }
         }
         let event = EventSource { metadata, ..Default::default() };
-        self.next.send(event)
+        std::future::ready(self.next.send(event))
     }
 }
 

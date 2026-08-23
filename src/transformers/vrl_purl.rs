@@ -861,7 +861,7 @@ mod tests {
 
         // PackageUrl sorts qualifiers alphabetically and encodes @ in version
         assert!(result.starts_with("pkg:oci/nginx@%40sha256:abc?"));
-        assert!(result.contains("repository_url=docker.io/library"));
+        assert!(result.contains("repository_url=docker.io%2Flibrary"));
         assert!(result.contains("tag=1.21"));
     }
 
@@ -876,7 +876,7 @@ mod tests {
         "ghcr.io/cdviz-dev",
         "sha256:abc",
         "v0.1.0",
-        "pkg:oci/cdviz-grafana@sha256:abc?repository_url=ghcr.io/cdviz-dev/charts&tag=v0.1.0"
+        "pkg:oci/cdviz-grafana@sha256:abc?repository_url=ghcr.io%2Fcdviz-dev%2Fcharts&tag=v0.1.0"
     )]
     // Deep path prefix
     #[case(
@@ -884,7 +884,7 @@ mod tests {
         "registry.example.com/org",
         "sha256:def",
         "latest",
-        "pkg:oci/my-image@sha256:def?repository_url=registry.example.com/org/a/b&tag=latest"
+        "pkg:oci/my-image@sha256:def?repository_url=registry.example.com%2Forg%2Fa%2Fb&tag=latest"
     )]
     // No slash in name — repository_url unchanged
     #[case(
@@ -892,7 +892,7 @@ mod tests {
         "ghcr.io/myorg",
         "sha256:abc",
         "v1.0",
-        "pkg:oci/my-image@sha256:abc?repository_url=ghcr.io/myorg&tag=v1.0"
+        "pkg:oci/my-image@sha256:abc?repository_url=ghcr.io%2Fmyorg&tag=v1.0"
     )]
     // Slash in name, no existing repository_url — prefix becomes the repository_url
     #[case(
@@ -942,7 +942,7 @@ mod tests {
         let result = purl_object_to_string(&Value::from(purl_obj)).unwrap();
 
         assert!(result.starts_with("pkg:helm/wordpress@15.2.35?"));
-        assert!(result.contains("repository_url=https://charts.bitnami.com/bitnami"));
+        assert!(result.contains("repository_url=https:%2F%2Fcharts.bitnami.com%2Fbitnami"));
     }
 
     #[test]
@@ -967,12 +967,12 @@ mod tests {
 
     // ArgoCD Helm → PURL string tests
     #[rstest]
-    #[case("ghcr.io/owner", "nginx", "1.0.0", "pkg:oci/nginx@1.0.0?repository_url=ghcr.io/owner")]
+    #[case("ghcr.io/owner", "nginx", "1.0.0", "pkg:oci/nginx@1.0.0?repository_url=ghcr.io%2Fowner")]
     #[case(
         "https://charts.bitnami.com/bitnami",
         "wordpress",
         "15.2.35",
-        "pkg:generic/wordpress@15.2.35?download_url=https://charts.bitnami.com/bitnami&type=helm"
+        "pkg:generic/wordpress@15.2.35?download_url=https:%2F%2Fcharts.bitnami.com%2Fbitnami&type=helm"
     )]
     // OCI: chart name contains a path prefix — prefix must move into repository_url, not name
     // Regression: previously produced pkg:oci/charts%2Fcdviz-grafana?repository_url=ghcr.io/cdviz-dev
@@ -980,21 +980,21 @@ mod tests {
         "ghcr.io/cdviz-dev",
         "charts/cdviz-grafana",
         "0.1.0",
-        "pkg:oci/cdviz-grafana@0.1.0?repository_url=ghcr.io/cdviz-dev/charts"
+        "pkg:oci/cdviz-grafana@0.1.0?repository_url=ghcr.io%2Fcdviz-dev%2Fcharts"
     )]
     // OCI: deeper path prefix (e.g. "a/b/c" → name="c", prefix="a/b")
     #[case(
         "ghcr.io/myorg",
         "a/b/my-chart",
         "2.0.0",
-        "pkg:oci/my-chart@2.0.0?repository_url=ghcr.io/myorg/a/b"
+        "pkg:oci/my-chart@2.0.0?repository_url=ghcr.io%2Fmyorg%2Fa%2Fb"
     )]
     // OCI: no slash in chart name — repo_url unchanged
     #[case(
         "ghcr.io/cdviz-dev",
         "cdviz-grafana",
         "0.1.0",
-        "pkg:oci/cdviz-grafana@0.1.0?repository_url=ghcr.io/cdviz-dev"
+        "pkg:oci/cdviz-grafana@0.1.0?repository_url=ghcr.io%2Fcdviz-dev"
     )]
     fn test_argocd_helm_to_purl_string(
         #[case] repo_url: &str,
@@ -1012,7 +1012,7 @@ mod tests {
         "https://github.com/kubernetes-sigs/kustomize",
         Some("examples/helloWorld"),
         "v5.0.0",
-        "pkg:github/kubernetes-sigs/kustomize@v5.0.0?path=examples/helloWorld"
+        "pkg:github/kubernetes-sigs/kustomize@v5.0.0?path=examples%2FhelloWorld"
     )]
     #[case(
         "https://github.com/argoproj/argo-cd",
@@ -1036,7 +1036,7 @@ mod tests {
         "https://gitlab.com/group/project",
         Some("k8s"),
         "v1.2.3",
-        "pkg:generic/project@v1.2.3?path=k8s&type=git&vcs_url=https://gitlab.com/group/project"
+        "pkg:generic/project@v1.2.3?path=k8s&type=git&vcs_url=https:%2F%2Fgitlab.com%2Fgroup%2Fproject"
     )]
     // Path normalization: empty string should be omitted
     #[case("https://github.com/owner/repo", Some(""), "v1.0.0", "pkg:github/owner/repo@v1.0.0")]
