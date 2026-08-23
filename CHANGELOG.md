@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.49.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.48.3...0.49.0) - 2026-08-23
+
+### Fixed
+
+- *(deps)* [**breaking**] update config, test,... to please latest update
+- *(deps)* update rust crate vrl to 0.35 ([#400](https://github.com/cdviz-dev/cdviz-collector/pull/400))
+- *(deps)* update rust crate packageurl to 0.7 ([#392](https://github.com/cdviz-dev/cdviz-collector/pull/392))
+- *(deps)* update rust crate testcontainers to 0.28 ([#396](https://github.com/cdviz-dev/cdviz-collector/pull/396))
+- *(deps)* update rust crate async-nats to 0.50 ([#391](https://github.com/cdviz-dev/cdviz-collector/pull/391))
+- *(deps)* update rust crate base64 to 0.23 ([#393](https://github.com/cdviz-dev/cdviz-collector/pull/393))
+
+### Other
+
+- *(deps)* update rust crate uuid to v1.25.0 ([#401](https://github.com/cdviz-dev/cdviz-collector/pull/401))
+- *(deps)* update dependency rust to v1.98.0 ([#399](https://github.com/cdviz-dev/cdviz-collector/pull/399))
+- *(deps)* update rust crate serde_with to v3.22.0 ([#397](https://github.com/cdviz-dev/cdviz-collector/pull/397))
+- *(deps)* update rust crate similar to v3.2.0 ([#398](https://github.com/cdviz-dev/cdviz-collector/pull/398))
+- *(deps)* update renovatebot/github-action action to v46.2.0 ([#395](https://github.com/cdviz-dev/cdviz-collector/pull/395))
+- *(deps)* update rust crate uuid to v1.24.0 ([#389](https://github.com/cdviz-dev/cdviz-collector/pull/389))
+- *(deps)* update rust crate tokio to v1.53.0 ([#390](https://github.com/cdviz-dev/cdviz-collector/pull/390))
+- rework README.md
+
 ## [0.48.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.48.2...0.48.3) - 2026-07-14
 
 ### Fixed
