@@ -287,6 +287,14 @@ missing_docs = "allow"  # not published as crate
 unsafe_code = "forbid"
 warnings = "deny"
 
+# smaller debug info: enough for backtrace line numbers, much smaller target
+# dir (good for caching) than full debuginfo
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.test]
+debug = "line-tables-only"
+
 [profile.release]
 strip = "symbols"  # "none", "debuginfo", "symbols"
 lto = "thin"  # see https://doc.rust-lang.org/cargo/reference/profiles.html#lto

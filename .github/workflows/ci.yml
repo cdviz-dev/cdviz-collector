@@ -26,16 +26,15 @@ jobs:
       CARGO_TERM_COLOR: always
       # to help debug on failure (maybe conflict with disable of test debug)
       RUST_BACKTRACE: full
-      # reduce size of target (good for caching)
+      # reduce size of target (good for caching); deliberately overrides
+      # profile.test debug="line-tables-only" from Cargo.toml, which is meant for
+      # local dev - CI wants the smallest target dir it can get
       CARGO_PROFILE_TEST_DEBUG: 0
-      # disable incremental compilation faster from-scratch builds & sccache
-      CARGO_INCREMENTAL: 0
-      # configure sccache to cache the build artifacts (on github caches)
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v7
-      - uses: mozilla-actions/sccache-action@v0.0.9
+      # sccache + cargo dirs restored from one actions/cache blob (local-dir
+      # backend, not SCCACHE_GHA_ENABLED); also exports CARGO_INCREMENTAL=0.
+      - uses: ./.github/actions/rust-cache-restore
       - uses: jdx/mise-action@v4
         with:
           # version 2025.5.11, a symlink is created for rust setup
@@ -66,3 +65,6 @@ jobs:
           CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__TOKEN: ${{ secrets.CDVIZ_COLLECTOR_TOKEN }}
           CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__SIGNATURE_PREFIX: "sha256="
           CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__SIGNATURE_ENCODING: "hex"
+      # only `main` writes the cache; branches restore from it (see the action)
+      - uses: ./.github/actions/rust-cache-save
+        if: github.ref == 'refs/heads/main'

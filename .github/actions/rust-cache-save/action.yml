@@ -1,0 +1,31 @@
+---
+name: Save the rust cargo + sccache cache
+description: >-
+  Saves ~/.cargo/registry, ~/.cargo/git and the sccache local object cache
+  (~/.cache/sccache) under the same key rust-cache-restore looks for. See
+  rust-cache-restore's own description for the key layering and for why
+  SCCACHE_GHA_ENABLED must never be set.
+
+  Only ci.yml calls this, and only on `main` - every other workflow, and every
+  feature-branch run, is restore-only. Feature branches read main's entry, so
+  they get the cache without burning the repo's 10GB cache quota on a write per
+  push. release.yml is restore-only for an additional reason: it runs on tag
+  pushes, and a cache written on refs/tags/x cannot be read from the next tag, so
+  a save there would be dead weight.
+
+  No explicit `sccache --show-stats` step - see rust-cache-restore's own
+  description for why.
+inputs:
+  key-prefix:
+    description: cache key namespace, must match rust-cache-restore
+    default: sccache-rust
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache/save@v6
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          ~/.cache/sccache
+        key: ${{ inputs.key-prefix }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mise.toml', 'Cargo.lock') }}-${{ github.run_id }}

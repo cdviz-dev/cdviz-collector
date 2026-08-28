@@ -1,0 +1,58 @@
+---
+name: Restore the rust cargo + sccache cache
+description: >-
+  Installs sccache, restores ~/.cargo/registry, ~/.cargo/git and the sccache
+  *local directory* object cache (~/.cache/sccache) from a single actions/cache
+  entry, then points rustc at sccache.
+
+  Replaces the SCCACHE_GHA_ENABLED backend: that one does a GitHub cache
+  round-trip per compilation object, while the local-dir backend moves the whole
+  object store as one compressed blob. Inspiration:
+  https://www.warpbuild.com/guides/sccache-github-actions
+
+  SCCACHE_GHA_ENABLED must never be set alongside this - it makes sccache ignore
+  SCCACHE_DIR and fall back to the per-object backend.
+
+  Key layering: runner.arch is in the key and not just runner.os, because the
+  release matrix builds on ubuntu-latest (X64), ubuntu-22.04-arm (ARM64) and
+  macos-14 in parallel, and Linux X64 would otherwise collide with Linux ARM64.
+  The hash covers mise.toml (this repo pins the rust version there, it has no
+  rust-toolchain.toml) and Cargo.lock; mise.toml also holds task definitions and
+  churns for unrelated reasons, which is harmless because the second restore-key
+  falls back past the hash. github.run_id comes last so every save writes a
+  fresh, never-colliding key (actions/cache/save is exact-key-or-nothing) while
+  restore always rolls forward to the newest matching prefix.
+
+  No explicit `sccache --show-stats` step: mozilla-actions/sccache-action already
+  registers a post-job hook that prints them.
+inputs:
+  key-prefix:
+    description: cache key namespace, must match rust-cache-save
+    default: sccache-rust
+  cache-size:
+    description: max size of the sccache local object store
+    default: 2G
+runs:
+  using: composite
+  steps:
+    - uses: mozilla-actions/sccache-action@v0.0.11
+    - uses: actions/cache/restore@v6
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          ~/.cache/sccache
+        key: ${{ inputs.key-prefix }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mise.toml', 'Cargo.lock') }}-${{ github.run_id }}
+        restore-keys: |
+          ${{ inputs.key-prefix }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mise.toml', 'Cargo.lock') }}-
+          ${{ inputs.key-prefix }}-${{ runner.os }}-${{ runner.arch }}-
+    - name: Point rustc at sccache
+      shell: bash
+      run: |
+        echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_DIR=$HOME/.cache/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_IDLE_TIMEOUT=0" >> "$GITHUB_ENV"
+        echo "SCCACHE_CACHE_SIZE=${{ inputs.cache-size }}" >> "$GITHUB_ENV"
+        # sccache cannot cache incremental artifacts: leaving incremental on means
+        # full recompiles with no cache benefit.
+        echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
