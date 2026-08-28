@@ -321,7 +321,7 @@ pub(crate) async fn resolve_config_source(
     raw_headers: &[String],
 ) -> Result<ResolvedConfigSource> {
     match source {
-        None => Ok(ResolvedConfigSource::None),
+        Option::None => Ok(ResolvedConfigSource::None),
         Some(ConfigSource::File(path)) => {
             if !raw_headers.is_empty() {
                 tracing::warn!(
