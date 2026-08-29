@@ -1,4 +1,11 @@
 //! Remote file adapter for Figment configuration provider using `OpenDAL`.
+//!
+//! Security note: VRL's `get_env_var` (and the rest of `vrl::stdlib`) is registered
+//! unconditionally for every compiled transformer, including ones fetched through this
+//! adapter (`*_rfile`, e.g. `github://` imports). There is currently no per-source opt-in/out
+//! for environment access — importing an untrusted remote transformer grants it the same
+//! `get_env_var` capability as a locally authored one. Gating this per-source is a future
+//! improvement, not implemented here.
 
 use figment::{
     Figment, Profile, Provider,
@@ -131,6 +138,19 @@ impl<T: Provider> RemoteFileAdapter<T> {
             )?);
         }
         if remote_config.service_type == "github" {
+            // OpenDAL's github service (opendal-service-github) has no ref/branch/commit
+            // pinning parameter — it always reads from the repo's default branch HEAD via
+            // the GitHub contents API, so this fetch is inherently unpinned and the content
+            // can change between runs. Deliberate convenience (no redeploy needed to pick up
+            // transformer updates), at the user's own risk. Anyone who needs a pinned fetch
+            // can use an explicit `https://raw.githubusercontent.com/<owner>/<repo>/<sha>/...`
+            // URL remote instead of `type = "github"`.
+            tracing::warn!(
+                owner = remote_config.parameters.get("owner").map(String::as_str),
+                repo = remote_config.parameters.get("repo").map(String::as_str),
+                "remote config `type = \"github\"` always fetches the default branch HEAD (unpinned); \
+                 use an explicit pinned https://raw.githubusercontent.com/<owner>/<repo>/<sha>/... URL remote if reproducibility matters"
+            );
             let owner = remote_config
                 .parameters
                 .get("owner")
