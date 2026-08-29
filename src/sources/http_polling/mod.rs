@@ -320,6 +320,7 @@ async fn fetch(
     spec: &request::RequestSpec,
     accept: &'static str,
     header_configs: &[OutgoingHeaderConfig],
+    trusted_origin: Option<&reqwest::Url>,
 ) -> std::result::Result<FetchedResponse, ()> {
     let Ok(method_val) = reqwest::Method::from_bytes(spec.method.to_uppercase().as_bytes()) else {
         tracing::warn!(method = spec.method, "invalid HTTP method");
@@ -341,15 +342,27 @@ async fn fetch(
     }
     let url_str = url.to_string();
 
-    let mut req = client.request(method_val, url);
+    let mut req = client.request(method_val, url.clone());
     req = req.header(reqwest::header::ACCEPT, accept);
     for (name, value) in &spec.headers {
         req = req.header(name.as_str(), value.as_str());
     }
     let body_bytes = spec.body.as_deref().unwrap_or(&[]);
-    match generate_headers(header_configs, Some(body_bytes)) {
-        Ok(headers) => req = req.headers(headers),
-        Err(err) => tracing::warn!(?err, "failed to generate static headers, skipping"),
+    // Configured secret headers must not follow a driver-derived URL (e.g. from a
+    // response Link header or body cursor) to a different origin than the poll's
+    // original trusted request — same threat as credential-stripping on redirects.
+    let same_origin =
+        trusted_origin.is_none_or(|trusted| !retry_after_middleware::is_cross_origin(trusted, &url));
+    if same_origin {
+        match generate_headers(header_configs, Some(body_bytes)) {
+            Ok(headers) => req = req.headers(headers),
+            Err(err) => tracing::warn!(?err, "failed to generate static headers, skipping"),
+        }
+    } else {
+        tracing::warn!(
+            url = url_str,
+            "driver-derived URL is cross-origin from the trusted request; skipping configured secret headers"
+        );
     }
     if let Some(body) = &spec.body {
         req = req.body(body.clone());
@@ -590,6 +603,10 @@ impl HttpPollingExtractor {
             }
         };
 
+        // Anchor origin for this poll cycle: the first bootstrap request's URL. Configured
+        // secret headers are only attached to requests that stay on this origin.
+        let trusted_origin = queue.front().and_then(|t| url::Url::parse(&t.spec.url).ok());
+
         let header_configs = Arc::new(outgoing_header_map_to_configs(&self.config.headers));
         let accept = self.config.parser.accept_header();
         let concurrency = self.config.max_concurrency.max(1);
@@ -624,8 +641,9 @@ impl HttpPollingExtractor {
 
                 let client = self.client.clone();
                 let configs = Arc::clone(&header_configs);
+                let trusted = trusted_origin.clone();
                 inflight.push(async move {
-                    let resp = fetch(&client, &task.spec, accept, &configs).await;
+                    let resp = fetch(&client, &task.spec, accept, &configs, trusted.as_ref()).await;
                     (task, resp)
                 });
             }
@@ -1124,6 +1142,66 @@ mod tests {
 
         let (mut extractor, _collector) = make_extractor(&config);
         assert!(extractor.run_once().await.unwrap().advanced());
+    }
+
+    #[tokio::test]
+    async fn test_secret_header_dropped_on_cross_origin_follow_up() {
+        use crate::security::header::HeaderSource;
+
+        // Bootstrap on `trusted`, discovery response points the feedback hop at a
+        // different host (`other`). The configured secret header must reach `trusted`
+        // but never `other`.
+        let trusted = MockServer::start().await;
+        let other = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/list"))
+            .and(header("x-api-key", "test-secret"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw("{}", "application/json"))
+            .expect(1)
+            .mount(&trusted)
+            .await;
+
+        // Any request to `other` that carries the secret header is a leak — assert none do.
+        Mock::given(method("GET"))
+            .and(path("/detail"))
+            .and(header("x-api-key", "test-secret"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&other)
+            .await;
+        // Non-matching (no secret header) request to `other` is expected to happen.
+        Mock::given(method("GET"))
+            .and(path("/detail"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw("{}", "application/json"))
+            .expect(1)
+            .mount(&other)
+            .await;
+
+        let trusted_uri = trusted.uri();
+        let other_uri = other.uri();
+        let driver = format!(
+            r#"
+            if .response == null {{
+                .requests = [{{ "url": "{trusted_uri}/list", "route": "feedback" }}]
+            }} else {{
+                .requests = [{{ "url": "{other_uri}/detail", "route": "pipeline" }}]
+            }}
+            "#
+        );
+        let mut config = config_with_driver(driver);
+        config.headers.insert(
+            "x-api-key".to_string(),
+            HeaderSource::Static {
+                value: "test-secret".to_string(),
+                prefix: String::new(),
+                suffix: String::new(),
+            },
+        );
+
+        let (mut extractor, _collector) = make_extractor(&config);
+        assert!(extractor.run_once().await.unwrap().advanced());
+        // wiremock's `.expect(0)`/`.expect(1)` assertions above are verified on drop.
     }
 
     #[tokio::test]

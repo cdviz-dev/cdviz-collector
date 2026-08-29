@@ -126,7 +126,7 @@ fn strip_credentials_if_cross_origin(req: &mut Request, new_url: &reqwest::Url) 
     }
 }
 
-fn is_cross_origin(a: &reqwest::Url, b: &reqwest::Url) -> bool {
+pub(super) fn is_cross_origin(a: &reqwest::Url, b: &reqwest::Url) -> bool {
     if a.scheme() != b.scheme() || a.host() != b.host() {
         return true;
     }
