@@ -56,15 +56,10 @@ pub(crate) struct NatsExtractor {
 }
 
 impl NatsExtractor {
-    /// Must be called from the context of a Tokio 1.x runtime.
-    pub(crate) fn try_from(config: &Config, next: EventSourcePipe) -> Result<Self> {
+    pub(crate) async fn try_from(config: &Config, next: EventSourcePipe) -> Result<Self> {
         let servers: Vec<String> =
             config.servers.split(',').map(|s| s.trim().to_string()).collect();
-        let client = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(async_nats::connect(servers))
-                .into_diagnostic()
-        })?;
+        let client = async_nats::connect(servers).await.into_diagnostic()?;
         let header_rules = header_rule_map_to_configs(&config.headers);
         Ok(NatsExtractor {
             client,
@@ -285,8 +280,7 @@ mod tests {
         let pipe = Box::new(collector.create_pipe());
 
         // Connection to non-existent server will still construct (async-nats connects lazily)
-        // try_from uses block_in_place so we need a multi-thread runtime
-        let result = NatsExtractor::try_from(&config, pipe);
+        let result = NatsExtractor::try_from(&config, pipe).await;
         // May succeed or fail depending on async-nats lazy connect behaviour
         drop(result);
     }
@@ -318,7 +312,8 @@ mod tests {
             metadata: serde_json::json!({}),
         };
 
-        let extractor = NatsExtractor::try_from(&config, pipe).expect("Failed to create extractor");
+        let extractor =
+            NatsExtractor::try_from(&config, pipe).await.expect("Failed to create extractor");
 
         let cancel_token = CancellationToken::new();
         let cancel_clone = cancel_token.clone();

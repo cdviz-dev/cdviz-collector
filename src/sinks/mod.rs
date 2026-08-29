@@ -16,7 +16,7 @@ mod retry;
 #[cfg(feature = "sink_sse")]
 pub(crate) mod sse;
 
-use crate::errors::{Report, Result};
+use crate::errors::Result;
 use crate::transformers;
 use crate::{Message, Receiver};
 use axum::Router;
@@ -126,15 +126,13 @@ impl Config {
     }
 }
 
-impl TryFrom<Config> for SinkEnum {
-    type Error = Report;
-
-    fn try_from(value: Config) -> Result<Self> {
+impl SinkEnum {
+    async fn from_config(value: Config) -> Result<Self> {
         let out = match value {
             #[cfg(feature = "sink_clickhouse")]
             Config::Clickhouse(config) => ClickHouseSink::try_from(config)?.into(),
             #[cfg(feature = "sink_db")]
-            Config::Db(config) => DbSink::try_from(config)?.into(),
+            Config::Db(config) => DbSink::try_from_config(config).await?.into(),
             Config::Debug(config) => DebugSink::try_from(config)?.into(),
             #[cfg(feature = "sink_folder")]
             Config::Folder(config) => FolderSink::try_from(config)?.into(),
@@ -143,7 +141,7 @@ impl TryFrom<Config> for SinkEnum {
             #[cfg(feature = "sink_kafka")]
             Config::Kafka(config) => KafkaSink::try_from(config)?.into(),
             #[cfg(feature = "sink_nats")]
-            Config::Nats(config) => NatsSink::try_from(config)?.into(),
+            Config::Nats(config) => NatsSink::try_from_config(config).await?.into(),
             #[cfg(feature = "sink_sse")]
             Config::Sse(config) => SseSink::try_from(config)?.into(),
         };
@@ -184,7 +182,7 @@ trait Sink {
 
 pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> JoinHandle<Result<()>> {
     tokio::spawn(async move {
-        let sink = SinkEnum::try_from(config)?;
+        let sink = SinkEnum::from_config(config).await?;
         let mut rx = rx;
         tracing::info!(name, kind = "sink", "start to receive from message queue");
         loop {
@@ -217,7 +215,7 @@ pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> Join
 }
 
 /// Create sinks and return both the task handles and any routes they need to register
-pub(crate) fn create_sinks_and_routes(
+pub(crate) async fn create_sinks_and_routes(
     sink_configs: impl IntoIterator<Item = (String, Config)>,
     tx: &tokio::sync::broadcast::Sender<Message>,
 ) -> Result<SinkHandlesAndRoutes> {
@@ -232,7 +230,7 @@ pub(crate) fn create_sinks_and_routes(
         tracing::info!(kind = "sink", name, "starting");
 
         // Create the sink first to extract any routes
-        let sink = SinkEnum::try_from(config.clone())?;
+        let sink = SinkEnum::from_config(config.clone()).await?;
 
         // Extract routes if the sink provides them
         if let Some(route) = sink.get_routes() {

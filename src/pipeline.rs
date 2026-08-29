@@ -90,12 +90,12 @@ impl PipelineBuilder {
     ///
     /// Failed if no sinks configured
     #[allow(clippy::type_complexity)]
-    pub fn create_sinks(
+    pub async fn create_sinks(
         &self,
         enable_http_server: bool,
     ) -> Result<(Vec<JoinHandle<Result<()>>>, Vec<Router>)> {
         let (sink_handles, sink_routes) =
-            sinks::create_sinks_and_routes(self.config.sinks.clone(), &self.tx)?;
+            sinks::create_sinks_and_routes(self.config.sinks.clone(), &self.tx).await?;
 
         if sink_handles.is_empty() && (!enable_http_server || sink_routes.is_empty()) {
             tracing::error!("no sink configured or started");
@@ -113,7 +113,7 @@ impl PipelineBuilder {
     ///
     /// Failed if no sources configured
     #[allow(clippy::type_complexity)]
-    pub fn create_sources(
+    pub async fn create_sources(
         &self,
         enable_http_server: bool,
         shutdown_token: &CancellationToken,
@@ -124,7 +124,8 @@ impl PipelineBuilder {
             shutdown_token,
             Some(&self.config.state),
             &self.config.http.root_url,
-        )?;
+        )
+        .await?;
 
         if source_handles.is_empty() && (!enable_http_server || source_routes.is_empty()) {
             tracing::error!("no source configured or started");
@@ -149,11 +150,11 @@ impl PipelineBuilder {
         tokio::spawn(async move { handle_shutdown_signal(shutdown_token_signal).await });
 
         // Create sinks with routes
-        let (sink_handles, sink_routes) = self.create_sinks(enable_http_server)?;
+        let (sink_handles, sink_routes) = self.create_sinks(enable_http_server).await?;
 
         // Create sources using standard pattern
         let (source_handles, source_routes) =
-            self.create_sources(enable_http_server, &shutdown_token)?;
+            self.create_sources(enable_http_server, &shutdown_token).await?;
 
         let operation = if enable_http_server { "server" } else { "send" };
         tracing::info!("Starting {} operation", operation);

@@ -99,10 +99,8 @@ pub(crate) struct Config {
 /// # Errors
 ///
 /// Fail if we cannot connect to the database
-impl TryFrom<Config> for DbSink {
-    type Error = Report;
-
-    fn try_from(mut config: Config) -> Result<Self> {
+impl DbSink {
+    pub(crate) async fn try_from_config(mut config: Config) -> Result<Self> {
         if config.pool_connections_min > config.pool_connections_max {
             miette::bail!(
                 "pool_connections_min ({}) must be <= pool_connections_max ({})",
@@ -134,10 +132,7 @@ impl TryFrom<Config> for DbSink {
         let pool = if lazy_connection {
             pool_options.connect_lazy(&url).into_diagnostic()?
         } else {
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(pool_options.connect(&url))
-            })
-            .into_diagnostic()?
+            pool_options.connect(&url).await.into_diagnostic()?
         };
         Ok(Self { pool, total_duration_of_retries })
     }
@@ -284,7 +279,7 @@ mod tests {
             total_duration_of_retries: default_total_duration_of_retries(),
             lazy_connection: true,
         };
-        let dbsink = DbSink::try_from(config).unwrap();
+        let dbsink = DbSink::try_from_config(config).await.unwrap();
         //Basic initialize the db schema
         // A transaction is implicitly created for the all file so some instruction could be applied
         // -- { severity: Error, code: "25001", message: "CREATE INDEX CONCURRENTLY cannot run inside a transaction block",

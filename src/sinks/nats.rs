@@ -31,7 +31,7 @@
 
 use super::Sink;
 use crate::Message;
-use crate::errors::{IntoDiagnostic, Report, Result};
+use crate::errors::{IntoDiagnostic, Result};
 use crate::security::header::{
     OutgoingHeaderMap, generate_headers, outgoing_header_map_to_configs,
 };
@@ -91,16 +91,10 @@ impl std::fmt::Debug for NatsSink {
     }
 }
 
-impl TryFrom<Config> for NatsSink {
-    type Error = Report;
-
-    fn try_from(value: Config) -> Result<Self> {
+impl NatsSink {
+    pub(crate) async fn try_from_config(value: Config) -> Result<Self> {
         let servers: Vec<String> = value.servers.split(',').map(|s| s.trim().to_string()).collect();
-        let client = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(async_nats::connect(servers))
-                .into_diagnostic()
-        })?;
+        let client = async_nats::connect(servers).await.into_diagnostic()?;
         Ok(NatsSink {
             client,
             subject: value.subject,
@@ -233,7 +227,7 @@ mod tests {
             mode: NatsSinkMode::Core,
             ..Default::default()
         };
-        let sink = NatsSink::try_from(config).expect("Failed to create NATS sink");
+        let sink = NatsSink::try_from_config(config).await.expect("Failed to create NATS sink");
 
         let mut runner = TestRunner::default();
         let test_message = any::<Message>().new_tree(&mut runner).unwrap().current();
@@ -287,7 +281,8 @@ mod tests {
             timeout: Duration::from_secs(5),
             ..Default::default()
         };
-        let sink = NatsSink::try_from(config).expect("Failed to create NATS JetStream sink");
+        let sink =
+            NatsSink::try_from_config(config).await.expect("Failed to create NATS JetStream sink");
 
         let mut runner = TestRunner::default();
         let test_message = any::<Message>().new_tree(&mut runner).unwrap().current();

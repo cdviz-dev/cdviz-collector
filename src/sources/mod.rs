@@ -66,7 +66,7 @@ impl Config {
     }
 }
 
-pub(crate) fn make(
+pub(crate) async fn make(
     name: &str,
     config: &Config,
     tx: Sender<Message>,
@@ -84,7 +84,7 @@ pub(crate) fn make(
     // captured at the terminal is valid for sinks to link back to.
     let pipe: EventSourcePipe =
         Box::new(transformers::SpanPipe::new(pipe, "source", name.to_string()));
-    config.extractor.make_extractor(name, pipe, cancel_token, state_config)
+    config.extractor.make_extractor(name, pipe, cancel_token, state_config).await
 }
 
 pub use crate::event::Event as EventSource;
@@ -172,21 +172,20 @@ fn set_source_if_missing(body: &mut serde_json::Value, metadata: &serde_json::Va
     }
 }
 
-pub(crate) fn create_sources_and_routes(
+pub(crate) async fn create_sources_and_routes(
     source_configs: impl IntoIterator<Item = (String, Config)>,
     tx: &tokio::sync::broadcast::Sender<Message>,
     cancel_token: &CancellationToken,
     state_config: Option<&crate::state::Config>,
     root_url: &url::Url,
 ) -> Result<SourceHandlesAndRoutes> {
-    let sources = source_configs
-        .into_iter()
-        .filter(|(_name, config)| config.is_enabled())
-        .inspect(|(name, _config)| tracing::info!(kind = "source", name, "starting"))
-        .map(|(name, config)| {
-            make(&name, &config, tx.clone(), cancel_token.clone(), state_config, root_url)
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let mut sources = vec![];
+    for (name, config) in source_configs.into_iter().filter(|(_name, config)| config.is_enabled()) {
+        tracing::info!(kind = "source", name, "starting");
+        sources.push(
+            make(&name, &config, tx.clone(), cancel_token.clone(), state_config, root_url).await?,
+        );
+    }
 
     let mut join_handles = vec![];
     let mut routes = vec![];

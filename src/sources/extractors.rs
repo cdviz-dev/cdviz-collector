@@ -49,7 +49,7 @@ pub enum Extractor {
 
 impl Config {
     /// ignore the 'enabled' field, create the extractor like if it was enabled.
-    pub(crate) fn make_extractor(
+    pub(crate) async fn make_extractor(
         &self,
         name: &str,
         next: EventSourcePipe,
@@ -84,7 +84,7 @@ impl Config {
             }
             #[cfg(feature = "source_nats")]
             Config::Nats(config) => {
-                let extractor = nats::NatsExtractor::try_from(config, next)?;
+                let extractor = nats::NatsExtractor::try_from(config, next).await?;
                 Extractor::Task(tokio::spawn(async move {
                     extractor.run(cancel_token).await?;
                     tracing::info!(name, kind = "source", "exiting");
@@ -161,7 +161,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         assert2::assert!(let
-            Ok(Extractor::Task(handle)) = config.make_extractor("test", pipe, cancel_token.clone(), None)
+            Ok(Extractor::Task(handle)) = config.make_extractor("test", pipe, cancel_token.clone(), None).await
         );
 
         // Cancel the token and verify task completes
@@ -181,7 +181,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         assert2::assert!(let
-            Ok(Extractor::Webhook(_router)) = config.make_extractor("test", pipe, cancel_token, None)
+            Ok(Extractor::Webhook(_router)) = config.make_extractor("test", pipe, cancel_token, None).await
         );
     }
 
@@ -206,7 +206,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         // Should fail with invalid configuration
-        assert2::assert!(let Err(_) = config.make_extractor("test", pipe, cancel_token, None));
+        assert2::assert!(let Err(_) = config.make_extractor("test", pipe, cancel_token, None).await);
     }
 
     #[test]
@@ -259,7 +259,7 @@ mod security_tests {
             let cancel_token = CancellationToken::new();
 
             // Should not panic or fail due to name content
-            let result = config.make_extractor(name, pipe, cancel_token, None);
+            let result = config.make_extractor(name, pipe, cancel_token, None).await;
             assert!(result.is_ok(), "Failed for name: {name}");
         }
     }
