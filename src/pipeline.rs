@@ -184,7 +184,10 @@ impl PipelineBuilder {
 
         // Wait for all components to complete
         // Sinks will naturally exit when all senders are dropped and the channel closes
-        all_handles.into_iter().collect::<TryJoinAll<_>>().await.into_diagnostic()?;
+        let results = all_handles.into_iter().collect::<TryJoinAll<_>>().await.into_diagnostic()?;
+        for result in results {
+            result?;
+        }
 
         tracing::info!("{} operation completed", operation);
         Ok(true)
