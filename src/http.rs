@@ -168,6 +168,44 @@ pub(crate) fn launch(
     })
 }
 
+/// Accepts requests whose `Accept` header is absent, `*/*`, `application/json`, or
+/// `text/event-stream` (the SSE sink's content type); rejects anything else with 406.
+///
+/// Replaces `ValidateRequestHeaderLayer::accept("application/json")`, which only allowed
+/// `application/json` and so rejected real SSE clients (`Accept: text/event-stream`) with 406.
+///
+/// A hand-rolled `ValidateRequest` impl (rather than a closure) is needed because the
+/// response body type must stay generic (`ResBody: Default`) to match whatever body type
+/// the surrounding layer stack infers — same constraint `ValidateRequestHeaderLayer::accept`
+/// itself is built under.
+struct AcceptJsonOrSse<ResBody>(std::marker::PhantomData<fn() -> ResBody>);
+
+impl<ResBody> Clone for AcceptJsonOrSse<ResBody> {
+    fn clone(&self) -> Self {
+        Self(std::marker::PhantomData)
+    }
+}
+
+impl<B, ResBody: Default> tower_http::validate_request::ValidateRequest<B> for AcceptJsonOrSse<ResBody> {
+    type ResponseBody = ResBody;
+
+    fn validate(&mut self, req: &mut http::Request<B>) -> std::result::Result<(), http::Response<ResBody>> {
+        let accepted = match req.headers().get(http::header::ACCEPT).and_then(|v| v.to_str().ok()) {
+            None => true,
+            Some(value) => value.split(',').any(|v| {
+                let mime = v.split(';').next().unwrap_or(v).trim();
+                mime == "*/*" || mime == "application/json" || mime == "text/event-stream"
+            }),
+        };
+        if accepted {
+            Ok(())
+        } else {
+            #[allow(clippy::unwrap_used)]
+            Err(http::Response::builder().status(http::StatusCode::NOT_ACCEPTABLE).body(ResBody::default()).unwrap())
+        }
+    }
+}
+
 fn app(
     access_log: AccessLogConfig,
     request_timeout: Duration,
@@ -218,7 +256,7 @@ fn app(
         .layer((
             cors,
             SetSensitiveRequestHeadersLayer::new(std::iter::once(http::header::AUTHORIZATION)),
-            ValidateRequestHeaderLayer::accept("application/json"),
+            ValidateRequestHeaderLayer::custom(AcceptJsonOrSse(std::marker::PhantomData)),
             RequestDecompressionLayer::new(),
             CompressionLayer::new(),
             DefaultBodyLimit::max(DEFAULT_BODY_LIMIT_BYTES),
@@ -413,5 +451,54 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::REQUEST_TIMEOUT);
+    }
+
+    #[rstest]
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_sse_route_accepts_event_stream_accept_header() {
+        use crate::security::rule::HeaderRuleMap;
+        use crate::sinks::sse::SseSink;
+
+        let sink = SseSink::new("test".to_string(), HeaderRuleMap::default());
+        let sse_route = sink.make_route();
+        let app = app(AccessLogConfig::default(), default_request_timeout(), vec![sse_route], CancellationToken::new());
+
+        // A real SSE client sends `Accept: text/event-stream`; the global Accept validator
+        // must not reject it with 406 (regression for audit finding A2).
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/sse/test")
+                    .header(http::header::ACCEPT, "text/event-stream")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_ne!(response.status(), StatusCode::NOT_ACCEPTABLE);
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get(http::header::CONTENT_TYPE).unwrap(), "text/event-stream");
+
+        // application/json (existing default) still works.
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/sse/test")
+                    .header(http::header::ACCEPT, "application/json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_ne!(response.status(), StatusCode::NOT_ACCEPTABLE);
+
+        // Missing Accept header still works.
+        let response = app
+            .oneshot(Request::builder().uri("/sse/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_ne!(response.status(), StatusCode::NOT_ACCEPTABLE);
     }
 }
