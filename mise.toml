@@ -115,6 +115,13 @@ run = [
   "cargo --locked nextest run --test-threads 1 --retries 1 --workspace --run-ignored only",
 ]
 
+[tasks."test:kafka"]
+description = "run tests requiring the kafka feature (heavy: builds rdkafka, needs docker for the Redpanda testcontainer); not run on every push, see ci:heavy"
+wait_for = ["lint", "lint:*", "build:cli"]
+run = [
+  "cargo --locked nextest run --test-threads 1 --workspace --features sink_kafka,source_kafka",
+]
+
 [tasks."test:coverage"]
 description = "run test coverage to help identify code not executed on tests (!= code tested)"
 env = { RUSTFLAGS = "-Cinstrument-coverage", LLVM_PROFILE_FILE = "target/test-coverage/data/%p-%m.profraw" }
@@ -271,7 +278,11 @@ run = [
 
 [tasks."ci"]
 depends = ["lint", "test", "deny"]
-description = "set of tasks run by CI"
+description = "set of tasks run by CI on every push"
+
+[tasks."ci:heavy"]
+depends = ["check", "lint:dependencies", "test:kafka"]
+description = "occasional/on-demand CI checks too heavy to run on every push (feature matrix, unused/outdated deps, kafka tests); see .github/workflows/ci-monthly.yml"
 
 [tasks."list:containers"]
 description = "list all containers images"

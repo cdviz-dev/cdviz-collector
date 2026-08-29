@@ -1,0 +1,55 @@
+---
+# occasional/on-demand checks too heavy for the every-push ci.yml:
+# feature matrix build, unused/outdated deps, kafka feature tests.
+name: ci-monthly
+
+on:
+  schedule:
+    # 03:00 UTC on the 1st of each month
+    # (could add `push: tags: ["v*"]` later if that turns out useful; not added speculatively)
+    - cron: "0 3 1 * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci-heavy:
+    runs-on: "ubuntu-latest"
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: full
+      CARGO_PROFILE_TEST_DEBUG: 0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/rust-cache-restore
+      - uses: jdx/mise-action@v4
+        with:
+          cache: false
+          cache_save: false
+          experimental: true
+      - name: install cdviz-collector
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/cdviz-dev/cdviz-collector/releases/latest/download/cdviz-collector-installer.sh \
+            | sh
+        shell: bash
+      - name: run ci:heavy and report test results
+        run: |
+          cdviz-collector send --run testsuiterun_junit \
+            --data "target/nextest/default/junit.xml" \
+            --metadata "suite_name=/cdviz-collector/ci-monthly" \
+            --metadata "tested_artifact_id=pkg:oci/cdviz-collector" \
+            --url "${CDVIZ_COLLECTOR_URL}" \
+            -- mise run --jobs 1 ci:heavy
+        shell: bash
+        env:
+          CDVIZ_COLLECTOR_URL: ${{ secrets.CDVIZ_COLLECTOR_URL }}
+          CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__TYPE: "signature"
+          CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__TOKEN: ${{ secrets.CDVIZ_COLLECTOR_TOKEN }}
+          CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__SIGNATURE_PREFIX: "sha256="
+          CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__SIGNATURE_ENCODING: "hex"
