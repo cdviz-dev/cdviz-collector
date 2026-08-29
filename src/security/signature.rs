@@ -28,7 +28,7 @@ pub struct SignatureConfig {
     /// The header name of the signature to check
     pub(crate) header: String,
     /// The token used to sign the request (hmac-sha256)
-    #[serde(default, skip_serializing)]
+    #[serde(skip_serializing)]
     pub(crate) token: SecretString,
     /// Encoding of the token (how bytes are encoded in chars)
     /// If not set the bytes of the token are used.
@@ -249,6 +249,17 @@ mod tests {
         let bytes = to_bytes(body, usize::MAX).await.map_err(|_| SignatureError::BodyReadFailed)?;
         check_signature(config, &parts.headers, &bytes)?;
         Ok(Request::from_parts(parts, Body::from(bytes)))
+    }
+
+    #[test]
+    fn signature_config_requires_token() {
+        // A missing `token` must fail to deserialize (fail closed), not silently default
+        // to an empty/predictable HMAC key.
+        let toml = r#"
+            header = "X-Hub-Signature-256"
+        "#;
+        let result: std::result::Result<SignatureConfig, _> = toml::from_str(toml);
+        assert!(result.is_err(), "expected missing `token` to be rejected, got {result:?}");
     }
 
     #[proptest(async = "tokio", cases = 10)]
