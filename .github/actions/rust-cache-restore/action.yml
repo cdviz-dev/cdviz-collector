@@ -53,6 +53,12 @@ runs:
         echo "SCCACHE_DIR=$HOME/.cache/sccache" >> "$GITHUB_ENV"
         echo "SCCACHE_IDLE_TIMEOUT=0" >> "$GITHUB_ENV"
         echo "SCCACHE_CACHE_SIZE=${{ inputs.cache-size }}" >> "$GITHUB_ENV"
+        # readable after a failed run, since the sccache server outlives the step that crashed
+        echo "SCCACHE_ERROR_LOG=/tmp/sccache.log" >> "$GITHUB_ENV"
+        echo "SCCACHE_LOG=warn" >> "$GITHUB_ENV"
+        # also route CMake-built C/C++ deps (e.g. from -sys crates) through sccache
+        echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
+        echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
         # sccache cannot cache incremental artifacts: leaving incremental on means
         # full recompiles with no cache benefit.
         echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
