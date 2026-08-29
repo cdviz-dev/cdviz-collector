@@ -420,3 +420,4 @@ CLAUDE.md
 proptest-regressions/
 build/
 .cdviz-collector/
+*.profraw
