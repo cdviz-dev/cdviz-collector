@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.49.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.49.0...0.49.1) - 2026-08-29
+
+### Fixed
+
+- lint warning, explicit Option::None
+
+### Other
+
+- *(ci)* use separate sccache cache key for release profile builds
+- *(ci)* save sccache cache even when the build/check step fails
+- *(deps)* update rust crate uuid to v1.26.0 ([#402](https://github.com/cdviz-dev/cdviz-collector/pull/402))
+- switch CI sccache from the GHA backend to local dir + actions/cache
+
 ## [0.49.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.48.3...0.49.0) - 2026-08-23
 
 ### Fixed
