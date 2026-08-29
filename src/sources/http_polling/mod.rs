@@ -90,6 +90,11 @@ pub(crate) struct Config {
     #[serde(default, with = "humantime_serde::option")]
     pub(crate) min_request_interval: Option<Duration>,
 
+    /// Per-request timeout (connect + response). Guards against a hung upstream
+    /// stalling the poll worklist indefinitely. Default: 30s.
+    #[serde(default, with = "humantime_serde::option")]
+    pub(crate) request_timeout: Option<Duration>,
+
     /// Maximum number of requests fetched concurrently within one poll.
     /// Default: 4.
     #[serde(default = "default_max_concurrency")]
@@ -210,6 +215,8 @@ fn default_max_requests() -> u32 {
 fn default_max_depth() -> u32 {
     50
 }
+
+const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Controls how the HTTP response body is split into [`EventSource`] instances.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -427,6 +434,7 @@ impl HttpPollingExtractor {
             reqwest::Client::builder()
                 .user_agent(&config.user_agent)
                 .redirect(reqwest::redirect::Policy::none())
+                .timeout(config.request_timeout.unwrap_or(DEFAULT_REQUEST_TIMEOUT))
                 .build()
                 .into_diagnostic()?,
         )
@@ -821,6 +829,7 @@ mod tests {
             metadata: serde_json::json!({}),
             user_agent: default_user_agent(),
             min_request_interval: None,
+            request_timeout: None,
             max_concurrency: default_max_concurrency(),
             max_requests: default_max_requests(),
             max_depth: default_max_depth(),
@@ -1202,6 +1211,31 @@ mod tests {
         let (mut extractor, _collector) = make_extractor(&config);
         assert!(extractor.run_once().await.unwrap().advanced());
         // wiremock's `.expect(0)`/`.expect(1)` assertions above are verified on drop.
+    }
+
+    #[tokio::test]
+    async fn test_request_timeout_bounds_hung_response() {
+        // A response that never completes must not hang the poll forever: with a short
+        // configured `request_timeout`, the request fails fast and the poll degrades to
+        // `hold` rather than blocking indefinitely.
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(r#"{"key":"value"}"#, "application/json")
+                    .set_delay(Duration::from_secs(10)),
+            )
+            .mount(&server)
+            .await;
+
+        let mut config = make_config(&server.uri());
+        config.request_timeout = Some(Duration::from_millis(100));
+        let (mut extractor, _collector) = make_extractor(&config);
+
+        let result = timeout(Duration::from_secs(5), extractor.run_once()).await;
+        assert!(result.is_ok(), "run_once() must return well before the 10s response delay");
+        assert!(!result.unwrap().unwrap().advanced(), "a timed-out request must not advance");
     }
 
     #[tokio::test]
