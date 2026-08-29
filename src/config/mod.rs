@@ -74,6 +74,10 @@ pub(crate) struct ConfigBuilder {
     cli_overrides: Option<String>,
     key_value_overrides: Option<String>,
     enable_env_vars: bool,
+    /// True when the user-provided config came from a remote (HTTP/HTTPS) source rather
+    /// than a local file. Gates `*_file` expansion: a MITM'd or malicious remote config
+    /// must not be able to read arbitrary local files via `*_file` keys.
+    source_is_remote: bool,
 }
 
 impl ConfigBuilder {
@@ -86,6 +90,7 @@ impl ConfigBuilder {
             cli_overrides: None,
             key_value_overrides: None,
             enable_env_vars: true,
+            source_is_remote: false,
         }
     }
 
@@ -111,11 +116,14 @@ impl ConfigBuilder {
     ///
     /// Prefer this over calling `with_config_file` + `with_config_text` separately,
     /// as it enforces the XOR invariant enforced by [`ResolvedConfigSource`].
-    pub fn with_resolved_source(self, source: ResolvedConfigSource) -> Self {
+    pub fn with_resolved_source(mut self, source: ResolvedConfigSource) -> Self {
         match source {
             ResolvedConfigSource::None => self,
             ResolvedConfigSource::File(path) => self.with_config_file(Some(path)),
-            ResolvedConfigSource::Content(content) => self.with_config_text(Some(content)),
+            ResolvedConfigSource::Content(content) => {
+                self.source_is_remote = true;
+                self.with_config_text(Some(content))
+            }
         }
     }
 
@@ -181,6 +189,7 @@ impl ConfigBuilder {
     /// This ensures remote config definitions from any layer are visible when
     /// resolving `_rfile` references from any other layer.
     pub fn build_figment(self) -> Result<Figment> {
+        let source_is_remote = self.source_is_remote;
         // Phase 1: merge all plain sources without adapters
         let raw = self.build_raw_figment();
         let raw_value: toml::Value = raw.extract().into_diagnostic()?;
@@ -190,7 +199,15 @@ impl ConfigBuilder {
         // timestamp-typed field without per-field wiring.
         let raw_toml = raw_toml.replace("$now", &jiff::Timestamp::now().to_string());
 
-        // Phase 2: apply adapters once on the fully merged config
+        // Phase 2: apply adapters once on the fully merged config.
+        // A remote config source is untrusted (MITM/compromised host) and must not be able
+        // to smuggle a `*_file` key to read arbitrary local files — `*_rfile` stays allowed
+        // since it's routed through an explicitly-configured remote operator, not a raw path.
+        if source_is_remote && raw_value_contains_file_key(&raw_value) {
+            miette::bail!(
+                "config fetched from a remote source must not contain `*_file` keys (local file expansion); use `*_rfile` for remote-sourced file references instead"
+            );
+        }
         let provider = FileAdapter::wrap(Toml::string(&raw_toml));
         #[cfg(feature = "config_remote")]
         let provider = RemoteFileAdapter::wrap(provider);
@@ -336,6 +353,18 @@ pub(crate) async fn resolve_config_source(
             let content = fetch_url_config(&url, &headers).await?;
             Ok(ResolvedConfigSource::Content(content))
         }
+    }
+}
+
+/// Recursively check whether any key in the merged config ends in `_file`
+/// (the `figment_file_provider_adapter` convention for local-path expansion).
+fn raw_value_contains_file_key(value: &toml::Value) -> bool {
+    match value {
+        toml::Value::Table(table) => table.iter().any(|(k, v)| {
+            (k.ends_with("_file") && !k.ends_with("_rfile")) || raw_value_contains_file_key(v)
+        }),
+        toml::Value::Array(items) => items.iter().any(raw_value_contains_file_key),
+        _ => false,
     }
 }
 
@@ -611,5 +640,43 @@ enabled = true
             .build()
             .unwrap();
         assert!(config.sinks.get("debug").unwrap().is_enabled());
+    }
+
+    #[test]
+    fn remote_source_with_file_key_is_rejected() {
+        let toml = r#"
+            [dummy]
+            template_file = "/etc/passwd"
+        "#;
+        let err = ConfigBuilder::new()
+            .with_base_config("")
+            .with_env_vars(false)
+            .with_resolved_source(ResolvedConfigSource::Content(toml.to_string()))
+            .build_figment()
+            .unwrap_err();
+        assert!(format!("{err}").contains("*_file"));
+    }
+
+    #[test]
+    fn local_file_source_with_file_key_still_expands() {
+        Jail::expect_with(|jail| {
+            jail.create_file("secret.txt", "hello")?;
+            jail.create_file(
+                "cdviz-collector.toml",
+                r#"
+                [dummy]
+                template_file = "secret.txt"
+                "#,
+            )?;
+            let figment = ConfigBuilder::new()
+                .with_base_config("")
+                .with_env_vars(false)
+                .with_resolved_source(ResolvedConfigSource::File("cdviz-collector.toml".into()))
+                .build_figment();
+            // A local file source (--config <path>) must still expand `*_file` normally —
+            // only remote-fetched config content is restricted.
+            assert!(figment.is_ok());
+            Ok(())
+        });
     }
 }
