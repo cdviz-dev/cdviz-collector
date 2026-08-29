@@ -16,7 +16,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 /// The webhook config
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, serde::Serialize, Default)]
 pub(crate) struct Config {
     /// id of the webhook, used to define the path of the webhook's url (`/webhooks/{id}`)
     pub(crate) id: String,
@@ -32,7 +32,7 @@ pub(crate) struct Config {
     pub(crate) signature: Option<signature::SignatureConfig>,
     /// Base metadata to include in all `EventSource` instances created by this extractor.
     /// The `context.source` field will be automatically populated if not set.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub(crate) metadata: serde_json::Value,
 }
 

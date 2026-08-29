@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 /// Configuration for Kafka source
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub(crate) struct Config {
     /// Kafka broker addresses (comma-separated)
     pub(crate) brokers: String,
@@ -37,7 +37,7 @@ pub(crate) struct Config {
     pub(crate) auto_commit: bool,
     /// Base metadata to include in all `EventSource` instances created by this extractor.
     /// The `context.source` field will be automatically populated if not set.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub(crate) metadata: serde_json::Value,
 }
 

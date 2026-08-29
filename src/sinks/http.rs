@@ -17,7 +17,7 @@ use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use reqwest_tracing::TracingMiddleware;
 use serde::Deserialize;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub(crate) struct Config {
     /// Is the sink is enabled?
     pub(crate) enabled: bool,

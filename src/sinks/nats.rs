@@ -39,7 +39,7 @@ use async_nats::header::HeaderValue as NatsHeaderValue;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub(crate) struct Config {
     /// Is the sink enabled?
     pub(crate) enabled: bool,

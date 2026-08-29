@@ -23,12 +23,12 @@ use sha2::Sha256;
 // Create alias for HMAC-SHA256
 type HmacSha256 = Hmac<Sha256>;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SignatureConfig {
     /// The header name of the signature to check
     pub(crate) header: String,
     /// The token used to sign the request (hmac-sha256)
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub(crate) token: SecretString,
     /// Encoding of the token (how bytes are encoded in chars)
     /// If not set the bytes of the token are used.

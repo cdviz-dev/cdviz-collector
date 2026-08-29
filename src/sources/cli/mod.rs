@@ -19,7 +19,7 @@ pub(crate) struct Config {
     pub parser: parsers::Config,
     /// Base metadata to include in all `EventSource` instances created by this extractor.
     /// The `context.source` field will be automatically populated if not set.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub metadata: serde_json::Value,
 }
 

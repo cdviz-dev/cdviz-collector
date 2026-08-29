@@ -44,7 +44,7 @@ use tracing::Instrument;
 
 type SinkHandlesAndRoutes = (Vec<JoinHandle<Result<()>>>, Vec<Router>);
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 #[serde(tag = "type")]
 pub(crate) enum Config {
     #[cfg(feature = "sink_clickhouse")]

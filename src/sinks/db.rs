@@ -36,12 +36,13 @@ fn default_lazy_connection() -> bool {
 use retry::default_total_duration_of_retries;
 
 /// The database client config
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub(crate) struct Config {
     /// Is the sink is enabled?
     pub(crate) enabled: bool,
 
     /// The database url (with username, password and the database)
+    #[serde(skip_serializing)]
     url: SecretString,
 
     /// The minimum number of connections to the database to maintain at all times.

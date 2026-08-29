@@ -21,7 +21,7 @@ pub(crate) struct Config {
     #[serde(default)]
     pub parser: parsers::Config,
     /// Base metadata for `EventSources` (`context.source` injected here; user overrides in `run.overrides`)
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub metadata: serde_json::Value,
     #[serde(default)]
     pub fail_on_collector_error: bool,

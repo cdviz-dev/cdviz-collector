@@ -77,7 +77,7 @@ pub(crate) struct Config {
 
     /// Base metadata included in every `EventSource`. `context.source` is
     /// auto-populated during config loading if not already set.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub(crate) metadata: serde_json::Value,
     /// `User-Agent` header sent with every request.
     /// Defaults to `cdviz-collector/<version>`.

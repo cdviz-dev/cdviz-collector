@@ -8,7 +8,7 @@ use crate::security::rule::HeaderRuleMap;
 use serde::Deserialize;
 
 /// Configuration for NATS source
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub(crate) struct Config {
     /// NATS server URLs (comma-separated), e.g. `<nats://localhost:4222>`
     pub(crate) servers: String,
@@ -29,12 +29,12 @@ pub(crate) struct Config {
     pub(crate) headers_to_keep: Vec<String>,
     /// Base metadata to include in all `EventSource` instances created by this extractor.
     /// The `context.source` field will be automatically populated if not set.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub(crate) metadata: serde_json::Value,
 }
 
 /// NATS source operation mode
-#[derive(Clone, Debug, Deserialize, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, serde::Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum NatsSourceMode {
     /// Core NATS pub/sub (default)

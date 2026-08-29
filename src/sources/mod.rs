@@ -30,7 +30,7 @@ use tokio_util::sync::CancellationToken;
 type SourceHandlesAndRoutes = (Vec<JoinHandle<Result<()>>>, Vec<Router>);
 
 // TODO support name/reference for extractor / transformer
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, serde::Serialize, Default)]
 pub(crate) struct Config {
     #[serde(default)]
     enabled: bool,

@@ -39,7 +39,7 @@ use tracing::Instrument;
 
 use retry::default_total_duration_of_retries;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub(crate) struct Config {
     /// Is the sink enabled?
     pub(crate) enabled: bool,
@@ -50,6 +50,7 @@ pub(crate) struct Config {
     /// Username (optional)
     user: Option<String>,
     /// Password (optional)
+    #[serde(skip_serializing)]
     password: Option<SecretString>,
     /// INSERT query template with {field} placeholders
     query: String,

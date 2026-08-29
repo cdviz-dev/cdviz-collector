@@ -21,7 +21,7 @@ pub struct Config {
 
     /// Base metadata to include in all `EventSource` instances created by this extractor.
     /// The `context.source` field will be automatically populated if not set.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub metadata: serde_json::Value,
     /// `User-Agent` header sent with the SSE connection request.
     /// Defaults to `cdviz-collector/<version>`.

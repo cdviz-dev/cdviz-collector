@@ -46,11 +46,14 @@ pub(crate) struct ConfigArgs {
     set: Vec<String>,
 
     /// Print the resolved/consolidated configuration to stdout (TOML format),
-    /// with `FileAdapter` and `RemoteFileAdapter` applied
+    /// with `FileAdapter` and `RemoteFileAdapter` applied.
+    /// Secrets (tokens, passwords, DB URLs, ...) are redacted.
     #[clap(long)]
     print: bool,
 
-    /// Print merged config BEFORE `FileAdapter`/`RemoteFileAdapter` resolve paths and remote files
+    /// Print merged config BEFORE `FileAdapter`/`RemoteFileAdapter` resolve paths and remote
+    /// files. Unlike `--print`, this dumps the raw figment value, NOT the typed `Config` —
+    /// secrets are NOT redacted here. Intended for debugging config merging only.
     #[clap(long)]
     print_raw: bool,
 
@@ -93,13 +96,14 @@ pub(crate) async fn config_cmd(args: ConfigArgs) -> Result<bool> {
     }
 
     if args.print {
-        let figment = Config::builder()
+        // Extract into the typed `Config` (not a raw `toml::Value`) so `SecretString`
+        // fields are redacted rather than serialized in plaintext.
+        let config = Config::builder()
             .with_base_config(base_config)
             .with_resolved_source(resolved.clone())
             .with_keyvalue(&args.set)?
-            .build_figment()?;
-        let value: toml::Value = figment.extract().into_diagnostic()?;
-        writeln!(std::io::stdout(), "{}", toml::to_string_pretty(&value).into_diagnostic()?)
+            .build()?;
+        writeln!(std::io::stdout(), "{}", toml::to_string_pretty(&config).into_diagnostic()?)
             .into_diagnostic()?;
     }
 
@@ -166,4 +170,48 @@ pub(crate) async fn config_cmd(args: ConfigArgs) -> Result<bool> {
     }
 
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn print_redacts_secrets() {
+        let toml = r#"
+            [sinks.debug]
+            enabled = false
+
+            [sinks.db]
+            type = "db"
+            enabled = true
+            url = "postgres://user:super-secret-password@localhost/db"
+
+            [sinks.clickhouse]
+            type = "clickhouse"
+            enabled = true
+            url = "http://localhost:8123"
+            database = "default"
+            password = "clickhouse-secret"
+            query = "INSERT INTO t VALUES ({payload})"
+
+            [sources.wh]
+            type = "webhook"
+            enabled = true
+            id = "wh"
+
+            [sources.wh.headers.x-signature]
+            type = "signature"
+            header = "x-signature"
+            token = "signing-secret"
+        "#;
+        let config = crate::config::Config::builder()
+            .with_env_vars(false)
+            .with_config_text(Some(toml.to_string()))
+            .build()
+            .unwrap();
+        let printed = toml::to_string_pretty(&config).unwrap();
+
+        assert!(!printed.contains("super-secret-password"), "db url leaked: {printed}");
+        assert!(!printed.contains("clickhouse-secret"), "clickhouse password leaked: {printed}");
+        assert!(!printed.contains("signing-secret"), "signature token leaked: {printed}");
+    }
 }
