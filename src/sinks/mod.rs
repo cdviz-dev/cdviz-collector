@@ -94,6 +94,17 @@ impl Config {
         }
     }
 
+    /// Named transformer chain configured directly on this sink (not the global pool).
+    /// Only `Debug` and `Http` sinks carry a chain today; other variants have none.
+    pub(crate) fn chain_transformers(&self) -> &[transformers::NamedConfig] {
+        match self {
+            Self::Debug(c) => &c.chain.transformers,
+            #[cfg(feature = "sink_http")]
+            Self::Http(c) => &c.chain.transformers,
+            _ => &[],
+        }
+    }
+
     pub(crate) fn is_enabled(&self) -> bool {
         match self {
             #[cfg(feature = "sink_clickhouse")]

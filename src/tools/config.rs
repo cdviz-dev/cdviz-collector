@@ -149,6 +149,14 @@ pub(crate) async fn config_cmd(args: ConfigArgs) -> Result<bool> {
                     }
                 }
 
+                let mut sink_names: Vec<_> = config.sinks.keys().collect();
+                sink_names.sort();
+                for name in sink_names {
+                    for (i, tconfig) in config.sinks[name].chain_transformers().iter().enumerate() {
+                        try_compile(format!("sink '{name}' transformer [{i}]"), &tconfig.config);
+                    }
+                }
+
                 if compile_errors.is_empty() {
                     cliclack::log::success(format!(
                         "Configuration is valid ({src_count} source(s), {sink_count} sink(s), {tx_count} transformer(s))"
@@ -213,5 +221,32 @@ mod tests {
         assert!(!printed.contains("super-secret-password"), "db url leaked: {printed}");
         assert!(!printed.contains("clickhouse-secret"), "clickhouse password leaked: {printed}");
         assert!(!printed.contains("signing-secret"), "signature token leaked: {printed}");
+    }
+
+    /// A4 regression: a sink's own transformer chain (`debug`/`http`) must be compiled by
+    /// `config --check`, not just the global pool / pipeline / source chains.
+    #[tokio::test]
+    async fn sink_transformer_chain_is_checked() {
+        let toml = r#"
+            [sinks.debug]
+            enabled = true
+
+            [[sinks.debug.transformers]]
+            type = "vrl"
+            template = "this is not valid vrl @@@"
+        "#;
+        let config = crate::config::Config::builder()
+            .with_env_vars(false)
+            .with_config_text(Some(toml.to_string()))
+            .build()
+            .unwrap();
+
+        let bad = &config.sinks["debug"].chain_transformers()[0];
+        let discard: crate::sources::EventSourcePipe =
+            Box::new(crate::transformers::discard_all::Processor::<crate::sources::EventSource>::new());
+        assert!(
+            bad.config.make_transformer(discard).is_err(),
+            "expected invalid VRL in sink chain to fail compilation"
+        );
     }
 }
