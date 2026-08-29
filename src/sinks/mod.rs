@@ -200,8 +200,19 @@ pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> Join
                     .instrument(span)
                     .await;
                 }
-                Err(RecvError::Lagged(_)) => {
-                    tracing::warn!(name, kind = "sink", "message queue lagged (event dropped)");
+                // Broadcast lag is per-receiver: each sink has its own lag counter, so a slow
+                // sink drops events for itself only and never blocks or drops for other sinks.
+                // Delivery here is best-effort, not at-least-once — NATS acks unconditionally
+                // and Kafka defaults to auto-commit regardless of broadcast lag, so neither
+                // surfaces a dropped event downstream. This counter is the operator-visible
+                // signal that it happened.
+                Err(RecvError::Lagged(skipped)) => {
+                    tracing::warn!(
+                        monotonic_counter.sink_queue_lagged_events = skipped,
+                        name,
+                        kind = "sink",
+                        "message queue lagged (event dropped)"
+                    );
                 }
                 Err(RecvError::Closed) => {
                     tracing::info!(name, kind = "sink", "message queue closed");

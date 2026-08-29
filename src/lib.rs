@@ -120,6 +120,7 @@ fn init_log(verbosity: Verbosity, disable_otel: bool) -> Result<Guard> {
         .with_timer(init_tracing_opentelemetry::LogTimer::Uptime)
         .with_logfmt_format()
         .with_otel(!disable_otel)
+        .with_metrics(!disable_otel)
         .init_subscriber()
         .into_diagnostic()?;
     if !disable_otel {

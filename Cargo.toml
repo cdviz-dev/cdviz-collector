@@ -61,6 +61,7 @@ indexmap = "2"
 humantime-serde = "1"
 init-tracing-opentelemetry = { version = "0.38", features = [
   "logfmt",
+  "metrics",
   "otlp",
   "tracing_subscriber_ext",
 ] }
