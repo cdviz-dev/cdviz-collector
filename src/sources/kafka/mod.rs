@@ -149,13 +149,7 @@ impl KafkaExtractor {
         };
 
         // Parse JSON payload
-        let body: Value = match serde_json::from_slice(payload) {
-            Ok(json) => json,
-            Err(e) => {
-                tracing::warn!(error = %e, "Failed to parse Kafka message as JSON, treating as string");
-                Value::String(String::from_utf8_lossy(payload).into_owned())
-            }
-        };
+        let body: Value = super::parse_json_or_string(payload);
 
         // Extract Kafka headers and convert to HTTP-style headers for validation
         let mut headers = HashMap::new();

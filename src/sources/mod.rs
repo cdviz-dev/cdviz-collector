@@ -29,6 +29,21 @@ use tokio_util::sync::CancellationToken;
 
 type SourceHandlesAndRoutes = (Vec<JoinHandle<Result<()>>>, Vec<Router>);
 
+/// Parse a message payload as JSON, falling back to a plain string on failure.
+///
+/// Shared by the kafka and nats extractors, whose header handling otherwise
+/// differs too much (rdkafka vs async-nats) to unify further.
+#[cfg(any(feature = "source_kafka", feature = "source_nats"))]
+pub(crate) fn parse_json_or_string(payload: &[u8]) -> serde_json::Value {
+    match serde_json::from_slice(payload) {
+        Ok(json) => json,
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to parse message payload as JSON, treating as string");
+            serde_json::Value::String(String::from_utf8_lossy(payload).into_owned())
+        }
+    }
+}
+
 // TODO support name/reference for extractor / transformer
 #[derive(Clone, Debug, Deserialize, serde::Serialize, Default)]
 pub(crate) struct Config {
