@@ -1,0 +1,46 @@
+name: transformers-refresh
+
+on:
+  schedule:
+    - cron: "0 4 1 * *" # monthly, 1st of month
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - id: resolve
+        shell: bash
+        run: |
+          VERSION=$(curl -fsSL https://api.github.com/repos/cdviz-dev/cdviz-collector/releases/latest | yq -r '.tag_name' | sed 's/^v//')
+          SHA=$(git ls-remote https://github.com/cdviz-dev/transformers-community.git refs/heads/main | cut -c1-7)
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "SHA=$SHA" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v4
+      - id: check
+        shell: bash
+        run: |
+          TAG="ghcr.io/cdviz-dev/cdviz-collector-with-transformers:${{ steps.resolve.outputs.VERSION }}-t${{ steps.resolve.outputs.SHA }}"
+          if docker buildx imagetools inspect "$TAG" >/dev/null 2>&1; then
+            echo "Already published, nothing changed: $TAG"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.check.outputs.skip == 'false'
+        uses: jdx/mise-action@v4
+        with:
+          cache: false
+      - if: steps.check.outputs.skip == 'false'
+        run: mise run publish:container:transformers --version "${{ steps.resolve.outputs.VERSION }}" --transformers-community-ref "${{ steps.resolve.outputs.SHA }}"
+        shell: bash

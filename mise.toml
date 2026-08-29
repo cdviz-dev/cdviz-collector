@@ -279,13 +279,16 @@ description = "show the 'resolved' bake definition"
 run = ["docker buildx bake --print"]
 
 [tasks."build:container"]
-description = "build container image `cdviz-collector:wip` by downloading binary from github release (e.g. `mise run build:container --version 0.4.0`)"
-run = [
-  """
-    export VERSION={{option(name="version")}}
-    docker buildx bake --progress=plain cdviz-collector
-""",
-]
+description = "build container images (`cdviz-collector` + `cdviz-collector-with-transformers`) by downloading binary from github release (e.g. `mise run build:container --version 0.4.0`)"
+usage = '''
+flag "--version <version>" help="cdviz-collector version to build"
+flag "--transformers-community-ref <ref>" default="main" help="transformers-community git ref/sha to bundle"
+'''
+run = '''
+export VERSION="${usage_version?}"
+export TRANSFORMERS_COMMUNITY_REF="${usage_transformers_community_ref?}"
+docker buildx bake --progress=plain
+'''
 
 [tasks."run:container"]
 run = [
@@ -298,13 +301,28 @@ run = [
 ]
 
 [tasks."publish:container"]
-description = "build the container image `cdviz-collector` and push it to ghcr.io"
-run = [
-  """
-    export VERSION={{option(name="version")}}
-    docker buildx bake --push cdviz-collector
-""",
-]
+description = "build the container images (`cdviz-collector` + `cdviz-collector-with-transformers`) and push them to ghcr.io"
+usage = '''
+flag "--version <version>" help="cdviz-collector version to build/publish"
+flag "--transformers-community-ref <ref>" default="main" help="transformers-community git ref/sha to bundle"
+'''
+run = '''
+export VERSION="${usage_version?}"
+export TRANSFORMERS_COMMUNITY_REF="${usage_transformers_community_ref?}"
+docker buildx bake --push
+'''
+
+[tasks."publish:container:transformers"]
+description = "build & push only `cdviz-collector-with-transformers` (e.g. monthly refresh when transformers-community changes but collector doesn't)"
+usage = '''
+flag "--version <version>" help="cdviz-collector version already published (base image)"
+flag "--transformers-community-ref <ref>" help="transformers-community git ref/sha to bundle"
+'''
+run = '''
+export VERSION="${usage_version?}"
+export TRANSFORMERS_COMMUNITY_REF="${usage_transformers_community_ref?}"
+docker buildx bake --push cdviz-collector-with-transformers
+'''
 
 [tasks."build:cli"]
 description = "build a cli, mainly for local development and test"

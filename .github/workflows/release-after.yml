@@ -31,6 +31,11 @@ jobs:
           EOF
           VERSION=$(yq -r '.releases[0].app_version' < plan.json)
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+      - id: transformers-ref
+        shell: bash
+        run: |
+          SHA=$(git ls-remote https://github.com/cdviz-dev/transformers-community.git refs/heads/main | cut -c1-7)
+          echo "SHA=$SHA" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -43,10 +48,11 @@ jobs:
           # without cache, missing components are installed
           # with cache, nothing is installed, but as rust tool is symlinked, it is not cached => missing components failure
           cache: false
-      - run: mise run publish:container --version "${{ steps.version.outputs.VERSION }}"
+      - run: mise run publish:container --version "${{ steps.version.outputs.VERSION }}" --transformers-community-ref "${{ steps.transformers-ref.outputs.SHA }}"
         shell: bash
-      - name: run container (for testing)
+      - name: run containers (for testing)
         run: |
           # mise run run:container
           docker run --rm --name test "ghcr.io/cdviz-dev/cdviz-collector:${{ steps.version.outputs.VERSION }}" --help
+          docker run --rm --name test-transformers "ghcr.io/cdviz-dev/cdviz-collector-with-transformers:${{ steps.version.outputs.VERSION }}-t${{ steps.transformers-ref.outputs.SHA }}" --help
         shell: bash

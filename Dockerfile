@@ -6,6 +6,11 @@
 # - https://edu.chainguard.dev/chainguard/chainguard-images/reference/rust/overview
 # - https://images.chainguard.dev/directory/image/static/overview
 
+# global scope: needed so it can be interpolated into the `FROM ghcr.io/cdviz-dev/cdviz-collector:${VERSION}`
+# line of the `cdviz-collector-with-transformers` stage below (Docker requires ARGs used in FROM to be
+# declared before any stage)
+ARG VERSION=latest
+
 #---------------------------------------------------------------------------------------------------
 # Buinding 'build' on CI takes ~30min
 # Rust compilation in docker is slow (especially for arm64)
@@ -172,3 +177,44 @@ USER nonroot
 #see https://stackoverflow.com/questions/21553353/what-is-the-difference-between-cmd-and-entrypoint-in-a-dockerfile
 ENTRYPOINT ["/usr/local/bin/cdviz-collector"]
 CMD []
+
+#---------------------------------------------------------------------------------------------------
+# Fetch the public community transformers ($BUILDPLATFORM pin: VRL files are arch-independent,
+# clone once instead of once per target arch under qemu).
+FROM --platform=$BUILDPLATFORM alpine/git AS transformers-community
+ARG TRANSFORMERS_COMMUNITY_REF=main
+WORKDIR /src
+RUN set -eux; \
+  git clone https://github.com/cdviz-dev/transformers-community.git .; \
+  git checkout "${TRANSFORMERS_COMMUNITY_REF}"
+
+#---------------------------------------------------------------------------------------------------
+# Keep only *.vrl files (same $BUILDPLATFORM pin reasoning).
+FROM --platform=$BUILDPLATFORM alpine:3 AS transformers-community-assemble
+WORKDIR /transformers
+COPY --from=transformers-community /src ./
+RUN set -eux; \
+  find . -type f ! -name '*.vrl' -delete; \
+  find . -type d -empty -delete
+
+#---------------------------------------------------------------------------------------------------
+# cdviz-collector + bundled community transformers.
+# Explicit registry reference (not `FROM cdviz-collector`, the local stage above) so this stays pinned
+# to the actual already-published image, standalone-buildable, and immune to drift from a fresh local
+# rebuild (e.g. an upstream `glibc-dynamic:latest` bump between the original release and a later
+# transformers-only refresh). At release time, docker-bake.hcl substitutes this reference with the
+# local `cdviz-collector` build target via bake's `contexts` override, so no registry round-trip or
+# two-step push is needed even though the base isn't pushed yet.
+# checkov:skip=CKV_DOCKER_7:Ensure the base image uses a non latest version tag
+# trivy:ignore:AVD-DS-0001
+FROM ghcr.io/cdviz-dev/cdviz-collector:${VERSION} AS cdviz-collector-with-transformers
+
+ARG TRANSFORMERS_COMMUNITY_REF
+
+LABEL org.opencontainers.image.description="cdviz-collector with bundled transformers-community VRL transformers" \
+  dev.cdviz.transformers-community.revision="${TRANSFORMERS_COMMUNITY_REF}"
+
+# default COPY perms (files 0644, dirs 0755) are world-readable => nonroot user (inherited) can read
+COPY --from=transformers-community-assemble --chown=0:0 /transformers /etc/cdviz-collector/transformers
+
+# entrypoint, user, env, HEALTHCHECK inherited from cdviz-collector => drop-in replacement
