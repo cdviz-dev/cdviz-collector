@@ -192,12 +192,13 @@ impl ConfigBuilder {
         let source_is_remote = self.source_is_remote;
         // Phase 1: merge all plain sources without adapters
         let raw = self.build_raw_figment();
-        let raw_value: toml::Value = raw.extract().into_diagnostic()?;
-        let raw_toml = toml::to_string(&raw_value).into_diagnostic()?;
+        let mut raw_value: toml::Value = raw.extract().into_diagnostic()?;
         // `$now` resolves once, at config-load time, to the current RFC3339 timestamp —
-        // e.g. `ts_before_limit = "$now"`. Plain text substitution so it works in any
-        // timestamp-typed field without per-field wiring.
-        let raw_toml = raw_toml.replace("$now", &jiff::Timestamp::now().to_string());
+        // e.g. `ts_before_limit = "$now"`. Only fields whose value is *exactly* `"$now"`
+        // are substituted (not substrings), so any unrelated string containing "$now" is
+        // left untouched.
+        substitute_now(&mut raw_value);
+        let raw_toml = toml::to_string(&raw_value).into_diagnostic()?;
 
         // Phase 2: apply adapters once on the fully merged config.
         // A remote config source is untrusted (MITM/compromised host) and must not be able
@@ -368,6 +369,18 @@ fn raw_value_contains_file_key(value: &toml::Value) -> bool {
     }
 }
 
+/// Recursively replace any string value that is *exactly* `"$now"` with the current
+/// RFC3339 timestamp (e.g. `ts_before_limit = "$now"`). Exact-match only, so a value
+/// merely containing "$now" as a substring is left untouched.
+fn substitute_now(value: &mut toml::Value) {
+    match value {
+        toml::Value::String(s) if s == "$now" => *s = jiff::Timestamp::now().to_string(),
+        toml::Value::Table(table) => table.iter_mut().for_each(|(_, v)| substitute_now(v)),
+        toml::Value::Array(items) => items.iter_mut().for_each(substitute_now),
+        _ => {}
+    }
+}
+
 /// Validate and join raw TOML fragments from `--set` arguments.
 ///
 /// Each element may be a single dotted key (`key=value`) or a multi-line
@@ -478,6 +491,28 @@ mod tests {
         let ts: jiff::Timestamp = ts_str.parse().unwrap();
         assert!(ts > jiff::Timestamp::now() - std::time::Duration::from_secs(5));
         assert!(ts <= jiff::Timestamp::now());
+    }
+
+    #[test]
+    fn now_placeholder_substring_is_not_substituted() {
+        let toml = r#"
+            [dummy]
+            ts = "$now"
+            description = "run $now please, not exactly now"
+        "#;
+        let figment = ConfigBuilder::new()
+            .with_base_config("")
+            .with_config_text(Some(toml.to_string()))
+            .with_env_vars(false)
+            .build_figment()
+            .unwrap();
+        let value: toml::Value = figment.extract().unwrap();
+        assert_eq!(
+            value["dummy"]["description"].as_str().unwrap(),
+            "run $now please, not exactly now"
+        );
+        let ts_str = value["dummy"]["ts"].as_str().unwrap();
+        assert!(ts_str.parse::<jiff::Timestamp>().is_ok());
     }
 
     #[rstest]
