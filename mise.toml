@@ -124,6 +124,8 @@ run = [
 ]
 
 [tasks."test:coverage"]
+# intentionally not wired into ci or ci:heavy - coverage isn't a current priority,
+# this is a local dev tool only (decided 2026-08-29 during the audit-fix Phase 2 pass)
 description = "run test coverage to help identify code not executed on tests (!= code tested)"
 env = { RUSTFLAGS = "-Cinstrument-coverage", LLVM_PROFILE_FILE = "target/test-coverage/data/%p-%m.profraw" }
 run = [
@@ -278,6 +280,9 @@ run = [
 ]
 
 [tasks."ci"]
+# deliberately excludes check (feature matrix), lint:dependencies (machete/outdated) and
+# test:kafka - too heavy for every push, see ci:heavy below - and test:coverage, which is
+# a local dev tool not run in any CI workflow (see its own task for why)
 depends = ["lint", "test", "deny"]
 description = "set of tasks run by CI on every push"
 
