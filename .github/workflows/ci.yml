@@ -7,6 +7,7 @@ on:
   push:
     branches-ignore:
       - "release-plz-*"
+  pull_request: {}
   workflow_dispatch:
 
 concurrency:
@@ -18,6 +19,9 @@ permissions:
 
 jobs:
   ci:
+    # skip release-plz PRs: `push` above already ignores that branch, so without this the
+    # `pull_request` event would still trigger a redundant run of the same commits.
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'release-plz-')
     # "ubuntu-22.04-arm" vs "ubuntu-latest"
     # - faster? (not sure 10min for both with cold cache, and 4min (+1min) for arm on 90% cache'hit)
     # - fewer available => longer "queued times"
@@ -49,7 +53,13 @@ jobs:
             https://github.com/cdviz-dev/cdviz-collector/releases/latest/download/cdviz-collector-installer.sh \
             | sh
         shell: bash
+      # fork PRs don't get repo secrets, so CDVIZ_COLLECTOR_URL would be empty and the
+      # reporting wrapper below would fail before `mise run ci` ever executes
+      - name: run CI (fork PR, no secrets available)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        run: mise run --jobs 1 ci
       - name: run CI and report test results
+        if: "!(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork)"
         run: |
           cdviz-collector send --run testsuiterun_junit \
             --data "target/nextest/default/junit.xml" \
