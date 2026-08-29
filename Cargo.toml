@@ -113,6 +113,7 @@ sqlx = { version = "0.9", default-features = false, features = [
   "time",
   "tls-rustls",
 ], optional = true }
+subtle = "2.6"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 tokio-util = "0.7"

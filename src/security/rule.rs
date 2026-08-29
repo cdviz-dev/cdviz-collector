@@ -145,10 +145,16 @@ pub fn validate_header(
             })?;
 
             let expected = super::enclose(value, prefix, suffix);
+            // Constant-time comparison: this is a configured secret value (e.g. a static
+            // API key), so a `==`/`!=` compare would leak its length/prefix via timing.
             let matches = if *case_sensitive {
-                actual_value == expected
+                bool::from(subtle::ConstantTimeEq::ct_eq(actual_value.as_bytes(), expected.as_bytes()))
             } else {
-                actual_value.to_lowercase() == expected.to_lowercase()
+                let (actual_lower, expected_lower) = (actual_value.to_lowercase(), expected.to_lowercase());
+                bool::from(subtle::ConstantTimeEq::ct_eq(
+                    actual_lower.as_bytes(),
+                    expected_lower.as_bytes(),
+                ))
             };
 
             if !matches {

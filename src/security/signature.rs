@@ -67,11 +67,14 @@ pub enum Encoding {
     Hex,
 }
 
-pub(crate) fn build_signature(
+/// Build an HMAC instance primed with the token key and the configured payload
+/// (optional headers-then-body prefix, then the body). Shared by `build_signature`
+/// (generation) and `check_signature` (constant-time verification via `Mac::verify_slice`).
+fn build_mac(
     config: &SignatureConfig,
     http_headers: &HeaderMap,
     http_body: &[u8],
-) -> Result<String, SignatureError> {
+) -> Result<HmacSha256, SignatureError> {
     let token = config.token.expose_secret();
     let token = match &config.token_encoding {
         Some(Encoding::Base64) => STANDARD.decode(token.as_bytes())?,
@@ -102,6 +105,15 @@ pub(crate) fn build_signature(
         mac.update(&prefix);
     }
     mac.update(http_body);
+    Ok(mac)
+}
+
+pub(crate) fn build_signature(
+    config: &SignatureConfig,
+    http_headers: &HeaderMap,
+    http_body: &[u8],
+) -> Result<String, SignatureError> {
+    let mac = build_mac(config, http_headers, http_body)?;
     let result = mac.finalize();
     let mut signature = match config.signature_encoding {
         Encoding::Base64 => STANDARD.encode(&result.into_bytes()[..]),
@@ -122,16 +134,38 @@ pub(crate) fn check_signature(
     http_headers: &HeaderMap,
     http_body: &Bytes,
 ) -> Result<(), SignatureError> {
-    let signature = http_headers.get(config.header.as_str()).and_then(|value| value.to_str().ok());
-    if signature.is_none() {
+    let Some(signature) =
+        http_headers.get(config.header.as_str()).and_then(|value| value.to_str().ok())
+    else {
         return Err(SignatureError::SignatureNotFound);
-    }
+    };
 
-    let expected_signature = build_signature(config, http_headers, http_body)?;
-    if expected_signature != signature.unwrap_or_default() {
+    let signature = match &config.signature_prefix {
+        Some(prefix) => match signature.strip_prefix(prefix.as_str()) {
+            Some(stripped) => stripped,
+            None => return Err(SignatureError::VerificationMismatch),
+        },
+        None => signature,
+    };
+    // A malformed (not validly encoded) incoming signature is not decodable to bytes at
+    // all — treat that the same as a verification mismatch rather than propagating the
+    // decode error, since it's attacker-controlled input and not a config/programming error.
+    let signature_bytes: Option<Vec<u8>> = match config.signature_encoding {
+        Encoding::Base64 => STANDARD.decode(signature.as_bytes()).ok(),
+        Encoding::Hex if signature.len() % 2 == 0 => {
+            let mut dst = vec![0u8; signature.len() / 2];
+            hex_decode(signature.as_bytes(), &mut dst).ok().map(|()| dst)
+        }
+        Encoding::Hex => None,
+    };
+    let Some(signature_bytes) = signature_bytes else {
         return Err(SignatureError::VerificationMismatch);
-    }
-    Ok(())
+    };
+
+    // Constant-time comparison via `Mac::verify_slice`, rather than building the expected
+    // signature as a string and comparing with `!=` (timing side-channel on the HMAC output).
+    let mac = build_mac(config, http_headers, http_body)?;
+    mac.verify_slice(&signature_bytes).map_err(|_| SignatureError::VerificationMismatch)
 }
 
 #[derive(Debug, derive_more::Error, derive_more::Display, derive_more::From)]
