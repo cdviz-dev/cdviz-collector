@@ -119,6 +119,9 @@ run = [
 description = "run test coverage to help identify code not executed on tests (!= code tested)"
 env = { RUSTFLAGS = "-Cinstrument-coverage", LLVM_PROFILE_FILE = "target/test-coverage/data/%p-%m.profraw" }
 run = [
+  # grcov silently logs-and-continues (exit 0, fake 100% badge) when llvm-profdata is
+  # missing instead of failing, so check for it explicitly first
+  "command -v llvm-profdata >/dev/null 2>&1 || { echo 'llvm-profdata not found (rust tool component llvm-tools missing)' >&2; exit 1; }",
   "rm -rf ./target/test-coverage || true",
   "mkdir -p ./target/test-coverage",
   "mise run test",
