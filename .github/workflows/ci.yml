@@ -67,4 +67,4 @@ jobs:
           CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__SIGNATURE_ENCODING: "hex"
       # only `main` writes the cache; branches restore from it (see the action)
       - uses: ./.github/actions/rust-cache-save
-        if: github.ref == 'refs/heads/main'
+        if: always() && github.ref == 'refs/heads/main'
