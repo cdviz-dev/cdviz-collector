@@ -97,8 +97,8 @@ wait_for = ["lint", "lint:*"]
 [tasks."test:unit"]
 wait_for = ["lint", "lint:*", "build:cli"]
 run = [
-  # HACK: retry against integration test random failure (why ??)
-  # "cargo --locked nextest run --test-threads 1 --retries 1 --workspace",
+  # a retry was previously used here to mask a random integration-test failure; removed,
+  # root cause unclear - if flakiness reappears, root-cause it rather than re-adding a blind retry
   "cargo --locked nextest run --test-threads 1 --workspace",
   # "cargo test --doc",
   # "cargo hack nextest --each-feature -- --test-threads=1",
@@ -111,7 +111,8 @@ run = "cargo --locked nextest run {{arg(var=true)}}"
 [tasks."test:ignored"]
 wait_for = ["lint", "lint:*", "build:cli"]
 run = [
-  # HACK: retry against integration test random failure (why ??)
+  # not part of the ci task's depends, so this retry isn't currently masking anything in
+  # CI - revisit if this task is ever wired into ci
   "cargo --locked nextest run --test-threads 1 --retries 1 --workspace --run-ignored only",
 ]
 
