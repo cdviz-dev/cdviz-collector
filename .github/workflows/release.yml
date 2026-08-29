@@ -135,6 +135,8 @@ jobs:
         uses: "dtolnay/rust-toolchain@stable"
       - name: "Restore cargo + sccache cache"
         uses: "./.github/actions/rust-cache-restore"
+        with:
+          key-prefix: sccache-rust-release
       - name: "Add gettid shim for glibc < 2.30 (manylinux_2_28)"
         run: |
           if ! nm -D /lib64/libc.so.6 2>/dev/null | grep -qw gettid; then

@@ -5,6 +5,8 @@
 # weight. The restore still falls back to the entry `main` saved.
 - name: Restore cargo + sccache cache
   uses: ./.github/actions/rust-cache-restore
+  with:
+    key-prefix: sccache-rust-release
 - name: Add gettid shim for glibc < 2.30 (manylinux_2_28)
   # gettid() glibc wrapper was added in glibc 2.30; recent Rust stdlib references it directly.
   # Compile a shim so lld can resolve the symbol when building on old glibc.

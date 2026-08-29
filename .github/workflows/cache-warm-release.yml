@@ -1,0 +1,38 @@
+---
+# Warms the sccache-rust-release cache from `main`, the only ref release.yml's
+# tag-triggered runs can restore from (GitHub Actions cache access is scoped to
+# the current ref or the default branch - a cache saved on one tag is never
+# visible to another tag). `cargo check --release` populates most of the
+# release-profile sccache object store without paying for a full link/codegen.
+name: cache-warm-release
+
+on:
+  schedule:
+    # Friday 06:00 UTC, ahead of typical release cuts
+    - cron: "0 6 * * 5"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cache-warm-release:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/rust-cache-restore
+        with:
+          key-prefix: sccache-rust-release
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check --release --workspace --locked
+        shell: bash
+      - uses: ./.github/actions/rust-cache-save
+        if: always()
+        with:
+          key-prefix: sccache-rust-release
