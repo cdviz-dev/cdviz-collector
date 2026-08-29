@@ -180,6 +180,11 @@ fn app(
         app = app.merge(route);
     }
 
+    // Wildcard CORS is deliberate: this is a pure API service (webhook receiver / SSE
+    // emitter / CDEvents API) with no attached browser frontend and no cookie/session-based
+    // auth — CORS only restricts browser JS from reading cross-origin *credentialed*
+    // (cookie) responses, so it doesn't create a leak vector here (same posture as public
+    // token-authenticated APIs, e.g. GitHub/Stripe). Not a gap to "fix" without this context.
     let cors = CorsLayer::new()
         // allow `GET` and `POST` when accessing the resource
         .allow_methods([http::Method::GET, http::Method::OPTIONS, http::Method::PATCH, http::Method::PUT, http::Method::POST])
