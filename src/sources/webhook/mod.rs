@@ -4,7 +4,6 @@ use crate::security::header::filter_http_headers;
 use crate::security::rule::{
     HeaderRuleConfig, HeaderRuleMap, header_rule_map_to_configs, validate_headers,
 };
-use crate::security::signature;
 use crate::sources::EventSource;
 use axum::Json;
 use axum::extract::State;
@@ -26,10 +25,6 @@ pub(crate) struct Config {
     /// Header rules for incoming webhook requests - new map format
     #[serde(default)]
     pub(crate) headers: HeaderRuleMap,
-    /// Verify the incoming request and the signature
-    #[deprecated(since = "0.9.0", note = "Use `headers` instead")]
-    #[serde(default)]
-    pub(crate) signature: Option<signature::SignatureConfig>,
     /// Base metadata to include in all `EventSource` instances created by this extractor.
     /// The `context.source` field will be automatically populated if not set.
     #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
@@ -45,11 +40,7 @@ struct WebhookState {
 }
 
 pub(crate) fn make_route(config: &Config, next: EventSourcePipe) -> Router {
-    let mut headers = header_rule_map_to_configs(&config.headers);
-    #[allow(deprecated)]
-    if let Some(signature) = config.signature.as_ref() {
-        headers.push(HeaderRuleConfig::from(signature.clone()));
-    }
+    let headers = header_rule_map_to_configs(&config.headers);
     let state = WebhookState {
         next: Arc::new(Mutex::new(next)),
         headers_to_keep: config
@@ -234,7 +225,6 @@ mod tests_handler {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod security_tests {
     use super::*;
     use crate::security::rule::Rule;
@@ -246,123 +236,12 @@ mod security_tests {
     use tower::ServiceExt;
 
     #[tokio::test]
-    async fn test_webhook_with_valid_signature() {
-        let config = Config {
-            metadata: serde_json::json!({}),
-            id: "secure".to_string(),
-            headers_to_keep: vec!["Content-Type".to_string()],
-            headers: HeaderRuleMap::new(),
-            signature: Some(SignatureConfig {
-                header: "X-Hub-Signature-256".to_string(),
-                token: "secret-token".into(),
-                token_encoding: None,
-                signature_prefix: Some("sha256=".to_string()),
-                signature_on: SignatureOn::Body,
-                signature_encoding: Encoding::Hex,
-            }),
-        };
-        let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, Box::new(collector.create_pipe()));
-
-        let payload = json!({"action": "test", "data": "secure"});
-        let payload_str = payload.to_string();
-
-        // Generate valid signature
-        let signature = crate::security::signature::build_signature(
-            config.signature.as_ref().unwrap(),
-            &HeaderMap::new(),
-            payload_str.as_bytes(),
-        )
-        .unwrap();
-
-        let request = Request::builder()
-            .uri("/webhook/secure")
-            .method("POST")
-            .header("content-type", "application/json")
-            .header("X-Hub-Signature-256", signature)
-            .body(Body::from(payload_str))
-            .unwrap();
-
-        let response = router.oneshot(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::CREATED);
-        assert2::assert!(let Some(output) = collector.try_into_iter().unwrap().next());
-        assert_eq!(output.body, payload);
-    }
-
-    #[tokio::test]
-    async fn test_webhook_with_invalid_signature() {
-        let config = Config {
-            metadata: serde_json::json!({}),
-            id: "secure".to_string(),
-            headers_to_keep: vec![],
-            headers: HeaderRuleMap::new(),
-            signature: Some(SignatureConfig {
-                header: "X-Hub-Signature-256".to_string(),
-                token: "secret-token".into(),
-                token_encoding: None,
-                signature_prefix: Some("sha256=".to_string()),
-                signature_on: SignatureOn::Body,
-                signature_encoding: Encoding::Hex,
-            }),
-        };
-        let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, Box::new(collector.create_pipe()));
-
-        let payload = json!({"action": "test", "data": "secure"});
-        let request = Request::builder()
-            .uri("/webhook/secure")
-            .method("POST")
-            .header("content-type", "application/json")
-            .header("X-Hub-Signature-256", "sha256=invalid-signature")
-            .body(Body::from(payload.to_string()))
-            .unwrap();
-
-        let response = router.oneshot(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-        assert2::assert!(let None = collector.try_into_iter().unwrap().next());
-    }
-
-    #[tokio::test]
-    async fn test_webhook_missing_required_signature() {
-        let config = Config {
-            metadata: serde_json::json!({}),
-            id: "secure".to_string(),
-            headers_to_keep: vec![],
-            headers: HeaderRuleMap::new(),
-            signature: Some(SignatureConfig {
-                header: "X-Hub-Signature-256".to_string(),
-                token: "secret-token".into(),
-                token_encoding: None,
-                signature_prefix: None,
-                signature_on: SignatureOn::Body,
-                signature_encoding: Encoding::Hex,
-            }),
-        };
-        let collector = collect_to_vec::Collector::<EventSource>::new();
-        let router = make_route(&config, Box::new(collector.create_pipe()));
-
-        let payload = json!({"action": "test"});
-        let request = Request::builder()
-            .uri("/webhook/secure")
-            .method("POST")
-            .header("content-type", "application/json")
-            // Missing signature header
-            .body(Body::from(payload.to_string()))
-            .unwrap();
-
-        let response = router.oneshot(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-        assert2::assert!(let None = collector.try_into_iter().unwrap().next());
-    }
-
-    #[tokio::test]
     async fn test_webhook_rejects_malformed_json() {
         let config = Config {
             metadata: serde_json::json!({}),
             id: "test".to_string(),
             headers_to_keep: vec![],
             headers: HeaderRuleMap::new(),
-            signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
@@ -381,14 +260,12 @@ mod security_tests {
     }
 
     #[tokio::test]
-    #[allow(deprecated)]
     async fn test_webhook_handles_large_payload() {
         let config = Config {
             metadata: serde_json::json!({}),
             id: "test".to_string(),
             headers_to_keep: vec![],
             headers: HeaderRuleMap::new(),
-            signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
@@ -416,7 +293,6 @@ mod security_tests {
             id: "../../../etc/passwd".to_string(),
             headers_to_keep: vec![],
             headers: HeaderRuleMap::new(),
-            signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
@@ -441,7 +317,6 @@ mod security_tests {
             id: "test".to_string(),
             headers_to_keep: vec!["Authorization".to_string(), "Content-Type".to_string()],
             headers: HeaderRuleMap::new(),
-            signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
@@ -481,7 +356,6 @@ mod security_tests {
                 );
                 map
             },
-            signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
@@ -520,7 +394,6 @@ mod security_tests {
                 );
                 map
             },
-            signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
@@ -559,7 +432,6 @@ mod security_tests {
                 map.insert(config_name.to_string(), Rule::Exists);
                 map
             },
-            ..Default::default()
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
@@ -592,7 +464,6 @@ mod security_tests {
                 map.insert("X-API-Key".to_string(), Rule::Exists);
                 map
             },
-            signature: None,
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
@@ -628,16 +499,18 @@ mod security_tests {
                         suffix: String::new(),
                     },
                 );
+                map.insert(
+                    "X-Hub-Signature-256".to_string(),
+                    Rule::Signature {
+                        token: "secret-token".into(),
+                        token_encoding: None,
+                        signature_prefix: Some("sha256=".to_string()),
+                        signature_on: SignatureOn::Body,
+                        signature_encoding: Encoding::Hex,
+                    },
+                );
                 map
             },
-            signature: Some(SignatureConfig {
-                header: "X-Hub-Signature-256".to_string(),
-                token: "secret-token".into(),
-                token_encoding: None,
-                signature_prefix: Some("sha256=".to_string()),
-                signature_on: SignatureOn::Body,
-                signature_encoding: Encoding::Hex,
-            }),
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
@@ -646,8 +519,16 @@ mod security_tests {
         let payload_str = payload.to_string();
 
         // Generate valid signature
+        let signature_config = SignatureConfig {
+            header: "X-Hub-Signature-256".to_string(),
+            token: "secret-token".into(),
+            token_encoding: None,
+            signature_prefix: Some("sha256=".to_string()),
+            signature_on: SignatureOn::Body,
+            signature_encoding: Encoding::Hex,
+        };
         let signature = crate::security::signature::build_signature(
-            config.signature.as_ref().unwrap(),
+            &signature_config,
             &HeaderMap::new(),
             payload_str.as_bytes(),
         )
@@ -688,7 +569,6 @@ mod security_tests {
                 );
                 map
             },
-            signature: None, // Using header rules instead of signature field
         };
         let collector = collect_to_vec::Collector::<EventSource>::new();
         let router = make_route(&config, Box::new(collector.create_pipe()));
