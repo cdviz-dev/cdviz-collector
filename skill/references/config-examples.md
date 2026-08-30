@@ -67,6 +67,8 @@ parser           = "json"       # one JSON object per file
 # parser = "xml"                # XML (requires parser_xml feature)
 # parser = "tap"                # TAP test output (requires parser_tap feature)
 metadata         = { environment_id = "/cluster/dev" }
+# try_read_headers_json = false # if true, look for a sibling `<file>.headers.json`
+                                 # and merge it into the extracted event's metadata
 ```
 
 ### opendal — S3
@@ -123,6 +125,7 @@ transformer_refs = ["github_to_cdevents"]
 type                 = "http_polling"
 polling_interval     = "60s"
 min_request_interval = "1s"    # min time between request starts
+request_timeout      = "30s"   # per-request timeout (default: 30s)
 parser               = "json"  # whole body → one event (transformer splits the array)
 ts_after             = "2024-01-01T00:00:00Z"  # bootstrap window start (backfill)
 
