@@ -1,4 +1,8 @@
-//! Fork/vendoring of <https://github.com/jpopesculian/reqwest-eventsource> (no updates since 0.6.0 2024-03-29 2y)
+//! Forked from <https://github.com/jpopesculian/reqwest-eventsource> (no updates since 0.6.0,
+//! 2024-03-29). Upstream has been inactive 2+ years, so this is now internalized permanently
+//! rather than pending a relink — treat it as this crate's own module, not vendored code to
+//! reconcile with upstream. Future changes (e.g. folding it into our internal reqwest
+//! middleware/helper stack) should edit it directly, no need to preserve a minimal diff.
 //! - update to reqwest 0.13 (first motivation)
 //! - replace thiserror by `derive_more` (better integration, remove dependencies to old thiserror 1.x)
 //! - apply clippy suggestion to follow recent feature from rust

@@ -200,7 +200,9 @@ parser_tap = ["dep:nom", "parser_yaml"]
 parser_xml = []
 parser_yaml = ["dep:serde_yaml"]
 #! ### Internal fork/vendoring
-#! replace `reqwest-eventsource = { version = "0.6", optional = true }`
+#! replaces `reqwest-eventsource = { version = "0.6", optional = true }` — upstream has been
+#! inactive 4+ years, so this is a permanent internal module (src/reqwest_eventsource/), not
+#! pending a relink to the original crate.
 reqwest-eventsource = [
   "dep:eventsource-stream",
   "dep:futures-core",
