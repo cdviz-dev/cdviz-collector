@@ -29,6 +29,13 @@ If you want to contribute code, please open an [issue] first to discuss what you
 
 All contributions must include a `Signed-off-by` line.
 
+### Writing documentation
+
+Doc comments and rustdoc should explain **why**, **how to use**, and
+**purpose/goal** — not paraphrase **what** the code already says. If a
+comment just restates the function/struct name in prose, it's not adding
+information; skip it.
+
 ## How to build
 
 The repository is composed of multiple subfolders / modules.
@@ -64,6 +71,21 @@ mise run test
 
 ## How to release
 
-???
+Releases are automated, there is no manual release step:
+
+1. `release-plz` watches `main`. After merges land, it opens (or updates) a
+   "release PR" bumping crate versions and updating the changelog.
+2. Merging that PR into `main` runs `release-plz`'s release job, which
+   publishes the crate to crates.io and pushes a matching git tag.
+3. The tag push triggers [`release.yml`](.github/workflows/release.yml)
+   (via [`cargo-dist`](https://github.com/axodotdev/cargo-dist)): it builds
+   the cross-platform binaries, creates the GitHub release with artifacts,
+   and updates the Homebrew formula.
+4. That release then triggers
+   [`release-after.yml`](.github/workflows/release-after.yml), which builds
+   and pushes the `cdviz-collector` and `cdviz-collector-with-transformers`
+   container images to `ghcr.io`.
+
+No manual tagging or `cargo publish` is needed or expected.
 
 [issue]: https://github.com/cdviz-dev/cdviz-collector/issues "CDviz collector's issue tracker"
