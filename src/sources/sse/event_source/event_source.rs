@@ -189,3 +189,70 @@ impl Stream for EventSource {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::StreamExt;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::matchers::method;
+
+    #[tokio::test]
+    async fn check_response_accepts_event_stream() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).insert_header("content-type", "text/event-stream"))
+            .mount(&server)
+            .await;
+        let res = reqwest::get(server.uri()).await.unwrap();
+        assert!(check_response(res).is_ok());
+    }
+
+    #[tokio::test]
+    async fn check_response_rejects_non_200_status() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET")).respond_with(ResponseTemplate::new(404)).mount(&server).await;
+        let res = reqwest::get(server.uri()).await.unwrap();
+        assert!(matches!(check_response(res), Err(Error::InvalidStatusCode(_))));
+    }
+
+    #[tokio::test]
+    async fn check_response_rejects_wrong_content_type() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).insert_header("content-type", "application/json"))
+            .mount(&server)
+            .await;
+        let res = reqwest::get(server.uri()).await.unwrap();
+        assert!(matches!(check_response(res), Err(Error::InvalidContentType(_))));
+    }
+
+    #[tokio::test]
+    async fn check_response_rejects_missing_content_type() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET")).respond_with(ResponseTemplate::new(200)).mount(&server).await;
+        let res = reqwest::get(server.uri()).await.unwrap();
+        assert!(matches!(check_response(res), Err(Error::InvalidContentType(_))));
+    }
+
+    #[tokio::test]
+    async fn stream_emits_open_then_message_and_tracks_last_event_id() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_raw("id: 42\ndata: hello\n\n", "text/event-stream"),
+            )
+            .mount(&server)
+            .await;
+
+        let mut es = EventSource::get(server.uri()).unwrap();
+        assert_eq!(es.next().await.unwrap().unwrap(), Event::Open);
+        let Event::Message(msg) = es.next().await.unwrap().unwrap() else {
+            panic!("expected a Message event");
+        };
+        assert_eq!(msg.data, "hello");
+        assert_eq!(es.last_event_id(), "42");
+    }
+}
