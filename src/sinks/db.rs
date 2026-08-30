@@ -3,7 +3,7 @@ use std::time::Duration;
 use super::{Sink, retry};
 use crate::{
     Message,
-    errors::{IntoDiagnostic, Report, Result},
+    errors::{IntoDiagnostic, Result},
 };
 use retry_policies::policies::ExponentialBackoff;
 use secrecy::{ExposeSecret, SecretString, zeroize::Zeroize};
@@ -156,13 +156,18 @@ impl Sink for DbSink {
             store_event_dedup(&self.pool, Event { payload: payload.clone() })
         })
         .await
+        .into_diagnostic()
     }
 }
 
 /// Stores the event, treating a duplicate (`PostgreSQL` 23505 `unique_violation`) as success.
 /// Duplicates are expected on restart when opendal replays already-processed files
 /// (see TODO in sources/opendal/mod.rs about state persistence).
-async fn store_event_dedup(pg_pool: &PgPool, event: Event) -> Result<()> {
+///
+/// Classifies the native `sqlx::Error` directly, before it would be erased into a
+/// `miette::Report` — `Report::downcast_ref` only matches the outermost wrapped type, not
+/// its `source()` chain, so classifying post-conversion would never match.
+async fn store_event_dedup(pg_pool: &PgPool, event: Event) -> sqlx::Result<()> {
     match store_event(pg_pool, event).await {
         Err(ref err) if is_duplicate_event(err) => {
             tracing::debug!("event already stored (duplicate), skipping");
@@ -172,16 +177,16 @@ async fn store_event_dedup(pg_pool: &PgPool, event: Event) -> Result<()> {
     }
 }
 
-fn is_duplicate_event(err: &Report) -> bool {
-    err.downcast_ref::<sqlx::Error>()
-        .and_then(|e| if let sqlx::Error::Database(db_err) = e { db_err.code() } else { None })
-        .is_some_and(|code| code == "23505")
+fn is_duplicate_event(err: &sqlx::Error) -> bool {
+    if let sqlx::Error::Database(db_err) = err {
+        db_err.code().is_some_and(|code| code == "23505")
+    } else {
+        false
+    }
 }
 
-fn is_transient_sqlx_error(err: &Report) -> bool {
-    err.downcast_ref::<sqlx::Error>().is_some_and(|e| {
-        matches!(e, sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed | sqlx::Error::Io(_))
-    })
+fn is_transient_sqlx_error(err: &sqlx::Error) -> bool {
+    matches!(err, sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed | sqlx::Error::Io(_))
 }
 
 #[derive(sqlx::FromRow)]
@@ -206,12 +211,11 @@ fn build_otel_span(db_operation: &str) -> tracing::Span {
 }
 
 // store event as json in db (postgresql using sqlx)
-async fn store_event(pg_pool: &PgPool, event: Event) -> Result<()> {
+async fn store_event(pg_pool: &PgPool, event: Event) -> sqlx::Result<()> {
     sqlx::query!("CALL cdviz.store_cdevent($1)", event.payload)
         .execute(pg_pool)
         .instrument(build_otel_span("store_cdevent"))
-        .await
-        .into_diagnostic()?;
+        .await?;
     Ok(())
 }
 
@@ -306,6 +310,34 @@ mod tests {
 
         let (sink, db_guard) = async_pg.await;
         TestContext { sink, db_guard, tracing_guard }
+    }
+
+    #[test]
+    fn transient_errors_are_retried() {
+        assert!(is_transient_sqlx_error(&sqlx::Error::PoolTimedOut));
+        assert!(is_transient_sqlx_error(&sqlx::Error::PoolClosed));
+    }
+
+    #[test]
+    fn non_transient_errors_are_not_retried() {
+        assert!(!is_transient_sqlx_error(&sqlx::Error::RowNotFound));
+    }
+
+    #[tokio::test]
+    async fn min_greater_than_max_pool_connections_is_rejected() {
+        let config = Config {
+            enabled: true,
+            url: "postgres://user:pass@localhost/db".into(),
+            pool_connections_min: 5,
+            pool_connections_max: 1,
+            pool_acquire_timeout: default_pool_acquire_timeout(),
+            pool_idle_timeout: default_pool_idle_timeout(),
+            pool_max_lifetime: default_pool_max_lifetime(),
+            pool_test_before_acquire: default_pool_test_before_acquire(),
+            total_duration_of_retries: default_total_duration_of_retries(),
+            lazy_connection: true,
+        };
+        assert!(DbSink::try_from_config(config).await.is_err());
     }
 
     #[rstest()]

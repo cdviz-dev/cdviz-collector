@@ -232,21 +232,27 @@ impl Sink for ClickHouseSink {
             execute_query(&self.client, &self.parsed_query.sql, &values)
         })
         .await
+        .into_diagnostic()
     }
 }
 
-async fn execute_query(client: &clickhouse::Client, sql: &str, values: &[String]) -> Result<()> {
+async fn execute_query(
+    client: &clickhouse::Client,
+    sql: &str,
+    values: &[String],
+) -> clickhouse::error::Result<()> {
     let mut query = client.query(sql);
     for value in values {
         query = query.bind(value.as_str());
     }
-    query.execute().instrument(build_otel_span("INSERT")).await.into_diagnostic()
+    query.execute().instrument(build_otel_span("INSERT")).await
 }
 
-fn is_transient_clickhouse_error(err: &Report) -> bool {
-    err.downcast_ref::<clickhouse::error::Error>().is_some_and(|e| {
-        matches!(e, clickhouse::error::Error::Network(_) | clickhouse::error::Error::TimedOut)
-    })
+/// Classifies the native `clickhouse::error::Error` directly, before it would be erased into a
+/// `miette::Report` — `Report::downcast_ref` only matches the outermost wrapped type, not its
+/// `source()` chain, so classifying post-conversion would never match.
+fn is_transient_clickhouse_error(err: &clickhouse::error::Error) -> bool {
+    matches!(err, clickhouse::error::Error::Network(_) | clickhouse::error::Error::TimedOut)
 }
 
 // OTel span for ClickHouse operations
