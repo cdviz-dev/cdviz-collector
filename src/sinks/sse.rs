@@ -345,7 +345,7 @@ mod integration_tests {
     use tokio::time::{Duration, timeout};
 
     #[tokio::test]
-    #[cfg(feature = "reqwest-eventsource")]
+    #[cfg(feature = "source_sse")]
     async fn test_sse_message_broadcast() {
         let config = Config {
             enabled: true,
@@ -380,7 +380,7 @@ mod integration_tests {
 
         // Start streaming in background first
         let stream_handle = tokio::spawn(async move {
-            use crate::reqwest_eventsource::{Event, EventSource};
+            use crate::sources::sse::event_source::{Event, EventSource};
 
             // Connect to SSE endpoint
             let mut es = EventSource::get(sse_url).expect("Failed to create EventSource");

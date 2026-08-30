@@ -1,14 +1,16 @@
 pub mod config;
+pub(crate) mod event_source;
 
 pub use config::Config;
 
 use crate::errors::Result;
-use crate::reqwest_eventsource::{Event, RequestBuilderExt};
 #[cfg(test)]
 use crate::security::rule::HeaderRuleMap;
+use crate::sources::sse::event_source::{Event, RequestBuilderExt};
 use crate::sources::{EventSource, EventSourcePipe};
 use futures::StreamExt;
-use std::time::Duration;
+use retry_policies::{RetryDecision, RetryPolicy, policies::ExponentialBackoff};
+use std::time::SystemTime;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
@@ -48,6 +50,7 @@ pub struct SseSourceState {
     pub config: Config,
     pub next: EventSourcePipe,
     client: reqwest::Client,
+    last_event_id: String,
 }
 
 impl SseSourceState {
@@ -57,12 +60,14 @@ impl SseSourceState {
             .user_agent(&config.user_agent)
             .build()
             .expect("failed to build HTTP client");
-        Self { config, next, client }
+        Self { config, next, client, last_event_id: String::new() }
     }
 
     pub async fn run(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut retry_count = 0;
         let max_retries = self.config.max_retries.unwrap_or(10);
+        let backoff = ExponentialBackoff::builder().build_with_max_retries(max_retries);
+        let request_start_time = SystemTime::now();
+        let mut n_past_retries: u32 = 0;
 
         loop {
             match self.connect_and_stream().await {
@@ -72,19 +77,23 @@ impl SseSourceState {
                 }
                 Err(e) => {
                     error!("SSE source error: {}", e);
-                    retry_count += 1;
 
-                    if retry_count >= max_retries {
-                        error!("Max retries ({}) exceeded, stopping SSE source", max_retries);
-                        break;
+                    match backoff.should_retry(request_start_time, n_past_retries) {
+                        RetryDecision::DoNotRetry => {
+                            error!("Max retries ({}) exceeded, stopping SSE source", max_retries);
+                            break;
+                        }
+                        RetryDecision::Retry { execute_after } => {
+                            let delay =
+                                execute_after.duration_since(SystemTime::now()).unwrap_or_default();
+                            n_past_retries += 1;
+                            warn!(
+                                "Retrying SSE connection in {:?} (attempt {}/{})",
+                                delay, n_past_retries, max_retries
+                            );
+                            tokio::time::sleep(delay).await;
+                        }
                     }
-
-                    let delay = Duration::from_secs(2_u64.pow(retry_count.min(6)));
-                    warn!(
-                        "Retrying SSE connection in {:?} (attempt {}/{})",
-                        delay, retry_count, max_retries
-                    );
-                    tokio::time::sleep(delay).await;
                 }
             }
         }
@@ -106,6 +115,12 @@ impl SseSourceState {
                 error!("Failed to generate headers: {}", e);
                 return Err(e.into());
             }
+        }
+
+        if !self.last_event_id.is_empty()
+            && let Ok(value) = reqwest::header::HeaderValue::from_str(&self.last_event_id)
+        {
+            request_builder = request_builder.header("last-event-id", value);
         }
 
         let mut event_source = request_builder.eventsource()?;
@@ -165,10 +180,12 @@ impl SseSourceState {
                 }
                 Err(e) => {
                     error!("SSE error: {}", e);
+                    self.last_event_id = event_source.last_event_id().to_string();
                     return Err(e.into());
                 }
             }
         }
+        self.last_event_id = event_source.last_event_id().to_string();
         Ok(())
     }
 }
@@ -363,6 +380,50 @@ mod integration_tests {
         // Should not have received any events
         let events: Vec<_> = collector.try_into_iter().unwrap().collect();
         assert!(events.is_empty(), "Should not receive any events due to connection failure");
+    }
+
+    /// A server that always fails the SSE handshake (bad content-type), so every connection
+    /// attempt is a retryable error. Exercises the `retry-policies`-driven give-up bound: with
+    /// `max_retries = N`, the source must attempt exactly `N + 1` connections (1 initial + N
+    /// retries), then stop.
+    #[tokio::test]
+    async fn test_sse_source_retry_gives_up_after_max_retries() {
+        use axum::routing::get;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let attempts_for_handler = attempts.clone();
+        let app = Router::new().route(
+            "/always-fails",
+            get(move || {
+                let attempts = attempts_for_handler.clone();
+                async move {
+                    attempts.fetch_add(1, Ordering::SeqCst);
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR
+                }
+            }),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server_handle = tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let source_config = Config {
+            url: format!("http://127.0.0.1:{port}/always-fails"),
+            max_retries: Some(2),
+            ..Default::default()
+        };
+        let collector = Collector::<EventSource>::new();
+        let pipe = Box::new(collector.create_pipe());
+        let source_handle = create_sse_source(source_config, pipe);
+
+        let result = timeout(Duration::from_secs(8), source_handle).await;
+        assert!(result.is_ok(), "source should give up and complete within timeout");
+        assert_eq!(attempts.load(Ordering::SeqCst), 3, "expected 1 initial attempt + 2 retries");
+
+        server_handle.abort();
     }
 
     #[tokio::test]

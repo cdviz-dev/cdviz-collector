@@ -43,14 +43,9 @@ pub enum Error {
     #[from(ignore)]
     #[display("Invalid status code: {}", _0)]
     InvalidStatusCode(#[error(not(source))] StatusCode), //, Box<Response>),
-    /// The `Last-Event-ID` cannot be formed into a Header to be submitted to the server
-    #[display("Invalid `Last-Event-ID`: {}", _0)]
-    InvalidLastEventId(#[error(not(source))] String),
     /// The stream ended
     #[display("Stream ended")]
     StreamEnded,
-    #[display("Failed to clone the RequestBuilder")]
-    CloneRequestBuilderFailed,
     #[display("Failed to retreive curren stream from memory")]
     CurrentStreamRetrievalFailed,
 }

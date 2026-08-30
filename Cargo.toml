@@ -55,7 +55,6 @@ figment = { version = "0.10", features = ["env"] }
 figment_file_provider_adapter = "0.1"
 futures = "0.3"
 futures-core = { version = "0.3", optional = true }
-futures-timer = { version = "3", optional = true }
 globset = "0.4"
 hmac = "0.13"
 indexmap = "2"
@@ -199,19 +198,6 @@ parser_csv_row = ["dep:csv"]
 parser_tap = ["dep:nom", "parser_yaml"]
 parser_xml = []
 parser_yaml = ["dep:serde_yaml"]
-#! ### Internal fork/vendoring
-#! replaces `reqwest-eventsource = { version = "0.6", optional = true }` — upstream has been
-#! inactive 4+ years, so this is a permanent internal module (src/reqwest_eventsource/), not
-#! pending a relink to the original crate.
-reqwest-eventsource = [
-  "dep:eventsource-stream",
-  "dep:futures-core",
-  "dep:futures-timer",
-  "dep:mime",
-  "dep:nom",
-  "dep:pin-project-lite",
-  "reqwest/stream",
-]
 #! ### Sinks
 sink_all = [
   "sink_clickhouse",
@@ -257,7 +243,18 @@ source_http_polling = ["http_client", "transformer_vrl"]
 source_kafka = ["dep:rdkafka"]
 source_nats = ["dep:async-nats"]
 source_opendal = ["dep:bytes", "dep:opendal", "state"]
-source_sse = ["dep:uuid", "reqwest-eventsource"]
+#! replaces `reqwest-eventsource = { version = "0.6", optional = true }` — upstream has been
+#! inactive 4+ years, so `src/sources/sse/event_source/` is a permanent internal module, not
+#! pending a relink to the original crate.
+source_sse = [
+  "dep:eventsource-stream",
+  "dep:futures-core",
+  "dep:mime",
+  "dep:pin-project-lite",
+  "dep:retry-policies",
+  "dep:uuid",
+  "reqwest/stream",
+]
 #! ### Persist state (for sources,...)
 state = ["dep:opendal"]
 #! ### Tools

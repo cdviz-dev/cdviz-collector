@@ -877,7 +877,6 @@ dependencies = [
  "figment_file_provider_adapter",
  "futures 0.3.34",
  "futures-core",
- "futures-timer",
  "globset",
  "hmac 0.13.0",
  "http",

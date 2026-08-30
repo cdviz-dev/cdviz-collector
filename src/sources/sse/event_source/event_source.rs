@@ -1,5 +1,4 @@
 use super::error::{CannotCloneRequestError, Error};
-use super::retry::{DEFAULT_RETRY, RetryPolicy};
 use core::pin::Pin;
 use eventsource_stream::Eventsource;
 pub use eventsource_stream::{Event as MessageEvent, EventStreamError};
@@ -14,11 +13,9 @@ use futures_core::stream::BoxStream;
 use futures_core::stream::LocalBoxStream;
 use futures_core::stream::Stream;
 use futures_core::task::{Context, Poll};
-use futures_timer::Delay;
 use pin_project_lite::pin_project;
-use reqwest::header::{HeaderName, HeaderValue};
+use reqwest::header::HeaderValue;
 use reqwest::{Error as ReqwestError, IntoUrl, RequestBuilder, Response, StatusCode};
-use std::time::Duration;
 
 #[cfg(not(target_arch = "wasm32"))]
 type ResponseFuture = BoxFuture<'static, Result<Response, ReqwestError>>;
@@ -30,20 +27,6 @@ type EventStream = BoxStream<'static, Result<MessageEvent, EventStreamError<Reqw
 #[cfg(target_arch = "wasm32")]
 type EventStream = LocalBoxStream<'static, Result<MessageEvent, EventStreamError<ReqwestError>>>;
 
-type BoxedRetry = Box<dyn RetryPolicy + Send + Unpin + 'static>;
-
-/// The ready state of an [`EventSource`]
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
-#[repr(u8)]
-pub enum ReadyState {
-    /// The `EventSource` is waiting on a response from the endpoint
-    Connecting = 0,
-    /// The `EventSource` is connected
-    Open = 1,
-    /// The `EventSource` is closed and no longer emitting Events
-    Closed = 2,
-}
-
 pin_project! {
 /// Provides the [`Stream`] implementation for the [`Event`] items. This wraps the
 /// [`RequestBuilder`] and retries requests when they fail.
@@ -54,12 +37,8 @@ pub struct EventSource {
     next_response: Option<ResponseFuture>,
     #[pin]
     cur_stream: Option<EventStream>,
-    #[pin]
-    delay: Option<Delay>,
     is_closed: bool,
-    retry_policy: BoxedRetry,
     last_event_id: String,
-    last_retry: Option<(usize, Duration)>
 }
 }
 
@@ -73,43 +52,20 @@ impl EventSource {
             builder,
             next_response: Some(res_future),
             cur_stream: None,
-            delay: None,
             is_closed: false,
-            retry_policy: Box::new(DEFAULT_RETRY),
             last_event_id: String::new(),
-            last_retry: None,
         })
     }
 
     /// Create a simple `EventSource` based on a GET request
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn get<T: IntoUrl>(url: T) -> Result<Self, CannotCloneRequestError> {
         Self::new(reqwest::Client::new().get(url))
-    }
-
-    /// Close the `EventSource` stream and stop trying to reconnect
-    pub fn close(&mut self) {
-        self.is_closed = true;
-    }
-
-    /// Set the retry policy
-    pub fn set_retry_policy(&mut self, policy: BoxedRetry) {
-        self.retry_policy = policy;
     }
 
     /// Get the last event id
     pub fn last_event_id(&self) -> &str {
         &self.last_event_id
-    }
-
-    /// Get the current ready state
-    pub fn ready_state(&self) -> ReadyState {
-        if self.is_closed {
-            ReadyState::Closed
-        } else if self.delay.is_some() || self.next_response.is_some() {
-            ReadyState::Connecting
-        } else {
-            ReadyState::Open
-        }
     }
 }
 
@@ -143,20 +99,7 @@ impl EventSourceProjection<'_> {
         self.cur_stream.take();
     }
 
-    fn retry_fetch(&mut self) -> Result<(), Error> {
-        self.cur_stream.take();
-        let req = self.builder.try_clone().ok_or(Error::CloneRequestBuilderFailed)?.header(
-            HeaderName::from_static("last-event-id"),
-            HeaderValue::from_str(self.last_event_id)
-                .map_err(|_| Error::InvalidLastEventId(self.last_event_id.clone()))?,
-        );
-        let res_future = Box::pin(req.send());
-        self.next_response.replace(res_future);
-        Ok(())
-    }
-
     fn handle_response(&mut self, res: Response) {
-        self.last_retry.take();
         let mut stream = res.bytes_stream().eventsource();
         stream.set_last_event_id(self.last_event_id.clone());
         self.cur_stream.replace(Box::pin(stream));
@@ -164,20 +107,13 @@ impl EventSourceProjection<'_> {
 
     fn handle_event(&mut self, event: &MessageEvent) {
         self.last_event_id.clone_from(&event.id);
-        if let Some(duration) = event.retry {
-            self.retry_policy.set_reconnection_time(duration);
-        }
     }
 
-    fn handle_error(&mut self, error: &Error) {
+    /// On any error the stream ends; reconnection (with backoff) is the caller's
+    /// responsibility, using [`EventSource::last_event_id`] to resume.
+    fn handle_error(&mut self) {
         self.clear_fetch();
-        if let Some(retry_delay) = self.retry_policy.retry(error, *self.last_retry) {
-            let retry_num = self.last_retry.map_or(1, |retry| retry.0);
-            *self.last_retry = Some((retry_num, retry_delay));
-            self.delay.replace(Delay::new(retry_delay));
-        } else {
-            *self.is_closed = true;
-        }
+        *self.is_closed = true;
     }
 }
 
@@ -206,19 +142,6 @@ impl Stream for EventSource {
             return Poll::Ready(None);
         }
 
-        if let Some(delay) = this.delay.as_mut().as_pin_mut() {
-            match delay.poll(cx) {
-                Poll::Ready(()) => {
-                    this.delay.take();
-                    if let Err(err) = this.retry_fetch() {
-                        *this.is_closed = true;
-                        return Poll::Ready(Some(Err(err)));
-                    }
-                }
-                Poll::Pending => return Poll::Pending,
-            }
-        }
-
         if let Some(response_future) = this.next_response.as_mut().as_pin_mut() {
             match response_future.poll(cx) {
                 Poll::Ready(Ok(res)) => {
@@ -236,7 +159,7 @@ impl Stream for EventSource {
                 }
                 Poll::Ready(Err(err)) => {
                     let err = Error::Transport(err);
-                    this.handle_error(&err);
+                    this.handle_error();
                     return Poll::Ready(Some(Err(err)));
                 }
                 Poll::Pending => {
@@ -251,7 +174,7 @@ impl Stream for EventSource {
         match cur_stream.as_mut().poll_next(cx) {
             Poll::Ready(Some(Err(err))) => {
                 let err = err.into();
-                this.handle_error(&err);
+                this.handle_error();
                 Poll::Ready(Some(Err(err)))
             }
             Poll::Ready(Some(Ok(event))) => {
@@ -259,9 +182,8 @@ impl Stream for EventSource {
                 Poll::Ready(Some(Ok(event.into())))
             }
             Poll::Ready(None) => {
-                let err = Error::StreamEnded;
-                this.handle_error(&err);
-                Poll::Ready(Some(Err(err)))
+                this.handle_error();
+                Poll::Ready(Some(Err(Error::StreamEnded)))
             }
             Poll::Pending => Poll::Pending,
         }

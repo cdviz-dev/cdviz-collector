@@ -29,14 +29,16 @@
 //!     }
 //! }
 //! ```
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod error;
 mod event_source;
 mod reqwest_ext;
-pub mod retry;
 
-pub use error::{CannotCloneRequestError, Error};
-pub use event_source::{Event, EventSource, ReadyState};
-pub use reqwest_ext::RequestBuilderExt;
+// `EventSource`/`CannotCloneRequestError`/`Error` are only named directly by tests (a bare SSE
+// client in `sinks/sse.rs`'s integration test); everyday callers only need `Event` and
+// `RequestBuilderExt::eventsource()`.
+#[allow(unused_imports)]
+pub(crate) use error::{CannotCloneRequestError, Error};
+pub(crate) use event_source::Event;
+#[allow(unused_imports)]
+pub(crate) use event_source::EventSource;
+pub(crate) use reqwest_ext::RequestBuilderExt;

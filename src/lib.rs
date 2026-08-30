@@ -9,8 +9,6 @@ mod http;
 mod message;
 mod otel;
 mod pipeline;
-#[cfg(feature = "reqwest-eventsource")]
-mod reqwest_eventsource;
 mod security;
 mod sinks;
 mod sources;
