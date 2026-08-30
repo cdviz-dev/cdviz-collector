@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.49.0...0.50.0) - 2026-08-30
+
+### Added
+
+- *(otel)* upgrade init-tracing-opentelemetry to 0.40, expose /metrics, add per-stage counters
+- *(config)* [**breaking**] deny unknown fields on all TOML config structs
+- *(event)* [**breaking**] mark Event non_exhaustive, clarify EventPipe's Pipe access
+- *(sources)* [**breaking**] remove deprecated webhook signature config field
+- *(sinks)* add OTel counter for broadcast queue lag per sink
+- *(ci)* add monthly/on-demand workflow for kafka tests, feature matrix, dep checks
+- *(docker)* add cdviz-collector-with-transformers image bundling transformers-community
+
+### Fixed
+
+- *(sinks)* classify retry/dedup errors before miette erases their type
+- *(pipeline)* convert db/nats sink and source construction to async, removing block_in_place
+- *(config)* scope $now substitution to exact-match field values
+- *(config)* check sink transformer chains in --check
+- *(http)* accept text/event-stream so SSE routes aren't rejected with 406
+- *(pipeline)* propagate inner task failures from connect run loop
+- *(http_polling)* add request_timeout, default 30s
+- *(security)* require SignatureConfig.token, remove fail-open default
+- *(security)* use constant-time comparison for HMAC and header-equals checks
+- *(config)* redact secrets in `config --print` output
+- *(http_polling)* drop configured secret headers on cross-origin follow-up URLs
+- *(config)* reject *_file keys from remote config sources
+- *(deny)* deny yanked crates explicitly
+- *(mise)* fail test:coverage loudly when llvm-profdata is missing
+- *(ci)* add pull_request trigger, skip release-plz PRs, fork-safe secrets
+
+### Other
+
+- *(http_polling)* cover max_concurrency bound and checkpoint persistence
+- *(sse)* unit-test the internal EventSource stream state machine
+- *(tools)* cover config_cmd error paths and transform output naming
+- *(mise)* explain why fmt --check stays commented out in lint:rust
+- *(config-examples)* document try_read_headers_json and request_timeout
+- *(contributing)* document release process and doc-writing rule
+- *(sse)* [**breaking**] fold reqwest-eventsource fork into sources/sse, dedupe retry
+- *(reqwest-eventsource)* record decision to internalize permanently
+- *(cargo)* set rust-version and categories before 1.0
+- *(sources)* dedupe JSON-or-string payload parsing between kafka and nats
+- *(state)* add checkpoint round-trip tests for load_ts_after error paths
+- *(http)* record why wildcard CORS is deliberate, not a gap
+- *(config)* warn on unpinned github:// remote fetch, document get_env_var exposure
+- *(mise)* note deliberate CI-scope exclusions to avoid audit false positives
+- *(mise)* drop dead retry config on test:unit, clarify test:ignored scope
+- ignore profraw file
+- *(ci)* set SCCACHE_ERROR_LOG/LOG and CMake compiler-launcher env vars
+- *(ci)* quote key-prefix in release.yml to match dist-generated style
+
 ## [0.49.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.48.3...0.49.0) - 2026-08-23
 
 ### Fixed
