@@ -1492,6 +1492,95 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_max_concurrency_bounds_parallel_requests() {
+        // 4 requests, each held open 100ms. With max_concurrency=2, they run in two waves
+        // (~200ms total) — neither fully serialized (~400ms) nor fully parallel (~100ms).
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw("{}", "application/json")
+                    .set_delay(Duration::from_millis(100)),
+            )
+            .mount(&server)
+            .await;
+
+        let uri = server.uri();
+        let reqs = format!(r#"{{ "url": "{uri}/data" }},"#).repeat(4);
+        let mut config = config_with_driver(format!(".requests = [{reqs}]"));
+        config.max_concurrency = 2;
+        let (mut extractor, _collector) = make_extractor(&config);
+
+        let start = std::time::Instant::now();
+        assert!(extractor.run_once().await.unwrap().advanced());
+        let elapsed = start.elapsed();
+        assert!(elapsed >= Duration::from_millis(180), "requests ran too parallel: {elapsed:?}");
+        assert!(elapsed < Duration::from_millis(350), "requests ran too serial: {elapsed:?}");
+    }
+
+    #[cfg(feature = "state")]
+    #[tokio::test]
+    async fn test_checkpoint_saved_on_advance_and_loaded_on_next_run() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw("{}", "application/json"))
+            .mount(&server)
+            .await;
+
+        let state_dir = tempfile::TempDir::new().unwrap();
+        let state_builder =
+            opendal::services::Fs::default().root(&state_dir.path().to_string_lossy());
+        let state_op = opendal::Operator::new(state_builder).unwrap();
+        let state_config = crate::state::Config {
+            kind: "fs".to_string(),
+            parameters: HashMap::from([(
+                "root".to_string(),
+                state_dir.path().to_string_lossy().to_string(),
+            )]),
+        };
+
+        let config = make_config(&server.uri());
+        let collector = Collector::<EventSource>::new();
+        let pipe = Box::new(collector.create_pipe());
+        let mut extractor = HttpPollingExtractor::try_from(
+            &config,
+            pipe,
+            Some(&state_config),
+            "checkpoint-test".to_string(),
+        )
+        .unwrap();
+
+        // Let `run()` complete a single poll cycle (fast local mock server), then cancel it.
+        let cancel_token = CancellationToken::new();
+        let cancel_token2 = cancel_token.clone();
+        let handle = tokio::spawn(async move { extractor.run(cancel_token2).await });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        cancel_token.cancel();
+        timeout(Duration::from_secs(5), handle).await.unwrap().unwrap().unwrap();
+
+        let saved = crate::state::load_ts_after(&state_op, "checkpoint-test").await;
+        assert!(saved.is_some(), "checkpoint should be persisted after a poll advances");
+
+        // A fresh extractor for the same source, backed by the same state store, must resume
+        // from the persisted `ts_after` instead of `Timestamp::MIN`.
+        let collector2 = Collector::<EventSource>::new();
+        let pipe2 = Box::new(collector2.create_pipe());
+        let mut extractor2 = HttpPollingExtractor::try_from(
+            &config,
+            pipe2,
+            Some(&state_config),
+            "checkpoint-test".to_string(),
+        )
+        .unwrap();
+        let pre_cancelled = CancellationToken::new();
+        pre_cancelled.cancel();
+        extractor2.run(pre_cancelled).await.unwrap();
+        assert_eq!(extractor2.filter.ts_after(), saved.unwrap());
+    }
+
+    #[tokio::test]
     async fn test_min_request_interval_spaces_requests() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
