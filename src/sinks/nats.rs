@@ -40,6 +40,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     /// Is the sink enabled?
     pub(crate) enabled: bool,

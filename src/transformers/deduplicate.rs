@@ -4,6 +4,7 @@ use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     /// Max number of keys to remember (FIFO eviction when full). `0` disables deduplication.
     capacity: usize,

@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 
 /// The webhook config
 #[derive(Clone, Debug, Deserialize, serde::Serialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     /// id of the webhook, used to define the path of the webhook's url (`/webhooks/{id}`)
     pub(crate) id: String,

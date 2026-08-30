@@ -11,6 +11,7 @@ use std::{
 use tokio_util::sync::CancellationToken;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     #[serde(default)]
     pub command: Vec<String>,

@@ -4,6 +4,7 @@ use crate::security::header::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     /// The SSE endpoint URL to connect to
     pub url: String,

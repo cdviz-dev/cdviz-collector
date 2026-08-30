@@ -9,6 +9,7 @@ use serde::Deserialize;
 
 /// Configuration for NATS source
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     /// NATS server URLs (comma-separated), e.g. `<nats://localhost:4222>`
     pub(crate) servers: String,

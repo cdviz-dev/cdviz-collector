@@ -24,6 +24,7 @@ use sha2::Sha256;
 type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct SignatureConfig {
     /// The header name of the signature to check
     pub(crate) header: String,
@@ -47,7 +48,7 @@ pub struct SignatureConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
-//#[serde(untagged)]
+#[serde(deny_unknown_fields)]
 pub enum SignatureOn {
     #[serde(rename = "body")]
     #[default]

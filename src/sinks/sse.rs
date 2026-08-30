@@ -15,6 +15,7 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     /// Is the sink enabled?
     pub(crate) enabled: bool,

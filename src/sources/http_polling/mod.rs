@@ -29,6 +29,7 @@ fn default_retry_duration() -> Duration {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     /// How often to poll the endpoint.
     #[serde(with = "humantime_serde")]

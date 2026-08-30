@@ -37,6 +37,7 @@ use retry::default_total_duration_of_retries;
 
 /// The database client config
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     /// Is the sink is enabled?
     pub(crate) enabled: bool,

@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     target: String,
 }

@@ -11,6 +11,7 @@ use std::time::Duration;
 
 /// Configuration for Kafka source
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     /// Kafka broker addresses (comma-separated)
     pub(crate) brokers: String,

@@ -79,7 +79,7 @@ impl<P: Pipe> Pipe for SpanPipe<P> {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
-#[serde(tag = "type")]
+#[serde(tag = "type", deny_unknown_fields)]
 pub(crate) enum Config {
     #[serde(alias = "passthrough")]
     #[default]

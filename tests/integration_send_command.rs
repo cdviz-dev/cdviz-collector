@@ -271,8 +271,8 @@ async fn test_send_command_with_signature_validation() {
         [sinks.http.headers.x-signature-256]
         type = "signature"
         token = "{}"
-        algorithm = "sha256"
-        prefix = "sha256="
+        signature_encoding = "hex"
+        signature_prefix = "sha256="
     "#},
         webhook_secret
     );

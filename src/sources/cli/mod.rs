@@ -11,6 +11,7 @@ use std::{
 use tracing::instrument;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     /// Data source specification - can be direct JSON, @filename, or @- for stdin
     pub data: Option<String>,

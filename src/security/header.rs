@@ -11,6 +11,7 @@ use super::signature::{self, Encoding, SignatureOn};
 /// Both libraries use the same underlying `HeaderMap`, `HeaderName`, and `HeaderValue` types.
 /// Configuration for generating outgoing request headers
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OutgoingHeaderConfig {
     /// The header name (consistent with `HeaderRuleConfig`)
     pub header: String,
@@ -20,7 +21,7 @@ pub struct OutgoingHeaderConfig {
 
 /// Different ways to generate header values
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", deny_unknown_fields)]
 pub enum HeaderSource {
     /// Static header value
     #[serde(rename = "static")]

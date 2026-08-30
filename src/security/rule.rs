@@ -9,6 +9,7 @@ use super::signature::{self, Encoding, SignatureOn};
 
 /// Configuration for validating incoming request headers
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HeaderRuleConfig {
     /// The header name to validate
     pub header: String,
@@ -33,7 +34,7 @@ impl From<signature::SignatureConfig> for HeaderRuleConfig {
 
 /// Validation rules for header values
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", deny_unknown_fields)]
 pub enum Rule {
     /// Header must exist (any non-empty value)
     #[serde(rename = "exists")]

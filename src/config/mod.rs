@@ -50,6 +50,7 @@ impl FromStr for ConfigSource {
 }
 
 #[derive(Clone, Debug, Deserialize, serde::Serialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     #[serde(default)]
     pub(crate) sources: HashMap<String, sources::Config>,
