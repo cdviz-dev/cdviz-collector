@@ -8,9 +8,44 @@
 
 use init_tracing_opentelemetry::opentelemetry::Context;
 use init_tracing_opentelemetry::opentelemetry::global;
+use init_tracing_opentelemetry::opentelemetry::metrics::Counter;
 use init_tracing_opentelemetry::opentelemetry::propagation::{Extractor, Injector};
 use init_tracing_opentelemetry::tracing_opentelemetry::OpenTelemetrySpanExt;
 use std::collections::HashMap;
+use std::sync::OnceLock;
+
+static PROMETHEUS_REGISTRY: OnceLock<prometheus::Registry> = OnceLock::new();
+
+/// Store the Prometheus registry created by `TracingConfig::with_metrics_prometheus()` so the
+/// HTTP layer (assembled several call-frames away from `init_log`) can mount `/metrics` without
+/// threading the registry through every intermediate signature.
+pub(crate) fn set_prometheus_registry(registry: prometheus::Registry) {
+    let _ = PROMETHEUS_REGISTRY.set(registry);
+}
+
+/// `Registry` is an `Arc` internally, so cloning it out is cheap.
+pub(crate) fn prometheus_registry() -> Option<prometheus::Registry> {
+    PROMETHEUS_REGISTRY.get().cloned()
+}
+
+static PIPE_EVENTS_COUNTER: OnceLock<Counter<u64>> = OnceLock::new();
+static SINK_EVENTS_COUNTER: OnceLock<Counter<u64>> = OnceLock::new();
+
+/// Counts events flowing through `SpanPipe` (every source and transformer). Recorded directly
+/// via the `opentelemetry::metrics` API instead of the `monotonic_counter.*` tracing-event
+/// convention, so incrementing it doesn't also emit a log line per event. When otel/metrics are
+/// disabled, `global::meter` returns a no-op meter, so `.add()` is a harmless no-op.
+pub(crate) fn pipe_events_counter() -> &'static Counter<u64> {
+    PIPE_EVENTS_COUNTER
+        .get_or_init(|| global::meter("cdviz-collector").u64_counter("pipe_events_total").build())
+}
+
+/// Counts events dispatched to sinks. See [`pipe_events_counter`] for why this bypasses the
+/// tracing-event counter convention.
+pub(crate) fn sink_events_counter() -> &'static Counter<u64> {
+    SINK_EVENTS_COUNTER
+        .get_or_init(|| global::meter("cdviz-collector").u64_counter("sink_events_total").build())
+}
 
 struct HeaderInjector<'a>(&'a mut HashMap<String, String>);
 

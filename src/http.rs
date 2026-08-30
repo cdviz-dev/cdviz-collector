@@ -245,12 +245,16 @@ fn app(
         inner.layer(middleware::from_fn_with_state(access_log.filter, access_log_middleware))
     };
 
-    inner
+    let mut inner = inner
         //start OpenTelemetry trace on incoming request
         .layer(OtelAxumLayer::default())
         // request processed without span / trace
         .route("/healthz", get(health))
-        .route("/readyz", get(ready))
+        .route("/readyz", get(ready));
+    if let Some(registry) = crate::otel::prometheus_registry() {
+        inner = inner.merge(axum_tracing_opentelemetry::prometheus_metrics::router(registry));
+    }
+    inner
         .fallback(fallback)
         .layer(Extension(shutdown_token))
         .layer((

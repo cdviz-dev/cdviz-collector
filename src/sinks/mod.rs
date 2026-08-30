@@ -26,6 +26,7 @@ use clickhouse::ClickHouseSink;
 use db::DbSink;
 use debug::DebugSink;
 use enum_dispatch::enum_dispatch;
+use init_tracing_opentelemetry::opentelemetry::KeyValue;
 #[cfg(feature = "sink_folder")]
 use folder::FolderSink;
 #[cfg(feature = "sink_http")]
@@ -193,9 +194,18 @@ pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> Join
                     let span = msg.processing_span(&name);
                     async {
                         tracing::debug!(name, event_id = ?msg.cdevent.id(), "sending");
-                        if let Err(err) = sink.send(&msg).await {
+                        let res = sink.send(&msg).await;
+                        if let Err(ref err) = res {
                             tracing::warn!(name, kind = "sink", event_id = ?msg.cdevent.id(), ?err, "fail during sending of event");
                         }
+                        crate::otel::sink_events_counter().add(
+                            1,
+                            &[
+                                KeyValue::new("kind", "sink"),
+                                KeyValue::new("name", name.clone()),
+                                KeyValue::new("status", if res.is_ok() { "ok" } else { "error" }),
+                            ],
+                        );
                     }
                     .instrument(span)
                     .await;

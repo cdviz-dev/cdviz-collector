@@ -12,6 +12,7 @@ use crate::{
     errors::{Error, IntoDiagnostic, Result, miette},
     event::{Event, EventPipe},
 };
+use init_tracing_opentelemetry::opentelemetry::KeyValue;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -74,6 +75,14 @@ impl<P: Pipe> Pipe for SpanPipe<P> {
             span.record("otel.status_code", "error");
             span.record("error", tracing::field::display(err));
         }
+        crate::otel::pipe_events_counter().add(
+            1,
+            &[
+                KeyValue::new("kind", self.kind),
+                KeyValue::new("name", self.name.clone()),
+                KeyValue::new("status", if res.is_ok() { "ok" } else { "error" }),
+            ],
+        );
         res
     }
 }

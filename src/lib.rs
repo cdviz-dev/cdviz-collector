@@ -113,20 +113,25 @@ fn init_log(verbosity: Verbosity, disable_otel: bool) -> Result<Guard> {
     if verbosity.is_present() {
         config = config.with_log_directives(verbosity.log_level_filter().as_str().to_lowercase());
     }
-    let guard = config
+    let mut config = config
         .with_stderr()
         .with_timer(init_tracing_opentelemetry::LogTimer::Uptime)
         .with_logfmt_format()
         .with_otel(!disable_otel)
-        .with_metrics(!disable_otel)
-        .init_subscriber()
-        .into_diagnostic()?;
+        .with_metrics(!disable_otel);
+    if !disable_otel {
+        config = config.with_metrics_prometheus();
+    }
+    let guard = config.init_subscriber().into_diagnostic()?;
     if !disable_otel {
         // The `TracingConfig` builder path does not register a global text-map propagator
         // (only the standalone `init_subscribers()` does), leaving it Noop — which silently
         // disables W3C trace-context inject/extract across every boundary (HTTP, Kafka, the
         // in-memory queue). Register it via the crate's API, honoring `OTEL_PROPAGATORS`.
         init_tracing_opentelemetry::init_propagator().into_diagnostic()?;
+    }
+    if let Some(registry) = guard.prometheus_registry() {
+        otel::set_prometheus_registry(registry.clone());
     }
     Ok(guard)
 }
