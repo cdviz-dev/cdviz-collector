@@ -521,3 +521,39 @@ fn remove_new_files(output_files: &Vec<PathBuf>) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn input_event(path: &str) -> EventSource {
+        EventSource {
+            body: serde_json::json!({"path": path}),
+            metadata: serde_json::json!({"path": path}),
+            headers: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn repeated_input_path_gets_disambiguated_filenames() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut sink = OutputToJsonFile {
+            directory: dir.path().to_path_buf(),
+            check_cdevent: false,
+            check_cdevent_failures_counter: Arc::new(AtomicU16::new(0)),
+            export_headers: false,
+            export_metadata: false,
+            seen_paths: HashMap::new(),
+        };
+
+        // Same input path emitted three times (1:n transformer output) must produce three
+        // distinct output files, not overwrite each other.
+        sink.send(input_event("events/001.json")).unwrap();
+        sink.send(input_event("events/001.json")).unwrap();
+        sink.send(input_event("events/001.json")).unwrap();
+
+        assert!(dir.path().join("events/001.json.new").exists());
+        assert!(dir.path().join("events/001.1.json.new").exists());
+        assert!(dir.path().join("events/001.2.json.new").exists());
+    }
+}

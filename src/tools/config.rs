@@ -182,6 +182,36 @@ pub(crate) async fn config_cmd(args: ConfigArgs) -> Result<bool> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    fn args(config: Option<ConfigSource>, print: bool, print_raw: bool, check: bool) -> ConfigArgs {
+        ConfigArgs {
+            config,
+            config_headers: Vec::new(),
+            set: Vec::new(),
+            print,
+            print_raw,
+            check,
+            for_command: ForCommand::Connect,
+        }
+    }
+
+    #[tokio::test]
+    async fn no_flags_is_an_error() {
+        let result = config_cmd(args(None, false, false, false)).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn check_on_invalid_config_returns_false_without_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("bad.toml");
+        std::fs::write(&path, "this is not valid toml @@@").unwrap();
+        let config = ConfigSource::File(path);
+        let result = config_cmd(args(Some(config), false, false, true)).await;
+        assert!(!result.unwrap());
+    }
+
     #[tokio::test]
     async fn print_redacts_secrets() {
         let toml = r#"
