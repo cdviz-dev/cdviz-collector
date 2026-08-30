@@ -75,6 +75,8 @@ description = "Lint all the code (lint_rust)"
 [tasks."lint:rust"]
 wait_for = ["build:cli"]
 run = [
+  # fmt --check is intentionally not a lint gate: formatting is enforced by
+  # `mise run autofix` (runs `format`) before commit, not by CI failing the build.
   # "cargo --locked fmt --all -- --check",
   # using the profile 'test' to reduce the number of compilation when running with test
   # => faster CI, less space used (and network for remote cache)
