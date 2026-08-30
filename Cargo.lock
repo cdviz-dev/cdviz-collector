@@ -473,9 +473,9 @@ dependencies = [
 
 [[package]]
 name = "axum-tracing-opentelemetry"
-version = "0.38.0"
+version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c938150bbecf4b43a24964bea0780f99d538b6654455e45b1784d410f122822"
+checksum = "6a940ca68abd9140674cbefc5d9225ae4cac9d0c40360830658112786ee68356"
 dependencies = [
  "axum",
  "futures-core",
@@ -1692,7 +1692,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c54e03a951783e8b327515db3f2a2fd0e3bed362a96b066f341ce66ed49b4ead"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -3014,9 +3014,9 @@ dependencies = [
 
 [[package]]
 name = "init-tracing-opentelemetry"
-version = "0.38.1"
+version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7265ae77e45e2cd3b03de74c62ee44583f8457902a72e3ad3f2184099c6e78e"
+checksum = "44e7389fce2508f77c8c87588f798d5e3d9c410e570ee96ce0f56724db7c2cb6"
 dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
@@ -6516,7 +6516,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",

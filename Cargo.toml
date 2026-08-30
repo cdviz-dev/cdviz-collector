@@ -25,7 +25,7 @@ path = "src/main.rs"
 [dependencies]
 async-nats = { version = "0.50", optional = true }
 axum = "0.8"
-axum-tracing-opentelemetry = "0.38"
+axum-tracing-opentelemetry = "0.39"
 base64 = "0.23"
 bytes = { version = "1", optional = true }
 cdevents-sdk = { version = "0.4", features = ["cloudevents"] }
@@ -59,7 +59,7 @@ globset = "0.4"
 hmac = "0.13"
 indexmap = "2"
 humantime-serde = "1"
-init-tracing-opentelemetry = { version = "0.38", features = [
+init-tracing-opentelemetry = { version = "0.39", features = [
   "logfmt",
   "metrics",
   "otlp",
