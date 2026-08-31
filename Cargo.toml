@@ -59,7 +59,7 @@ globset = "0.4"
 hmac = "0.13"
 indexmap = "2"
 humantime-serde = "1"
-init-tracing-opentelemetry = { version = "0.40", features = [
+init-tracing-opentelemetry = { version = "0.41", features = [
   "logfmt",
   "metrics",
   "metrics-prometheus",
