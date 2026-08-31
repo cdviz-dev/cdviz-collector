@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.50.0...0.50.1) - 2026-08-31
+
+### Fixed
+
+- *(deps)* update rust crate init-tracing-opentelemetry to 0.41 ([#406](https://github.com/cdviz-dev/cdviz-collector/pull/406))
+
 ## [0.50.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.49.0...0.50.0) - 2026-08-30
 
 ### Added
