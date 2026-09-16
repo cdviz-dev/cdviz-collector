@@ -16,3 +16,22 @@ begin
     insert into cdviz.cdevents_lake("payload") values(cdevent);
 end;
 $$ language plpgsql;
+
+-- store_cdevents: batch variant, one round trip for many events
+create or replace procedure cdviz.store_cdevents(
+    cdevents jsonb[]
+)
+as $$
+declare
+    cdevent jsonb;
+begin
+    foreach cdevent in array cdevents
+    loop
+        begin
+            call cdviz.store_cdevent(cdevent);
+        exception when unique_violation then
+            null;
+        end;
+    end loop;
+end;
+$$ language plpgsql;

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CALL cdviz.store_cdevents($1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f9333d5c6ab53e268b44cc0d76296e9465219885e02fe2a250ea559d6d781949"
+}

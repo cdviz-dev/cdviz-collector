@@ -26,11 +26,11 @@ use clickhouse::ClickHouseSink;
 use db::DbSink;
 use debug::DebugSink;
 use enum_dispatch::enum_dispatch;
-use init_tracing_opentelemetry::opentelemetry::KeyValue;
 #[cfg(feature = "sink_folder")]
 use folder::FolderSink;
 #[cfg(feature = "sink_http")]
 use http::HttpSink;
+use init_tracing_opentelemetry::opentelemetry::KeyValue;
 #[cfg(feature = "sink_kafka")]
 use kafka::KafkaSink;
 #[cfg(feature = "sink_nats")]
@@ -179,6 +179,13 @@ trait Sink {
     fn get_routes(&self) -> Option<axum::Router> {
         None
     }
+
+    /// Called once the message queue is closed (graceful shutdown), before the sink task
+    /// exits, so a sink that buffers internally (e.g. batching) can flush pending data.
+    /// Most sinks write synchronously and don't need this.
+    async fn flush(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> JoinHandle<Result<()>> {
@@ -229,6 +236,9 @@ pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> Join
                     break;
                 }
             }
+        }
+        if let Err(ref err) = sink.flush().await {
+            tracing::warn!(name, kind = "sink", ?err, "fail during flush on shutdown");
         }
         tracing::info!(name, kind = "sink", "exiting");
         Ok(())
