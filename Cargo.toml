@@ -152,7 +152,7 @@ indoc = "2"
 insta = { version = "1", features = ["yaml"] }
 pretty_assertions = "1"
 proptest = "1"
-rstest = "0.26"
+rstest = "0.27"
 tempfile = "3"
 test-strategy = "0.4"
 test-trace = "0.3"
