@@ -150,6 +150,11 @@ impl StatusPolicy {
     /// `Default` value, and live here rather than as seed entries that user config
     /// would replace wholesale): `401`/`403` → `abort` (auth/permission misconfig
     /// that won't self-heal), `5xx` → `hold` (transient), everything else → `skip`.
+    ///
+    /// Note for GitHub-like APIs: a spent rate limit is also reported as `403`, which this
+    /// default would abort on. That case is caught earlier by [`rate_limit_reset_in`] (the
+    /// poll pauses until the window resets); configure `on_status = { "403" = "hold" }` to
+    /// keep the time window as well, for an API that omits `x-ratelimit-*`.
     fn resolve(&self, status: u16) -> Behavior {
         if let Some(b) = self.0.get(&status.to_string()) {
             return *b;
@@ -218,6 +223,34 @@ fn default_max_depth() -> u32 {
 }
 
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Upper bound on a rate-limit pause, so a bogus or far-future `x-ratelimit-reset` cannot
+/// stall a poll indefinitely. GitHub's primary window is one hour.
+const MAX_RATE_LIMIT_WAIT: Duration = Duration::from_secs(3600);
+
+/// How long to wait before the next request when the response says the rate-limit budget is
+/// spent (`x-ratelimit-remaining: 0`), derived from `x-ratelimit-reset` (unix seconds).
+///
+/// Returns `None` when the headers are absent, unparseable, or the budget is not exhausted —
+/// i.e. the common case costs two header lookups. The `+1s` margin avoids retrying a hair
+/// early against a server whose clock is slightly ahead.
+fn rate_limit_reset_in(headers: &HeaderMap) -> Option<Duration> {
+    let header_num = |name: &str| -> Option<i64> {
+        headers.get(name)?.to_str().ok()?.trim().parse::<i64>().ok()
+    };
+    if header_num("x-ratelimit-remaining")? > 0 {
+        return None;
+    }
+    let reset_at = header_num("x-ratelimit-reset")?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs()
+        .try_into()
+        .ok()?;
+    let wait: i64 = reset_at.checked_sub(now)?;
+    (wait > 0).then(|| Duration::from_secs(wait.unsigned_abs()) + Duration::from_secs(1))
+}
 
 /// Controls how the HTTP response body is split into [`EventSource`] instances.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -411,6 +444,11 @@ pub(crate) struct HttpPollingExtractor {
     source_name: String,
     /// Whitelist of response header names forwarded into the pipe.
     headers_to_keep: Vec<HeaderName>,
+    /// Instant before which no request may be issued, because the upstream reported its
+    /// rate-limit budget spent. Kept on the extractor, not just inside a poll: a poll that
+    /// ends in `hold` would otherwise retry after `polling_interval` and hammer an API that
+    /// has already said "not before X" — which is how secondary rate limits get triggered.
+    rate_limited_until: Option<Instant>,
     #[cfg(feature = "state")]
     state_op: Option<opendal::Operator>,
 }
@@ -473,6 +511,7 @@ impl HttpPollingExtractor {
             next,
             source_name,
             headers_to_keep,
+            rate_limited_until: None,
             #[cfg(feature = "state")]
             state_op,
         })
@@ -563,6 +602,25 @@ impl HttpPollingExtractor {
             .collect())
     }
 
+    /// Hold every remaining request in the poll until the rate-limit window resets.
+    ///
+    /// GitHub reports an exhausted budget as `403` (or `429`) *without* a `Retry-After`, so
+    /// the retry middleware cannot see it and `on_status` alone would just burn the rest of
+    /// the worklist against a wall. Pushes `next_allowed` out (never pulls it in, so it
+    /// composes with `min_request_interval`).
+    fn apply_rate_limit_pause(&mut self, headers: &HeaderMap, next_allowed: &mut Option<Instant>) {
+        let Some(reset_in) = rate_limit_reset_in(headers) else { return };
+        let reset_in = reset_in.min(MAX_RATE_LIMIT_WAIT);
+        tracing::warn!(
+            wait_s = reset_in.as_secs(),
+            source = %self.source_name,
+            "rate limit exhausted; pausing until reset"
+        );
+        let at = Instant::now() + reset_in;
+        *next_allowed = Some(next_allowed.map_or(at, |cur| cur.max(at)));
+        self.rate_limited_until = Some(self.rate_limited_until.map_or(at, |cur| cur.max(at)));
+    }
+
     /// Resolve and log the [`Behavior`] for a non-2xx response per `on_status`.
     fn classify_non_success(&self, status: u16, url: &str) -> Behavior {
         let behavior = self.config.on_status.resolve(status);
@@ -622,7 +680,9 @@ impl HttpPollingExtractor {
         let mut inflight = FuturesUnordered::new();
         let mut issued: u32 = 0;
         let mut progressed: u32 = 0;
-        let mut next_allowed: Option<Instant> = None;
+        // Carry a pending rate-limit pause into this poll; `run` has already waited it out,
+        // this only matters if the reset moved further away meanwhile.
+        let mut next_allowed: Option<Instant> = self.rate_limited_until.take();
 
         loop {
             // Fill in-flight slots from the queue, honoring budget + rate limit.
@@ -639,14 +699,15 @@ impl HttpPollingExtractor {
                 }
                 issued += 1;
 
-                if let Some(interval) = self.config.min_request_interval {
+                // `next_allowed` is set both by `min_request_interval` and by a rate-limit
+                // reset, so it is honoured even when no interval is configured.
+                if let Some(at) = next_allowed {
                     let now = Instant::now();
-                    let at = next_allowed.unwrap_or(now);
                     if at > now {
                         sleep(at - now).await;
                     }
-                    next_allowed = Some(Instant::now() + interval);
                 }
+                next_allowed = self.config.min_request_interval.map(|i| Instant::now() + i);
 
                 let client = self.client.clone();
                 let configs = Arc::clone(&header_configs);
@@ -668,6 +729,8 @@ impl HttpPollingExtractor {
                 // Transport failure already logged in `fetch`; not progress.
                 continue;
             };
+
+            self.apply_rate_limit_pause(&resp.headers, &mut next_allowed);
 
             // Non-2xx responses are handled by the status policy, not the driver.
             if !(200..300).contains(&resp.status) {
@@ -756,6 +819,21 @@ impl HttpPollingExtractor {
         }
 
         while !cancel_token.is_cancelled() {
+            // Honour a rate-limit reset before starting another poll.
+            if let Some(until) = self.rate_limited_until {
+                let now = Instant::now();
+                if until > now {
+                    tracing::info!(
+                        wait_s = (until - now).as_secs(),
+                        source = %self.source_name,
+                        "waiting for rate-limit reset before next poll"
+                    );
+                    tokio::select! {
+                        () = sleep(until - now) => {},
+                        () = cancel_token.cancelled() => break,
+                    }
+                }
+            }
             if self.filter.is_at_limit() {
                 tracing::info!(
                     source = %self.source_name,
@@ -815,6 +893,77 @@ mod tests {
     use tokio_util::sync::CancellationToken;
     use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn headers_of(pairs: &[(&str, &str)]) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        for (k, v) in pairs {
+            h.insert(HeaderName::from_str(k).unwrap(), v.parse().unwrap());
+        }
+        h
+    }
+
+    fn unix_now() -> i64 {
+        i64::try_from(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_rate_limit_reset_in_none_when_budget_remains() {
+        let headers = headers_of(&[
+            ("x-ratelimit-remaining", "42"),
+            ("x-ratelimit-reset", &(unix_now() + 600).to_string()),
+        ]);
+        assert!(rate_limit_reset_in(&headers).is_none());
+    }
+
+    #[test]
+    fn test_rate_limit_reset_in_waits_when_budget_spent() {
+        let headers = headers_of(&[
+            ("x-ratelimit-remaining", "0"),
+            ("x-ratelimit-reset", &(unix_now() + 600).to_string()),
+        ]);
+        let wait = rate_limit_reset_in(&headers).expect("should wait");
+        // ~600s plus the 1s clock-skew margin
+        assert!(wait >= Duration::from_secs(590) && wait <= Duration::from_secs(605), "{wait:?}");
+    }
+
+    #[test]
+    fn test_rate_limit_reset_in_none_for_absent_or_past_or_garbage_headers() {
+        assert!(rate_limit_reset_in(&HeaderMap::new()).is_none());
+        // remaining=0 but no reset header
+        assert!(rate_limit_reset_in(&headers_of(&[("x-ratelimit-remaining", "0")])).is_none());
+        // reset already in the past: nothing to wait for
+        let past = headers_of(&[
+            ("x-ratelimit-remaining", "0"),
+            ("x-ratelimit-reset", &(unix_now() - 10).to_string()),
+        ]);
+        assert!(rate_limit_reset_in(&past).is_none());
+        // unparseable values must not panic
+        let garbage = headers_of(&[
+            ("x-ratelimit-remaining", "not-a-number"),
+            ("x-ratelimit-reset", "later"),
+        ]);
+        assert!(rate_limit_reset_in(&garbage).is_none());
+    }
+
+    #[test]
+    fn test_status_policy_403_can_be_overridden_to_hold() {
+        // GitHub reports a spent rate limit as 403; the built-in default aborts the source,
+        // which silently ends a backfill. The generated backfill config overrides it.
+        assert_eq!(StatusPolicy::default().resolve(403), Behavior::Abort);
+        let policy: StatusPolicy =
+            serde_json::from_str(r#"{"403":"hold","429":"hold"}"#).unwrap();
+        assert_eq!(policy.resolve(403), Behavior::Hold);
+        assert_eq!(policy.resolve(429), Behavior::Hold);
+        // unlisted statuses keep the built-in defaults
+        assert_eq!(policy.resolve(500), Behavior::Hold);
+        assert_eq!(policy.resolve(404), Behavior::Skip);
+    }
 
     /// Build a config from a full driver VRL script.
     fn config_with_driver(driver_vrl: String) -> Config {
@@ -1104,6 +1253,48 @@ mod tests {
         let result = timeout(Duration::from_secs(2), extractor.run(cancel_token)).await;
         assert!(result.is_ok(), "run() should complete within timeout");
         assert!(result.unwrap().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_rate_limited_response_throttles_subsequent_polls() {
+        // A 403 + `x-ratelimit-remaining: 0` is GitHub's "budget spent". With `403 => hold`
+        // the poll does not advance, so without a cross-poll pause the source would re-issue
+        // a request every `polling_interval` until the reset — exactly the hammering that
+        // trips secondary rate limits. Only the first poll should reach the server.
+        let server = MockServer::start().await;
+        let reset_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 3600;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(
+                ResponseTemplate::new(403)
+                    .insert_header("x-ratelimit-remaining", "0")
+                    .insert_header("x-ratelimit-reset", reset_at.to_string().as_str())
+                    .set_body_raw("{}", "application/json"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let mut config = make_config(&server.uri());
+        config.polling_interval = Duration::from_millis(10);
+        config.on_status = serde_json::from_str(r#"{"403":"hold"}"#).unwrap();
+
+        let cancel_token = CancellationToken::new();
+        let (mut extractor, _collector) = make_extractor(&config);
+
+        // Plenty of polling intervals elapse; the pause must suppress all but the first.
+        let _ = timeout(Duration::from_millis(400), extractor.run(cancel_token.clone())).await;
+        cancel_token.cancel();
+
+        assert!(
+            extractor.rate_limited_until.is_some_and(|t| t > Instant::now()),
+            "pause must outlive the poll that observed it"
+        );
+        // `expect(1)` on the mock is asserted when the server is dropped.
     }
 
     #[tokio::test]
