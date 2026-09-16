@@ -1,6 +1,6 @@
 [package]
 name = "cdviz-collector"
-version = "0.50.0"
+version = "0.50.1"
 edition = "2024"
 rust-version = "1.98"
 description = "A service and CLI tool for collecting SDLC/CI/CD events and dispatching them as CDEvents"
