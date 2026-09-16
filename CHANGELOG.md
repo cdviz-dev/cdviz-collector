@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.50.0...0.50.1) - 2026-09-16
+
+### Fixed
+
+- *(deps)* update
+- *(http_polling)* pause on rate limit instead of aborting the source
+- *(sources)* apply backpressure instead of silently dropping events
+- *(deps)* update rust crate init-tracing-opentelemetry to 0.41 ([#406](https://github.com/cdviz-dev/cdviz-collector/pull/406))
+
+### Other
+
+- *(deps)* update rust crate rstest to 0.27 ([#409](https://github.com/cdviz-dev/cdviz-collector/pull/409))
+- *(deps)* update renovatebot/github-action action to v46.3.0 ([#411](https://github.com/cdviz-dev/cdviz-collector/pull/411))
+
 ## [0.50.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.49.0...0.50.0) - 2026-08-30
 
 ### Added
