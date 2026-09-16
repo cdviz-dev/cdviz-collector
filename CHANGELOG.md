@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.51.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.50.1...0.51.0) - 2026-09-16
+
+### Added
+
+- *(sinks/db)* batch inserts to reduce round trips under burst load
+
+### Fixed
+
+- *(config)* strip `remote` key after pre-processing of config to have no unknow fields (deny_unknown_fields)
+
 ## [0.50.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.50.0...0.50.1) - 2026-09-16
 
 ### Fixed
