@@ -124,6 +124,7 @@ impl PipelineBuilder {
             shutdown_token,
             Some(&self.config.state),
             &self.config.http.root_url,
+            self.config.pipeline.queue_capacity,
         )
         .await?;
 

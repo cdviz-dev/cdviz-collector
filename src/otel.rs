@@ -30,6 +30,7 @@ pub(crate) fn prometheus_registry() -> Option<prometheus::Registry> {
 
 static PIPE_EVENTS_COUNTER: OnceLock<Counter<u64>> = OnceLock::new();
 static SINK_EVENTS_COUNTER: OnceLock<Counter<u64>> = OnceLock::new();
+static SOURCE_QUEUE_SATURATED_COUNTER: OnceLock<Counter<u64>> = OnceLock::new();
 
 /// Counts events flowing through `SpanPipe` (every source and transformer). Recorded directly
 /// via the `opentelemetry::metrics` API instead of the `monotonic_counter.*` tracing-event
@@ -45,6 +46,16 @@ pub(crate) fn pipe_events_counter() -> &'static Counter<u64> {
 pub(crate) fn sink_events_counter() -> &'static Counter<u64> {
     SINK_EVENTS_COUNTER
         .get_or_init(|| global::meter("cdviz-collector").u64_counter("sink_events_total").build())
+}
+
+/// Counts events refused by a source because the source→sink queue was above its high
+/// watermark. Non-zero means upstream is faster than the slowest sink and is being asked to
+/// retry — the backpressure counterpart of `sink_queue_lagged_events` (which counts events
+/// already lost). See [`pipe_events_counter`] for why this bypasses the tracing convention.
+pub(crate) fn source_queue_saturated_counter() -> &'static Counter<u64> {
+    SOURCE_QUEUE_SATURATED_COUNTER.get_or_init(|| {
+        global::meter("cdviz-collector").u64_counter("source_queue_saturated_total").build()
+    })
 }
 
 struct HeaderInjector<'a>(&'a mut HashMap<String, String>);

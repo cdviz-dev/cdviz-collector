@@ -48,6 +48,19 @@ pub enum Extractor {
 }
 
 impl Config {
+    /// Whether this source can tell its producer to slow down.
+    ///
+    /// Only push sources can: the producer is an HTTP caller that gets a 503 + `Retry-After`
+    /// and retries. A pull source has nobody to answer — refusing an event there would just
+    /// drop it, and a burst that the queue could have absorbed would be lost instead. So
+    /// backpressure is enabled only here; pull sources keep enqueuing and rely on the
+    /// `sink_queue_lagged_events` counter if a sink really cannot keep up.
+    pub(crate) fn supports_backpressure(&self) -> bool {
+        matches!(self, Self::Webhook(_))
+    }
+}
+
+impl Config {
     /// ignore the 'enabled' field, create the extractor like if it was enabled.
     pub(crate) async fn make_extractor(
         &self,

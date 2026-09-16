@@ -1,5 +1,5 @@
 use super::EventSourcePipe;
-use crate::errors::ReportWrapper;
+use crate::errors::{Error, ReportWrapper};
 use crate::security::header::filter_http_headers;
 use crate::security::rule::{
     HeaderRuleConfig, HeaderRuleMap, header_rule_map_to_configs, validate_headers,
@@ -92,6 +92,19 @@ async fn webhook(
     let send_result =
         state.next.lock().unwrap_or_else(std::sync::PoisonError::into_inner).send(event);
     if let Err(err) = send_result {
+        // Backpressure: the source→sink queue is nearly full, and enqueuing anyway would make
+        // a lagging sink silently drop already-queued events. Answer 503 + `Retry-After` so
+        // the caller (typically a backfill job POSTing history in bulk) slows down and
+        // retries instead of losing the event. `total_duration_of_retries` on the http sink
+        // bounds how long it keeps trying.
+        if matches!(err.downcast_ref::<Error>(), Some(Error::QueueSaturated { .. })) {
+            tracing::warn!(error = ?err, "webhook refused: event queue saturated");
+            return (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                [(axum::http::header::RETRY_AFTER, "1")],
+            )
+                .into_response();
+        }
         return ReportWrapper::from(err).into_response();
     }
     (axum::http::StatusCode::CREATED).into_response()
@@ -141,7 +154,7 @@ mod tests_handler {
         let config = Config { id: "test".to_string(), ..Default::default() };
         let (tx, _rx) = tokio::sync::broadcast::channel(10);
         let terminal: EventSourcePipe =
-            Box::new(crate::sources::send_cdevents::Processor::new(tx, "http://test/".to_string()));
+            Box::new(crate::sources::send_cdevents::Processor::new(tx, "http://test/".to_string(), Some(10)));
         let router = make_route(&config, terminal);
 
         let request = Request::builder()
@@ -156,6 +169,67 @@ mod tests_handler {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(body["detail"].as_str().is_some_and(|d| !d.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn test_webhook_returns_503_with_retry_after_when_queue_saturated() {
+        // A `broadcast` channel drops the OLDEST queued messages for a receiver that lags,
+        // silently. Once the queue is past its high watermark the webhook must refuse new
+        // events (503 + Retry-After) so the caller retries, instead of accepting one and
+        // causing an already-queued event to be lost.
+        let config = Config { id: "test".to_string(), ..Default::default() };
+        let capacity = 5;
+        let (tx, _rx) = tokio::sync::broadcast::channel(capacity);
+        let cdevent = json!({
+            "context": {
+                "version": "0.4.0",
+                "id": "saturation-test",
+                "source": "/test",
+                "type": "dev.cdevents.service.deployed.0.1.1",
+                "timestamp": "2024-03-14T10:30:00Z"
+            },
+            "subject": {
+                "id": "test-subject",
+                "source": "/test",
+                "type": "service",
+                "content": {
+                    "environment": { "id": "test-env" },
+                    "artifactId": "pkg:test/artifact@1.0.0"
+                }
+            }
+        });
+
+        // Fill the queue past the 80% watermark. `_rx` never reads, so nothing drains.
+        let post = |router: Router| {
+            let body = cdevent.to_string();
+            async move {
+                let request = Request::builder()
+                    .uri("/webhook/test")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body))
+                    .unwrap();
+                router.oneshot(request).await.unwrap()
+            }
+        };
+        let make_router = || {
+            let terminal: EventSourcePipe = Box::new(
+                crate::sources::send_cdevents::Processor::new(
+                    tx.clone(),
+                    "http://test/".to_string(),
+                    Some(capacity),
+                ),
+            );
+            make_route(&config, terminal)
+        };
+
+        // watermark = 80% of 5 = 4, so the first 4 are accepted and the 5th is refused.
+        for i in 0..4 {
+            assert_eq!(post(make_router()).await.status(), StatusCode::CREATED, "event {i}");
+        }
+        let response = post(make_router()).await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers().get("retry-after").unwrap(), "1");
     }
 
     #[tokio::test]

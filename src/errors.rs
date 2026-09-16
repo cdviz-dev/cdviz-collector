@@ -32,6 +32,17 @@ pub(crate) enum Error {
         #[error(ignore)]
         reason: String,
     },
+    /// The in-memory queue between sources and sinks is close to full: accepting more
+    /// would make a lagging sink drop already-queued events (broadcast lag is silent).
+    /// Push-style sources surface this to the caller so it can retry instead.
+    #[from(ignore)]
+    #[display("event queue saturated ({queued}/{capacity} queued), retry later")]
+    QueueSaturated {
+        #[error(ignore)]
+        queued: usize,
+        #[error(ignore)]
+        capacity: usize,
+    },
 }
 
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -51,11 +62,13 @@ impl Error {
 
     /// Maps an error variant to the HTTP status code it should be reported as.
     /// Variants caused by the caller's payload (schema mismatch, transform
-    /// rejection) map to a 4xx; anything else is treated as an internal failure.
+    /// rejection) map to a 4xx; backpressure maps to 503 so the caller retries;
+    /// anything else is treated as an internal failure.
     pub(crate) fn status_code(&self) -> axum::http::StatusCode {
         match self {
             Self::Serde { .. } => axum::http::StatusCode::BAD_REQUEST,
             Self::Rejected { .. } => axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+            Self::QueueSaturated { .. } => axum::http::StatusCode::SERVICE_UNAVAILABLE,
             _ => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

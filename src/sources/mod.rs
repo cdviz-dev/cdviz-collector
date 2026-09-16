@@ -88,11 +88,13 @@ pub(crate) async fn make(
     cancel_token: CancellationToken,
     state_config: Option<&crate::state::Config>,
     root_url: &url::Url,
+    queue_capacity: usize,
 ) -> Result<extractors::Extractor> {
     let mut default_source = root_url.clone();
     default_source.query_pairs_mut().append_pair("source", name);
+    let high_watermark = config.extractor.supports_backpressure().then_some(queue_capacity);
     let terminal: EventSourcePipe =
-        Box::new(send_cdevents::Processor::new(tx, default_source.to_string()));
+        Box::new(send_cdevents::Processor::new(tx, default_source.to_string(), high_watermark));
     let pipe = transformers::build_transformer_chain(&config.chain.transformers, terminal)?;
     // Originate (or continue, for webhook) the trace: one span per emitted event,
     // named after the source, so transformers nest under it and the trace context
@@ -193,12 +195,22 @@ pub(crate) async fn create_sources_and_routes(
     cancel_token: &CancellationToken,
     state_config: Option<&crate::state::Config>,
     root_url: &url::Url,
+    queue_capacity: usize,
 ) -> Result<SourceHandlesAndRoutes> {
     let mut sources = vec![];
     for (name, config) in source_configs.into_iter().filter(|(_name, config)| config.is_enabled()) {
         tracing::info!(kind = "source", name, "starting");
         sources.push(
-            make(&name, &config, tx.clone(), cancel_token.clone(), state_config, root_url).await?,
+            make(
+                &name,
+                &config,
+                tx.clone(),
+                cancel_token.clone(),
+                state_config,
+                root_url,
+                queue_capacity,
+            )
+            .await?,
         );
     }
 
