@@ -125,6 +125,9 @@ impl<T: Provider> RemoteFileAdapter<T> {
         // Process each profile
         for dict in map.values_mut() {
             self.process_dict(dict, &remote_configs)?;
+            // `remote` only exists to define providers for `*_rfile` lookups above;
+            // it isn't part of `Config`, and deny_unknown_fields rejects it if left in.
+            dict.remove("remote");
         }
 
         Ok(map)
