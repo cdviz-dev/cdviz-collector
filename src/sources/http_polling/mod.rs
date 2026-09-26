@@ -393,7 +393,7 @@ async fn fetch(
     // response Link header or body cursor) to a different origin than the poll's
     // original trusted request — same threat as credential-stripping on redirects.
     let same_origin =
-        trusted_origin.is_none_or(|trusted| !retry_after_middleware::is_cross_origin(trusted, &url));
+        trusted_origin.is_none_or(|trusted| !crate::security::header::is_cross_origin(trusted, &url));
     if same_origin {
         match generate_headers(header_configs, Some(body_bytes)) {
             Ok(headers) => req = req.headers(headers),
@@ -480,7 +480,13 @@ impl HttpPollingExtractor {
         // No TracingMiddleware here: polls run every interval and are usually idle, so a span
         // per HTTP request would be noise. The trace originates only when a message is emitted
         // (the source span in `emit_response`). Retry middleware is independent of tracing.
-        .with(RetryAfterMiddleware)
+        .with(RetryAfterMiddleware {
+            configured_headers: config
+                .headers
+                .keys()
+                .filter_map(|name| HeaderName::from_str(name).ok())
+                .collect(),
+        })
         .with(RetryTransientMiddleware::new_with_policy_and_strategy(
             retry_policy,
             config.on_status.clone(),

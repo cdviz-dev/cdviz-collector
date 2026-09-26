@@ -76,7 +76,11 @@ impl TryFrom<Config> for HttpSink {
         let retry_policy = ExponentialBackoff::builder()
             .build_with_total_retry_duration_and_limit_retries(value.total_duration_of_retries);
         let client = ClientBuilder::new(
-            reqwest::Client::builder().user_agent(value.user_agent).build().into_diagnostic()?,
+            reqwest::Client::builder()
+                .user_agent(value.user_agent)
+                .redirect(crate::security::header::redirect_policy(!value.headers.is_empty()))
+                .build()
+                .into_diagnostic()?,
         )
         .with(TracingMiddleware::default())
         .with(RetryTransientMiddleware::new_with_policy(retry_policy))
@@ -510,6 +514,64 @@ mod tests {
 
         // Should handle redirects properly
         assert2::assert!(let Ok(()) = sink.send(&msg).await);
+    }
+
+    fn config_with_api_key(destination: &str) -> Config {
+        let mut config = build_config(destination);
+        config.headers.insert(
+            "X-API-Key".to_string(),
+            HeaderSource::Secret {
+                value: "test-secret-key".into(),
+                prefix: String::new(),
+                suffix: String::new(),
+            },
+        );
+        config
+    }
+
+    #[test_strategy::proptest(async = "tokio", cases = 1)]
+    async fn test_http_sink_keeps_configured_headers_on_same_origin_redirect(msg: Message) {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .respond_with(ResponseTemplate::new(307).insert_header("Location", "/v2/events"))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v2/events"))
+            .and(wiremock::matchers::header("X-API-Key", "test-secret-key"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let sink = HttpSink::try_from(config_with_api_key(&format!("{}/events", server.uri())))
+            .unwrap();
+        sink.send(&msg).await.unwrap();
+    }
+
+    #[test_strategy::proptest(async = "tokio", cases = 1)]
+    async fn test_http_sink_does_not_replay_configured_headers_cross_origin(msg: Message) {
+        let attacker = MockServer::start().await;
+        Mock::given(wiremock::matchers::any())
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&attacker)
+            .await;
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .respond_with(
+                ResponseTemplate::new(307)
+                    .insert_header("Location", format!("{}/steal", attacker.uri()).as_str()),
+            )
+            .mount(&server)
+            .await;
+
+        let sink = HttpSink::try_from(config_with_api_key(&format!("{}/events", server.uri())))
+            .unwrap();
+        // The 3xx comes back as a non-2xx response (logged), the key never reaches `attacker`.
+        sink.send(&msg).await.unwrap();
     }
 
     #[test_strategy::proptest(async = "tokio", cases = 10)]

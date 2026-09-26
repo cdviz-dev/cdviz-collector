@@ -344,6 +344,11 @@ min_request_interval = "720ms"  # ≈ 83 req/min
 Automatic redirect following is disabled in the underlying HTTP client; all
 redirect and retry behaviour is managed by the middleware stack.
 
+A redirect to another origin (scheme, host or port), e.g. an API sending a download
+to blob storage, is followed **without** `Authorization`, `Cookie`,
+`Proxy-Authorization` and the configured `headers`, so credentials never reach a
+host they were not configured for. Same-origin redirects keep every header.
+
 ## Backfill Pattern
 
 A historical backfill is just a `connect` run with `ts_after` and

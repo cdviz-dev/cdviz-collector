@@ -160,6 +160,48 @@ fn generate_header_value_with_context(
     })
 }
 
+/// Same origin = same scheme, host and port (an unknown default port counts as different).
+pub(crate) fn is_cross_origin(a: &url::Url, b: &url::Url) -> bool {
+    if a.scheme() != b.scheme() || a.host() != b.host() {
+        return true;
+    }
+    match (a.port_or_known_default(), b.port_or_known_default()) {
+        (Some(pa), Some(pb)) => pa != pb,
+        _ => true,
+    }
+}
+
+/// Redirect policy for a client sending configured `headers` (API keys, signatures).
+///
+/// reqwest's default policy only strips `Authorization`/`Cookie`/`Proxy-Authorization` on a
+/// cross-origin redirect, so a configured `X-API-Key` would be replayed to whatever host the
+/// server redirects to. With configured headers, same-origin redirects are still followed
+/// (they keep the headers) but a cross-origin one is not: the 3xx is returned to the caller.
+/// If the new origin is legitimate, point the config at it.
+#[cfg(any(feature = "sink_http", feature = "source_sse"))]
+pub(crate) fn redirect_policy(has_configured_headers: bool) -> reqwest::redirect::Policy {
+    if !has_configured_headers {
+        return reqwest::redirect::Policy::default();
+    }
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() > 10 {
+            return attempt.error("too many redirects");
+        }
+        let cross_origin =
+            attempt.previous().first().is_some_and(|origin| is_cross_origin(origin, attempt.url()));
+        if cross_origin {
+            tracing::warn!(
+                location = %attempt.url(),
+                "not following cross-origin redirect: it would forward the configured headers; \
+                 update the configured URL if this is the new endpoint"
+            );
+            attempt.stop()
+        } else {
+            attempt.follow()
+        }
+    })
+}
+
 /// Convert an HTTP [`HeaderMap`] to a `HashMap<String, String>`, keeping only
 /// headers that appear in `headers_to_keep` and are not marked sensitive.
 ///

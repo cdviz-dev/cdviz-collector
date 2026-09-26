@@ -1,4 +1,6 @@
 use http::Extensions;
+use crate::security::header::is_cross_origin;
+use reqwest::header::HeaderName;
 use reqwest::{Request, Response, StatusCode};
 use reqwest_middleware::{Middleware, Next};
 use std::time::{Duration, SystemTime};
@@ -21,7 +23,10 @@ const MAX_RETRIES: u32 = 10;
 /// If no `Retry-After` is present on a 429/503, the response is returned as-is (letting
 /// the [`reqwest_retry::RetryTransientMiddleware`] stacked behind this one handle it via
 /// exponential backoff for network-level transient failures).
-pub(crate) struct RetryAfterMiddleware;
+pub(crate) struct RetryAfterMiddleware {
+    /// Configured outgoing header names, stripped on a cross-origin redirect.
+    pub(crate) configured_headers: Vec<HeaderName>,
+}
 
 #[async_trait::async_trait]
 impl Middleware for RetryAfterMiddleware {
@@ -54,7 +59,7 @@ impl Middleware for RetryAfterMiddleware {
                     let Some(loc) = resolve_location(resp.headers(), req.url()) else {
                         return Ok(resp);
                     };
-                    strip_credentials_if_cross_origin(&mut req, &loc);
+                    strip_credentials_if_cross_origin(&mut req, &loc, &self.configured_headers);
                     *req.method_mut() = reqwest::Method::GET;
                     *req.url_mut() = loc;
                     *req.body_mut() = None;
@@ -94,7 +99,7 @@ impl Middleware for RetryAfterMiddleware {
                     let Some(loc) = resolve_location(resp.headers(), req.url()) else {
                         return Ok(resp);
                     };
-                    strip_credentials_if_cross_origin(&mut req, &loc);
+                    strip_credentials_if_cross_origin(&mut req, &loc, &self.configured_headers);
                     *req.url_mut() = loc;
                     current = req;
                     redirect_count += 1;
@@ -115,27 +120,25 @@ fn resolve_location(
 
 /// Strip credential headers when a redirect crosses origins (scheme + host + port).
 ///
-/// Prevents `Authorization`, `Cookie`, and `Proxy-Authorization` from being
-/// forwarded to a different server. Called before following any redirect.
-fn strip_credentials_if_cross_origin(req: &mut Request, new_url: &reqwest::Url) {
+/// Prevents `Authorization`, `Cookie`, `Proxy-Authorization` and the source's configured
+/// `headers` (API keys, signatures) from being forwarded to a different server, e.g. an API
+/// redirecting a download to blob storage. Same-origin redirects keep everything.
+fn strip_credentials_if_cross_origin(
+    req: &mut Request,
+    new_url: &reqwest::Url,
+    configured_headers: &[HeaderName],
+) {
     if is_cross_origin(req.url(), new_url) {
         let headers = req.headers_mut();
         headers.remove(reqwest::header::AUTHORIZATION);
         headers.remove(reqwest::header::COOKIE);
         headers.remove(reqwest::header::PROXY_AUTHORIZATION);
+        for name in configured_headers {
+            headers.remove(name);
+        }
     }
 }
 
-pub(super) fn is_cross_origin(a: &reqwest::Url, b: &reqwest::Url) -> bool {
-    if a.scheme() != b.scheme() || a.host() != b.host() {
-        return true;
-    }
-    match (a.port_or_known_default(), b.port_or_known_default()) {
-        (Some(pa), Some(pb)) => pa != pb,
-        // Unknown scheme: treat as cross-origin to be conservative
-        _ => true,
-    }
-}
 
 /// Parse `Retry-After` header value as a `Duration`.
 ///
@@ -235,9 +238,11 @@ mod tests {
 
         let mut req = reqwest::Request::new(reqwest::Method::GET, original);
         req.headers_mut().insert(AUTHORIZATION, HeaderValue::from_static("Bearer secret"));
+        req.headers_mut().insert("x-api-key", HeaderValue::from_static("secret"));
 
-        strip_credentials_if_cross_origin(&mut req, &new_url);
+        strip_credentials_if_cross_origin(&mut req, &new_url, &[HeaderName::from_static("x-api-key")]);
         assert!(req.headers().get(AUTHORIZATION).is_none(), "Authorization should be stripped");
+        assert!(req.headers().get("x-api-key").is_none(), "configured header should be stripped");
     }
 
     #[test]
@@ -249,8 +254,10 @@ mod tests {
 
         let mut req = reqwest::Request::new(reqwest::Method::GET, original);
         req.headers_mut().insert(AUTHORIZATION, HeaderValue::from_static("Bearer secret"));
+        req.headers_mut().insert("x-api-key", HeaderValue::from_static("secret"));
 
-        strip_credentials_if_cross_origin(&mut req, &new_url);
+        strip_credentials_if_cross_origin(&mut req, &new_url, &[HeaderName::from_static("x-api-key")]);
         assert!(req.headers().get(AUTHORIZATION).is_some(), "Authorization should be preserved");
+        assert!(req.headers().get("x-api-key").is_some(), "configured header should be preserved");
     }
 }
