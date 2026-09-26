@@ -246,6 +246,22 @@ async fn run_batcher(
             .await
         {
             tracing::warn!(?err, batch_len = batch.len(), "fail during batch insert of events");
+            // One bad event must not drop the whole batch: retry one by one so only the
+            // offending event(s) are lost (same outcome as the pre-batching behavior).
+            // Skipped when the retry budget was already exhausted on a transient error
+            // (DB down): retrying per event would just stall for `len × budget`.
+            if batch.len() > 1 && !is_transient_sqlx_error(&err) {
+                for event in &batch {
+                    if let Err(err) =
+                        retry::retry_on_transient(&policy, is_transient_sqlx_error, || {
+                            store_events_batch(&pool, std::slice::from_ref(event))
+                        })
+                        .await
+                    {
+                        tracing::warn!(?err, "fail during insert of event");
+                    }
+                }
+            }
         }
         if let Some(ack) = flush_ack {
             let _ = ack.send(());
