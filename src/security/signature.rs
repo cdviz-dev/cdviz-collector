@@ -80,7 +80,8 @@ fn build_mac(
     let token = match &config.token_encoding {
         Some(Encoding::Base64) => STANDARD.decode(token.as_bytes())?,
         Some(Encoding::Hex) => {
-            let mut dst = Vec::with_capacity(token.len() * 2);
+            // `hex_decode` requires `dst.len() == src.len() / 2` (an odd length still errors).
+            let mut dst = vec![0u8; token.len() / 2];
             hex_decode(token.as_bytes(), &mut dst)?;
             dst
         }
@@ -524,6 +525,23 @@ mod security_edge_cases {
 
         let body = b"test body";
         assert2::assert!(let Err(_) = build_signature(&config, &HeaderMap::new(), body));
+    }
+
+    #[test]
+    fn test_signature_with_valid_hex_token_matches_raw_bytes_token() {
+        let config = |token: &str, token_encoding| SignatureConfig {
+            header: "X-Signature".to_string(),
+            token: token.into(),
+            token_encoding,
+            signature_prefix: None,
+            signature_on: SignatureOn::Body,
+            signature_encoding: Encoding::Hex,
+        };
+        let body = b"test body";
+        // "6b6579" is hex for "key"
+        let hex = build_signature(&config("6b6579", Some(Encoding::Hex)), &HeaderMap::new(), body);
+        let raw = build_signature(&config("key", None), &HeaderMap::new(), body);
+        assert_eq!(hex.unwrap(), raw.unwrap());
     }
 
     #[test]
