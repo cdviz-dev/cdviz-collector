@@ -608,8 +608,14 @@ impl HttpPollingExtractor {
     /// the retry middleware cannot see it and `on_status` alone would just burn the rest of
     /// the worklist against a wall. Pushes `next_allowed` out (never pulls it in, so it
     /// composes with `min_request_interval`).
-    fn apply_rate_limit_pause(&mut self, headers: &HeaderMap, next_allowed: &mut Option<Instant>) {
-        let Some(reset_in) = rate_limit_reset_in(headers) else { return };
+    ///
+    /// Returns `true` when a pause was applied.
+    fn apply_rate_limit_pause(
+        &mut self,
+        headers: &HeaderMap,
+        next_allowed: &mut Option<Instant>,
+    ) -> bool {
+        let Some(reset_in) = rate_limit_reset_in(headers) else { return false };
         let reset_in = reset_in.min(MAX_RATE_LIMIT_WAIT);
         tracing::warn!(
             wait_s = reset_in.as_secs(),
@@ -619,6 +625,7 @@ impl HttpPollingExtractor {
         let at = Instant::now() + reset_in;
         *next_allowed = Some(next_allowed.map_or(at, |cur| cur.max(at)));
         self.rate_limited_until = Some(self.rate_limited_until.map_or(at, |cur| cur.max(at)));
+        true
     }
 
     /// Resolve and log the [`Behavior`] for a non-2xx response per `on_status`.
@@ -730,10 +737,18 @@ impl HttpPollingExtractor {
                 continue;
             };
 
-            self.apply_rate_limit_pause(&resp.headers, &mut next_allowed);
+            let rate_limited = self.apply_rate_limit_pause(&resp.headers, &mut next_allowed);
 
             // Non-2xx responses are handled by the status policy, not the driver.
             if !(200..300).contains(&resp.status) {
+                // A rate-limited refusal (GitHub: 403/429 + `x-ratelimit-remaining: 0`) is not
+                // a verdict on the request: re-queue it to run once the pause elapses, instead
+                // of letting `on_status` abort (403) or skip (429) it. `max_requests` bounds
+                // the re-tries.
+                if rate_limited {
+                    queue.push_front(task);
+                    continue;
+                }
                 match self.classify_non_success(resp.status, &task.spec.url) {
                     Behavior::Skip => progressed += 1,
                     // `Retry` reaching here means the middleware exhausted its retry
@@ -842,7 +857,13 @@ impl HttpPollingExtractor {
                 break;
             }
 
-            match self.run_once().await {
+            // A poll can wait a long time (rate-limit pause up to 1h, a 1000-request worklist):
+            // drop it on shutdown. The window isn't advanced, so the next run replays it.
+            let outcome = tokio::select! {
+                outcome = self.run_once() => outcome,
+                () = cancel_token.cancelled() => break,
+            };
+            match outcome {
                 Ok(PollOutcome::Advance) => {
                     self.filter.advance();
                     #[cfg(feature = "state")]
@@ -1253,6 +1274,39 @@ mod tests {
         let result = timeout(Duration::from_secs(2), extractor.run(cancel_token)).await;
         assert!(result.is_ok(), "run() should complete within timeout");
         assert!(result.unwrap().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_rate_limited_403_is_retried_after_reset_with_default_policy() {
+        // GitHub's "budget spent" 403 must not hit the default `403 => abort`: the request is
+        // re-queued, waits for the reset, and its page is emitted.
+        let server = MockServer::start().await;
+        let reset_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 1;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(
+                ResponseTemplate::new(403)
+                    .insert_header("x-ratelimit-remaining", "0")
+                    .insert_header("x-ratelimit-reset", reset_at.to_string().as_str()),
+            )
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw("{}", "application/json"))
+            .mount(&server)
+            .await;
+
+        let config = make_config(&server.uri());
+        let (mut extractor, collector) = make_extractor(&config);
+
+        assert_eq!(extractor.run_once().await.unwrap(), PollOutcome::Advance);
+        assert_eq!(collector.try_into_iter().unwrap().count(), 1);
     }
 
     #[tokio::test]
