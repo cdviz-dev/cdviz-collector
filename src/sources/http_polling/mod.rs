@@ -59,6 +59,12 @@ pub(crate) struct Config {
     #[serde(default)]
     pub(crate) headers: OutgoingHeaderMap,
 
+    /// Hosts (glob patterns, e.g. `"*.example.com"`) a cross-origin redirect may go to while
+    /// keeping the configured `headers`. Default: none, the headers never leave the configured
+    /// origin (an https → http downgrade is never trusted).
+    #[serde(default)]
+    pub(crate) trusted_redirect_hosts: Vec<String>,
+
     /// Response headers to forward into the pipeline (transformers + sinks).
     /// Case-insensitive whitelist, mirroring the webhook source's `headers_to_keep`.
     /// Default: empty — no response headers are forwarded downstream. The VRL
@@ -486,6 +492,9 @@ impl HttpPollingExtractor {
                 .keys()
                 .filter_map(|name| HeaderName::from_str(name).ok())
                 .collect(),
+            trusted_redirect_hosts: crate::security::header::trusted_hosts(
+                &config.trusted_redirect_hosts,
+            )?,
         })
         .with(RetryTransientMiddleware::new_with_policy_and_strategy(
             retry_policy,
@@ -1000,6 +1009,7 @@ mod tests {
             ts_before_limit: None,
             driver_vrl,
             headers: OutgoingHeaderMap::new(),
+            trusted_redirect_hosts: Vec::new(),
             headers_to_keep: Vec::new(),
             total_duration_of_retries: Duration::from_millis(100),
             parser: ParserConfig::Json,

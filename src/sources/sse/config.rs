@@ -13,6 +13,12 @@ pub struct Config {
     #[serde(default)]
     pub headers: OutgoingHeaderMap,
 
+    /// Hosts (glob patterns, e.g. `"*.example.com"`) a cross-origin redirect may go to while
+    /// keeping the configured `headers`. Default: none, the headers never leave the configured
+    /// origin (an https → http downgrade is never trusted).
+    #[serde(default)]
+    pub trusted_redirect_hosts: Vec<String>,
+
     /// Maximum number of reconnection attempts (default: 10)
     pub max_retries: Option<u32>,
 
@@ -50,6 +56,7 @@ impl Default for Config {
         Self {
             url: "http://localhost:8080/sse/001".to_string(),
             headers: OutgoingHeaderMap::new(),
+            trusted_redirect_hosts: Vec::new(),
             max_retries: Some(10),
             enabled: true,
             metadata: serde_json::Value::default(),
@@ -77,6 +84,7 @@ mod tests {
 
         let config = Config {
             url: "https://example.com/events".to_string(),
+            trusted_redirect_hosts: Vec::new(),
             headers: {
                 let mut map = OutgoingHeaderMap::new();
                 map.insert(

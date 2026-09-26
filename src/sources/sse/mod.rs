@@ -63,7 +63,12 @@ impl SseSourceState {
     pub fn new(config: Config, next: EventSourcePipe) -> Self {
         let client = reqwest::Client::builder()
             .user_agent(&config.user_agent)
-            .redirect(crate::security::header::redirect_policy(!config.headers.is_empty()))
+            .redirect(crate::security::header::redirect_policy(
+                !config.headers.is_empty(),
+                // validated in `make_extractor`
+                crate::security::header::trusted_hosts(&config.trusted_redirect_hosts)
+                    .unwrap_or_else(|_| globset::GlobSet::empty()),
+            ))
             .build()
             .expect("failed to build HTTP client");
         Self { config, next, client, last_event_id: String::new(), opened: false }

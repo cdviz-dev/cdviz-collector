@@ -349,6 +349,13 @@ to blob storage, is followed **without** `Authorization`, `Cookie`,
 `Proxy-Authorization` and the configured `headers`, so credentials never reach a
 host they were not configured for. Same-origin redirects keep every header.
 
+To let a known host receive the configured headers on redirect, list it (glob,
+case-insensitive; an https → http downgrade is never trusted):
+
+```toml
+trusted_redirect_hosts = ["*.example.com", "downloads.example.org"]
+```
+
 ## Backfill Pattern
 
 A historical backfill is just a `connect` run with `ts_after` and

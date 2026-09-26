@@ -171,33 +171,60 @@ pub(crate) fn is_cross_origin(a: &url::Url, b: &url::Url) -> bool {
     }
 }
 
+/// Compile `trusted_redirect_hosts` glob patterns (e.g. `"*.example.com"`), matched
+/// case-insensitively against the redirect target's host.
+pub(crate) fn trusted_hosts(patterns: &[String]) -> crate::errors::Result<globset::GlobSet> {
+    use crate::errors::IntoDiagnostic;
+    let mut builder = globset::GlobSetBuilder::new();
+    for pattern in patterns {
+        builder.add(
+            globset::GlobBuilder::new(pattern).case_insensitive(true).build().into_diagnostic()?,
+        );
+    }
+    builder.build().into_diagnostic()
+}
+
+/// Whether a redirect from `from` to `to` may carry the configured headers: same origin, or a
+/// host listed in `trusted_redirect_hosts` (without an https → http downgrade).
+pub(crate) fn may_forward_headers(from: &url::Url, to: &url::Url, trusted: &globset::GlobSet) -> bool {
+    !is_cross_origin(from, to)
+        || (to.host_str().is_some_and(|host| trusted.is_match(host))
+            && !(from.scheme() == "https" && to.scheme() != "https"))
+}
+
 /// Redirect policy for a client sending configured `headers` (API keys, signatures).
 ///
 /// reqwest's default policy only strips `Authorization`/`Cookie`/`Proxy-Authorization` on a
 /// cross-origin redirect, so a configured `X-API-Key` would be replayed to whatever host the
-/// server redirects to. With configured headers, same-origin redirects are still followed
-/// (they keep the headers) but a cross-origin one is not: the 3xx is returned to the caller.
-/// If the new origin is legitimate, point the config at it.
+/// server redirects to. With configured headers, same-origin redirects and redirects to a
+/// `trusted` host are followed (they keep the headers); any other is not: the 3xx is returned
+/// to the caller. Note: reqwest itself still drops `Authorization`/`Cookie` on any cross-host
+/// redirect, so only custom headers (e.g. `X-API-Key`) reach a trusted host.
 #[cfg(any(feature = "sink_http", feature = "source_sse"))]
-pub(crate) fn redirect_policy(has_configured_headers: bool) -> reqwest::redirect::Policy {
+pub(crate) fn redirect_policy(
+    has_configured_headers: bool,
+    trusted: globset::GlobSet,
+) -> reqwest::redirect::Policy {
     if !has_configured_headers {
         return reqwest::redirect::Policy::default();
     }
-    reqwest::redirect::Policy::custom(|attempt| {
+    reqwest::redirect::Policy::custom(move |attempt| {
         if attempt.previous().len() > 10 {
             return attempt.error("too many redirects");
         }
-        let cross_origin =
-            attempt.previous().first().is_some_and(|origin| is_cross_origin(origin, attempt.url()));
-        if cross_origin {
+        let allowed = attempt
+            .previous()
+            .first()
+            .is_none_or(|origin| may_forward_headers(origin, attempt.url(), &trusted));
+        if allowed {
+            attempt.follow()
+        } else {
             tracing::warn!(
                 location = %attempt.url(),
                 "not following cross-origin redirect: it would forward the configured headers; \
-                 update the configured URL if this is the new endpoint"
+                 add its host to `trusted_redirect_hosts` or update the configured URL"
             );
             attempt.stop()
-        } else {
-            attempt.follow()
         }
     })
 }
@@ -266,6 +293,19 @@ impl From<SimpleHeaderConfig> for OutgoingHeaderConfig {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn may_forward_headers_same_origin_or_trusted_host_only() {
+        let url = |s: &str| url::Url::parse(s).unwrap();
+        let trusted = trusted_hosts(&["*.example.com".to_string()]).unwrap();
+        let from = url("https://api.example.com/a");
+        assert!(may_forward_headers(&from, &url("https://api.example.com/b"), &trusted));
+        assert!(may_forward_headers(&from, &url("https://CDN.Example.com/b"), &trusted));
+        assert!(!may_forward_headers(&from, &url("https://example.com/b"), &trusted));
+        assert!(!may_forward_headers(&from, &url("https://evil.test/b"), &trusted));
+        assert!(!may_forward_headers(&from, &url("http://cdn.example.com/b"), &trusted), "downgrade");
+        assert!(trusted_hosts(&["[".to_string()]).is_err());
+    }
+
     use super::*;
     use indoc::indoc;
 

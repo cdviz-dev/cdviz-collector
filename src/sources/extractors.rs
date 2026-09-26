@@ -122,6 +122,7 @@ impl Config {
             }
             #[cfg(feature = "source_sse")]
             Config::Sse(config) => {
+                crate::security::header::trusted_hosts(&config.trusted_redirect_hosts)?;
                 let extractor = sse::SseExtractor::from(config, next);
                 Extractor::Task(tokio::spawn(async move {
                     extractor.run(cancel_token).await?;

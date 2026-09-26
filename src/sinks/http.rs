@@ -25,6 +25,11 @@ pub(crate) struct Config {
     /// Header generation for outgoing HTTP requests - new map format
     #[serde(default)]
     pub(crate) headers: OutgoingHeaderMap,
+    /// Hosts (glob patterns, e.g. `"*.example.com"`) a cross-origin redirect may go to while
+    /// keeping the configured `headers`. Default: none, the headers never leave the configured
+    /// origin (an https → http downgrade is never trusted).
+    #[serde(default)]
+    pub(crate) trusted_redirect_hosts: Vec<String>,
     /// Timeout for message production (default 30m)
     #[serde(with = "humantime_serde", default = "default_total_duration_of_retries")]
     pub(crate) total_duration_of_retries: Duration,
@@ -78,7 +83,10 @@ impl TryFrom<Config> for HttpSink {
         let client = ClientBuilder::new(
             reqwest::Client::builder()
                 .user_agent(value.user_agent)
-                .redirect(crate::security::header::redirect_policy(!value.headers.is_empty()))
+                .redirect(crate::security::header::redirect_policy(
+                    !value.headers.is_empty(),
+                    crate::security::header::trusted_hosts(&value.trusted_redirect_hosts)?,
+                ))
                 .build()
                 .into_diagnostic()?,
         )
@@ -271,6 +279,7 @@ mod tests {
             log_errors: true,
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
+            trusted_redirect_hosts: Vec::new(),
             chain: TransformerChainConfig::default(),
         }
     }
@@ -431,6 +440,7 @@ mod tests {
             log_errors: true,
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
+            trusted_redirect_hosts: Vec::new(),
             chain: TransformerChainConfig::default(),
         };
         let sink = HttpSink::try_from(config).unwrap();
@@ -574,6 +584,31 @@ mod tests {
         sink.send(&msg).await.unwrap();
     }
 
+    #[test_strategy::proptest(async = "tokio", cases = 1)]
+    async fn test_http_sink_follows_cross_origin_redirect_to_trusted_host(msg: Message) {
+        let other = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(wiremock::matchers::header("X-API-Key", "test-secret-key"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&other)
+            .await;
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/events"))
+            .respond_with(
+                ResponseTemplate::new(307)
+                    .insert_header("Location", format!("{}/events", other.uri()).as_str()),
+            )
+            .mount(&server)
+            .await;
+
+        let mut config = config_with_api_key(&format!("{}/events", server.uri()));
+        config.trusted_redirect_hosts = vec!["127.0.0.1".to_string()];
+        let sink = HttpSink::try_from(config).unwrap();
+        sink.send(&msg).await.unwrap();
+    }
+
     #[test_strategy::proptest(async = "tokio", cases = 10)]
     async fn test_http_sink_with_static_headers(msg: Message) {
         let mock_server = MockServer::start().await;
@@ -613,6 +648,7 @@ mod tests {
             log_errors: true,
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
+            trusted_redirect_hosts: Vec::new(),
             chain: TransformerChainConfig::default(),
         };
         let sink = HttpSink::try_from(config).unwrap();
@@ -734,6 +770,7 @@ mod tests {
             log_errors: true,
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
+            trusted_redirect_hosts: Vec::new(),
             chain: TransformerChainConfig::default(),
         };
         let sink = HttpSink::try_from(config).unwrap();
@@ -815,6 +852,7 @@ mod tests {
             log_errors: true,
             log_full_response_on_error: false,
             user_agent: default_user_agent(),
+            trusted_redirect_hosts: Vec::new(),
             chain: TransformerChainConfig::default(),
         };
         let sink = HttpSink::try_from(config).unwrap();
