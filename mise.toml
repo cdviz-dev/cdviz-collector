@@ -261,7 +261,7 @@ run = [
   "sleep 5",
   "sqlx database create --database-url \"$PG_OFFLINE_URL\"",
   "cargo --locked sqlx prepare --workspace --database-url \"$PG_OFFLINE_URL\"",
-  "sqlx database drop -y --database-url \"PG_OFFLINE_URL\"",
+  "sqlx database drop -y --database-url \"$PG_OFFLINE_URL\"",
   "mise run db:stop",
 ]
 
