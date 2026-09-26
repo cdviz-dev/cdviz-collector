@@ -117,17 +117,24 @@ impl OpendalExtractor {
                 tracing::info!(source = %self.source_name, "reached ts_before_limit, source stopping");
                 break;
             }
-            match self.run_once().await {
+            // Only a complete scan may advance (and persist) the window: after a failed listing
+            // the same window is retried, else the files it would have listed are skipped.
+            let scanned = match self.run_once().await {
                 Err(err) => {
                     tracing::warn!(?err, scheme =? self.op.info().scheme(), root =? self.op.info().root(), "fail during scanning");
+                    false
                 }
                 Ok(count) => {
                     tracing::debug!(count, scheme =? self.op.info().scheme(), root =? self.op.info().root(), "scanning accepted counted resources");
+                    true
                 }
-            }
+            };
             tokio::select! {
                 () = sleep(self.polling_interval) => {},
                 () = cancel_token.cancelled() => {},
+            }
+            if !scanned {
+                continue;
             }
             self.filter.jump_to_next_ts_window();
             if let Some(state_op) = &self.state_op
