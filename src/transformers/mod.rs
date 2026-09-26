@@ -6,6 +6,8 @@ pub(crate) mod passthrough;
 #[cfg(feature = "transformer_vrl")]
 mod vrl;
 #[cfg(feature = "transformer_vrl")]
+pub(crate) mod vrl_env;
+#[cfg(feature = "transformer_vrl")]
 pub(crate) mod vrl_purl;
 
 use crate::{
@@ -25,6 +27,17 @@ use std::sync::{Arc, Mutex};
 /// `filter_map`, `drop`,... like for `Iterator`, `Stream`, `RxRust`.
 /// Also being able to return Error to the sender could help the Sender to ease handling (vs `Stream`)
 /// like retry, buffering, forward to its caller...
+/// Settings shared by every VRL program (transformers, `http_polling` drivers).
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct VrlConfig {
+    /// Glob patterns (e.g. `"GITHUB_*"`) of the environment variables VRL `get_env_var` may
+    /// read. Empty (the default): none. Keep it narrow, a broad pattern can expose secrets
+    /// (`GITHUB_TOKEN`, `CI_JOB_TOKEN`, `CDVIZ_COLLECTOR__...`) to remote transformers.
+    #[serde(default)]
+    pub(crate) allowed_env_vars: Vec<String>,
+}
+
 pub trait Pipe {
     type Input;
 

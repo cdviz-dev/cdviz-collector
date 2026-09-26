@@ -13,6 +13,11 @@ filter = ["4xx", "5xx"]
 [pipeline]
 queue_capacity = 1024
 
+[vrl]
+# Glob patterns of environment variables VRL `get_env_var` may read. Empty: none, so a
+# (possibly remote) transformer cannot read the collector's own secrets from the env.
+allowed_env_vars = []
+
 [state]
 kind = "fs"
 

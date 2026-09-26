@@ -77,8 +77,7 @@ pub(crate) struct DriverProgram {
 impl DriverProgram {
     /// Compile the VRL script that drives HTTP requests.
     pub(crate) fn compile(src: &str) -> Result<Self> {
-        let mut fns = vrl::stdlib::all();
-        fns.extend(crate::transformers::vrl_purl::all_custom_functions());
+        let fns = crate::transformers::vrl_env::functions();
         match vrl::compiler::compile(src, &fns) {
             Err(err) => {
                 let formatter = Formatter::new(src, err);

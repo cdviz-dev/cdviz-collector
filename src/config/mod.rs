@@ -65,6 +65,8 @@ pub(crate) struct Config {
     pub(crate) pipeline: pipeline::PipelineConfig,
     #[serde(default)]
     pub(crate) state: state::Config,
+    #[serde(default)]
+    pub(crate) vrl: transformers::VrlConfig,
 }
 
 /// Builder for Config with flexible configuration loading options
@@ -240,6 +242,10 @@ impl ConfigBuilder {
         // let mut config: Config = serde_json::from_value(value).into_diagnostic()?;
         // let mut config = Config::deserialize_from_value(value).into_diagnostic()?;
         let mut config: Config = figment.extract().into_diagnostic()?;
+
+        // Before any VRL program is compiled (sources, sinks, `config --check`).
+        #[cfg(feature = "transformer_vrl")]
+        transformers::vrl_env::set_allowed_env_vars(&config.vrl.allowed_env_vars)?;
 
         // resolve transformers references
         config.sources.iter_mut().try_for_each(|(_name, source_config)| {

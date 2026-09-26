@@ -1,11 +1,8 @@
 //! Remote file adapter for Figment configuration provider using `OpenDAL`.
 //!
-//! Security note: VRL's `get_env_var` (and the rest of `vrl::stdlib`) is registered
-//! unconditionally for every compiled transformer, including ones fetched through this
-//! adapter (`*_rfile`, e.g. `github://` imports). There is currently no per-source opt-in/out
-//! for environment access — importing an untrusted remote transformer grants it the same
-//! `get_env_var` capability as a locally authored one. Gating this per-source is a future
-//! improvement, not implemented here.
+//! Security note: transformers fetched through this adapter (`*_rfile`, e.g. `github://`
+//! imports) run with the same VRL functions as local ones. Environment access is limited
+//! globally by `vrl.allowed_env_vars` (see `transformers::vrl_env`), not per transformer.
 
 use figment::{
     Figment, Profile, Provider,

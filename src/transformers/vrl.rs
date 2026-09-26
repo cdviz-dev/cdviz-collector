@@ -17,10 +17,7 @@ pub(crate) struct Processor {
 
 impl Processor {
     pub(crate) fn new(template: &str, next: EventSourcePipe) -> Result<Self> {
-        // Use all of the std library functions
-        let mut fns = vrl::stdlib::all();
-        // Add custom PURL functions
-        fns.extend(super::vrl_purl::all_custom_functions());
+        let fns = super::vrl_env::functions();
         let src = if template.is_empty() {
             // empty fallback to identity (array of one element: the input)
             "[.]"
