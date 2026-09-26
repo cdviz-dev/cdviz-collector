@@ -188,9 +188,8 @@ trait Sink {
     }
 }
 
-pub(crate) fn start(name: String, config: Config, rx: Receiver<Message>) -> JoinHandle<Result<()>> {
+fn start(name: String, sink: SinkEnum, rx: Receiver<Message>) -> JoinHandle<Result<()>> {
     tokio::spawn(async move {
-        let sink = SinkEnum::from_config(config).await?;
         let mut rx = rx;
         tracing::info!(name, kind = "sink", "start to receive from message queue");
         loop {
@@ -260,8 +259,9 @@ pub(crate) async fn create_sinks_and_routes(
 
         tracing::info!(kind = "sink", name, "starting");
 
-        // Create the sink first to extract any routes
-        let sink = SinkEnum::from_config(config.clone()).await?;
+        // Build the sink once: the instance serving its routes must be the one receiving
+        // messages (an SSE sink's route reads the broadcast channel its `send` writes to).
+        let sink = SinkEnum::from_config(config).await?;
 
         // Extract routes if the sink provides them
         if let Some(route) = sink.get_routes() {
@@ -269,9 +269,47 @@ pub(crate) async fn create_sinks_and_routes(
         }
 
         // Start the sink task
-        let handle = start(name, config, tx.subscribe());
+        let handle = start(name, sink, tx.subscribe());
         handles.push(handle);
     }
 
     Ok((handles, routes))
+}
+
+#[cfg(all(test, feature = "sink_sse"))]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
+    use futures::StreamExt;
+    use proptest::prelude::*;
+    use proptest::test_runner::TestRunner;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn sse_route_receives_events_sent_through_the_queue() {
+        let (tx, _) = tokio::sync::broadcast::channel(10);
+        let config = Config::Sse(sse::Config {
+            enabled: true,
+            id: "t".to_string(),
+            headers: crate::security::rule::HeaderRuleMap::new(),
+        });
+        let (_handles, sse_routes) =
+            create_sinks_and_routes([("s".to_string(), config)], &tx).await.unwrap();
+        let router = sse_routes.into_iter().next().unwrap();
+        let resp =
+            router.oneshot(Request::get("/sse/t").body(Body::empty()).unwrap()).await.unwrap();
+
+        let msg = any::<Message>().new_tree(&mut TestRunner::default()).unwrap().current();
+        let id = msg.cdevent.id().to_string();
+        tx.send(msg).unwrap();
+
+        let mut body = resp.into_body().into_data_stream();
+        let chunk = tokio::time::timeout(std::time::Duration::from_secs(2), body.next())
+            .await
+            .expect("sse client must receive the event")
+            .unwrap()
+            .unwrap();
+        assert!(String::from_utf8_lossy(&chunk).contains(&id));
+    }
 }
