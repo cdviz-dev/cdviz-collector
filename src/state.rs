@@ -33,10 +33,22 @@ pub(crate) async fn load_ts_after(
     source_name: &str,
 ) -> Option<jiff::Timestamp> {
     let path = format!("{source_name}/checkpoint.json");
-    let bytes = op.read(&path).await.ok()?;
-    let value: serde_json::Value = serde_json::from_slice(&bytes.to_bytes()).ok()?;
-    let ts_str = value.get("ts_after")?.as_str()?;
-    ts_str.parse().ok()
+    let bytes = match op.read(&path).await {
+        Ok(bytes) => bytes,
+        Err(err) if err.kind() == opendal::ErrorKind::NotFound => return None,
+        Err(err) => {
+            tracing::warn!(?err, path, "cannot read checkpoint, restarting from scratch");
+            return None;
+        }
+    };
+    // A present-but-unusable checkpoint means a full re-poll (duplicates): say so.
+    let ts = serde_json::from_slice::<serde_json::Value>(&bytes.to_bytes())
+        .ok()
+        .and_then(|v| v.get("ts_after")?.as_str()?.parse().ok());
+    if ts.is_none() {
+        tracing::warn!(path, "corrupt checkpoint ignored, restarting from scratch");
+    }
+    ts
 }
 
 #[cfg(feature = "state")]
