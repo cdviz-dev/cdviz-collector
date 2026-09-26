@@ -29,13 +29,16 @@ impl SseExtractor {
     /// Run the SSE extractor, handling the SSE connection and event forwarding
     #[allow(clippy::ignored_unit_patterns)]
     pub(crate) async fn run(self, cancel_token: CancellationToken) -> Result<()> {
-        let sse_task = create_sse_source(self.config, self.next);
+        let mut sse_task = create_sse_source(self.config, self.next);
 
         tokio::select! {
             _ = cancel_token.cancelled() => {
-                // Clean cancellation - the task will be dropped
+                // Dropping a `JoinHandle` detaches the task, it doesn't stop it: abort it so it
+                // releases the pipeline sender, else graceful shutdown never completes.
+                sse_task.abort();
+                let _ = sse_task.await;
             }
-            result = sse_task => {
+            result = &mut sse_task => {
                 if let Err(e) = result {
                     error!("SSE task failed: {}", e);
                 }
@@ -51,6 +54,8 @@ pub struct SseSourceState {
     pub next: EventSourcePipe,
     client: reqwest::Client,
     last_event_id: String,
+    /// Set once the current connection opened, to reset the retry budget on its failure.
+    opened: bool,
 }
 
 impl SseSourceState {
@@ -60,13 +65,13 @@ impl SseSourceState {
             .user_agent(&config.user_agent)
             .build()
             .expect("failed to build HTTP client");
-        Self { config, next, client, last_event_id: String::new() }
+        Self { config, next, client, last_event_id: String::new(), opened: false }
     }
 
     pub async fn run(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let max_retries = self.config.max_retries.unwrap_or(10);
         let backoff = ExponentialBackoff::builder().build_with_max_retries(max_retries);
-        let request_start_time = SystemTime::now();
+        let mut request_start_time = SystemTime::now();
         let mut n_past_retries: u32 = 0;
 
         loop {
@@ -77,6 +82,13 @@ impl SseSourceState {
                 }
                 Err(e) => {
                     error!("SSE source error: {}", e);
+                    // The retry budget covers consecutive failures, not the source lifetime:
+                    // a connection that opened (then was closed, e.g. by an idle-timeout
+                    // proxy) starts a fresh budget.
+                    if std::mem::take(&mut self.opened) {
+                        request_start_time = SystemTime::now();
+                        n_past_retries = 0;
+                    }
 
                     match backoff.should_retry(request_start_time, n_past_retries) {
                         RetryDecision::DoNotRetry => {
@@ -129,6 +141,7 @@ impl SseSourceState {
             match event {
                 Ok(Event::Open) => {
                     info!("SSE connection opened");
+                    self.opened = true;
                 }
                 Ok(Event::Message(message)) => {
                     debug!(
@@ -173,9 +186,9 @@ impl SseSourceState {
                     let event_source =
                         EventSource { metadata, headers: std::collections::HashMap::new(), body };
 
+                    // One rejected event (e.g. a VRL error) must not end the stream.
                     if let Err(e) = self.next.send(event_source) {
                         error!("Failed to send event to pipeline: {}", e);
-                        break;
                     }
                 }
                 Err(e) => {
@@ -322,6 +335,31 @@ mod integration_tests {
         let server_url = format!("http://127.0.0.1:{port}/sse/test-sse");
 
         (server_url, server_handle)
+    }
+
+    #[tokio::test]
+    async fn test_sse_source_releases_pipeline_on_cancel() {
+        // The pipeline only shuts down once every source dropped its sender: cancelling
+        // must stop the spawned SSE task, not just detach it.
+        let (server_url, _server_handle) = setup_test_sse_sink().await;
+        let (tx, mut rx) = tokio::sync::broadcast::channel(10);
+        let pipe: EventSourcePipe = Box::new(crate::sources::send_cdevents::Processor::new(
+            tx,
+            "http://test/".to_string(),
+            None,
+        ));
+        let config = Config { url: server_url, ..Default::default() };
+        let cancel_token = CancellationToken::new();
+        let run = tokio::spawn(SseExtractor::from(&config, pipe).run(cancel_token.clone()));
+        tokio::time::sleep(Duration::from_millis(200)).await; // let it connect
+        cancel_token.cancel();
+        timeout(Duration::from_secs(2), run).await.expect("run must return on cancel").unwrap().unwrap();
+
+        let closed = timeout(Duration::from_secs(2), rx.recv()).await;
+        assert!(
+            matches!(closed, Ok(Err(tokio::sync::broadcast::error::RecvError::Closed))),
+            "sender still alive after cancel: {closed:?}"
+        );
     }
 
     #[tokio::test]
