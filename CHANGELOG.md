@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.52.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.51.0...0.52.0) - 2026-09-27
+
+### Added
+
+- *(security)* trusted_redirect_hosts glob allowlist for cross-origin redirects
+- *(vrl)* [**breaking**] restrict get_env_var to vrl.allowed_env_vars glob allowlist
+
+### Fixed
+
+- *(deps)* bump otel tracing crates, opendal 0.59, faster-hex 1.0
+- *(security)* [**breaking**] never replay configured headers on cross-origin redirects
+- *(mise)* missing $ in db:prepare-offline drop
+- *(state)* warn on unreadable or corrupt checkpoint (audit A13)
+- *(security)* decode hex token_encoding into a correctly sized buffer
+- *(sources/opendal)* hold the time window when a scan fails (audit A9)
+- *(http_polling)* re-queue rate-limited requests, make poll cancellable
+- *(sources/sse)* abort task on cancel, survive rejected events, reset retry budget
+- *(sinks)* build each sink once so the SSE route serves the live channel
+- *(sinks/db)* fall back to per-event insert when a batch insert fails
+
 ## [0.51.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.50.1...0.51.0) - 2026-09-16
 
 ### Added
