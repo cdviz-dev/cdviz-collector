@@ -156,7 +156,7 @@ pub(crate) fn check_signature(
         Encoding::Base64 => STANDARD.decode(signature.as_bytes()).ok(),
         Encoding::Hex if signature.len() % 2 == 0 => {
             let mut dst = vec![0u8; signature.len() / 2];
-            hex_decode(signature.as_bytes(), &mut dst).ok().map(|()| dst)
+            hex_decode(signature.as_bytes(), &mut dst).is_ok().then_some(dst)
         }
         Encoding::Hex => None,
     };

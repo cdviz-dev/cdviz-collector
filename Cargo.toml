@@ -25,7 +25,7 @@ path = "src/main.rs"
 [dependencies]
 async-nats = { version = "0.50", optional = true }
 axum = "0.8"
-axum-tracing-opentelemetry = { version = "0.39", features = ["metrics-prometheus"] }
+axum-tracing-opentelemetry = { version = "0.42", features = ["metrics-prometheus"] }
 base64 = "0.23"
 bytes = { version = "1", optional = true }
 cdevents-sdk = { version = "0.4", features = ["cloudevents"] }
@@ -50,7 +50,7 @@ async-trait = { version = "0.1", optional = true }
 enum_dispatch = "0.3"
 http = { version = "1", optional = true }
 eventsource-stream = { version = "0.2", optional = true }
-faster-hex = "0.10"
+faster-hex = "1"
 figment = { version = "0.10", features = ["env"] }
 figment_file_provider_adapter = "0.1"
 futures = "0.3"
@@ -59,7 +59,7 @@ globset = "0.4"
 hmac = "0.13"
 indexmap = "2"
 humantime-serde = "1"
-init-tracing-opentelemetry = { version = "0.41", features = [
+init-tracing-opentelemetry = { version = "0.43", features = [
   "logfmt",
   "metrics",
   "metrics-prometheus",
@@ -71,7 +71,7 @@ miette = { version = "7", features = ["fancy"] }
 mime = { version = "0.3", optional = true }
 multihash = "0.19"
 nom = { version = "8", optional = true }
-opendal = { version = "0.58", default-features = false, features = [
+opendal = { version = "0.59", default-features = false, features = [
   "auto-register-services",
   "http-transport-reqwest",
   "services-fs",
@@ -131,7 +131,7 @@ tower-http = { version = "0.7", features = [
   "validate-request",
 ] }
 tracing = "0.1"
-tracing-opentelemetry-instrumentation-sdk = { version = "0.38" }
+tracing-opentelemetry-instrumentation-sdk = { version = "0.42" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 url = "2.5.7"
 uuid = { version = "1", optional = true }
