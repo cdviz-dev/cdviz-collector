@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.52.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.52.0...0.52.1) - 2026-10-03
+
+### Fixed
+
+- *(deps)* bump rust to 1.99, vrl to 0.36 and dependencies
+
+### Other
+
+- cargo fmt
+- run clippy after tests to reuse test build artifacts
+- *(release)* add x86_64-apple-darwin and x86_64-pc-windows-msvc targets
+- *(deps)* update jdx/mise-action action to v5 ([#417](https://github.com/cdviz-dev/cdviz-collector/pull/417))
+
 ## [0.52.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.51.0...0.52.0) - 2026-09-27
 
 ### Added
