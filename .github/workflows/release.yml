@@ -138,6 +138,7 @@ jobs:
         with:
           "key-prefix": "sccache-rust-release"
       - name: "Add gettid shim for glibc < 2.30 (manylinux_2_28)"
+        if: "runner.os == 'Linux'"
         run: |
           if ! nm -D /lib64/libc.so.6 2>/dev/null | grep -qw gettid; then
             printf '#define _GNU_SOURCE\n#include <unistd.h>\n#include <sys/syscall.h>\npid_t gettid(void){return (pid_t)syscall(SYS_gettid);}\n' \

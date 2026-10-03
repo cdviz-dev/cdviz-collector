@@ -10,7 +10,7 @@
 - name: Add gettid shim for glibc < 2.30 (manylinux_2_28)
   # gettid() glibc wrapper was added in glibc 2.30; recent Rust stdlib references it directly.
   # Compile a shim so lld can resolve the symbol when building on old glibc.
-  # bash: Windows runners default to pwsh; the nm check no-ops outside manylinux.
+  if: runner.os == 'Linux'
   shell: bash
   run: |
     if ! nm -D /lib64/libc.so.6 2>/dev/null | grep -qw gettid; then
