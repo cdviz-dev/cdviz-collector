@@ -272,8 +272,9 @@ mod tests {
             .unwrap();
 
         let bad = &config.sinks["debug"].chain_transformers()[0];
-        let discard: crate::sources::EventSourcePipe =
-            Box::new(crate::transformers::discard_all::Processor::<crate::sources::EventSource>::new());
+        let discard: crate::sources::EventSourcePipe = Box::new(
+            crate::transformers::discard_all::Processor::<crate::sources::EventSource>::new(),
+        );
         assert!(
             bad.config.make_transformer(discard).is_err(),
             "expected invalid VRL in sink chain to fail compilation"

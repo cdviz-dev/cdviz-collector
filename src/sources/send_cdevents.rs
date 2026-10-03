@@ -33,9 +33,13 @@ impl Processor {
         default_source_url: String,
         queue_capacity: Option<usize>,
     ) -> Self {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
-        let high_watermark = queue_capacity
-            .map(|cap| (((cap as f64) * HIGH_WATERMARK_RATIO) as usize).max(1));
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_precision_loss,
+            clippy::cast_sign_loss
+        )]
+        let high_watermark =
+            queue_capacity.map(|cap| (((cap as f64) * HIGH_WATERMARK_RATIO) as usize).max(1));
         Self { next, default_source_url, high_watermark }
     }
 }
@@ -83,8 +87,11 @@ mod tests {
     #[test]
     fn test_header_passthrough() {
         let (tx, mut rx) = tokio::sync::broadcast::channel(10);
-        let mut processor =
-            Processor::new(tx.clone(), "http://test.example.com/?source=test".to_string(), Some(10));
+        let mut processor = Processor::new(
+            tx.clone(),
+            "http://test.example.com/?source=test".to_string(),
+            Some(10),
+        );
 
         // Create an EventSource with headers
         let mut headers = HashMap::new();

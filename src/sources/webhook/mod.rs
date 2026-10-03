@@ -153,8 +153,11 @@ mod tests_handler {
         // against the CDEvents schema directly, so an arbitrary payload fails there.
         let config = Config { id: "test".to_string(), ..Default::default() };
         let (tx, _rx) = tokio::sync::broadcast::channel(10);
-        let terminal: EventSourcePipe =
-            Box::new(crate::sources::send_cdevents::Processor::new(tx, "http://test/".to_string(), Some(10)));
+        let terminal: EventSourcePipe = Box::new(crate::sources::send_cdevents::Processor::new(
+            tx,
+            "http://test/".to_string(),
+            Some(10),
+        ));
         let router = make_route(&config, terminal);
 
         let request = Request::builder()
@@ -213,13 +216,12 @@ mod tests_handler {
             }
         };
         let make_router = || {
-            let terminal: EventSourcePipe = Box::new(
-                crate::sources::send_cdevents::Processor::new(
+            let terminal: EventSourcePipe =
+                Box::new(crate::sources::send_cdevents::Processor::new(
                     tx.clone(),
                     "http://test/".to_string(),
                     Some(capacity),
-                ),
-            );
+                ));
             make_route(&config, terminal)
         };
 

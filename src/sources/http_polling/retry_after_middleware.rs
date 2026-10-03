@@ -1,5 +1,5 @@
-use http::Extensions;
 use crate::security::header::{is_cross_origin, may_forward_headers};
+use http::Extensions;
 use reqwest::header::HeaderName;
 use reqwest::{Request, Response, StatusCode};
 use reqwest_middleware::{Middleware, Next};
@@ -61,7 +61,12 @@ impl Middleware for RetryAfterMiddleware {
                     let Some(loc) = resolve_location(resp.headers(), req.url()) else {
                         return Ok(resp);
                     };
-                    strip_credentials_if_cross_origin(&mut req, &loc, &self.configured_headers, &self.trusted_redirect_hosts);
+                    strip_credentials_if_cross_origin(
+                        &mut req,
+                        &loc,
+                        &self.configured_headers,
+                        &self.trusted_redirect_hosts,
+                    );
                     *req.method_mut() = reqwest::Method::GET;
                     *req.url_mut() = loc;
                     *req.body_mut() = None;
@@ -101,7 +106,12 @@ impl Middleware for RetryAfterMiddleware {
                     let Some(loc) = resolve_location(resp.headers(), req.url()) else {
                         return Ok(resp);
                     };
-                    strip_credentials_if_cross_origin(&mut req, &loc, &self.configured_headers, &self.trusted_redirect_hosts);
+                    strip_credentials_if_cross_origin(
+                        &mut req,
+                        &loc,
+                        &self.configured_headers,
+                        &self.trusted_redirect_hosts,
+                    );
                     *req.url_mut() = loc;
                     current = req;
                     redirect_count += 1;
@@ -134,9 +144,11 @@ fn strip_credentials_if_cross_origin(
     if is_cross_origin(req.url(), new_url) {
         let keep_configured = may_forward_headers(req.url(), new_url, trusted_redirect_hosts);
         let headers = req.headers_mut();
-        for name in
-            [reqwest::header::AUTHORIZATION, reqwest::header::COOKIE, reqwest::header::PROXY_AUTHORIZATION]
-        {
+        for name in [
+            reqwest::header::AUTHORIZATION,
+            reqwest::header::COOKIE,
+            reqwest::header::PROXY_AUTHORIZATION,
+        ] {
             // a trusted host keeps a configured `Authorization`, not an unconfigured one
             if !(keep_configured && configured_headers.contains(&name)) {
                 headers.remove(name);
@@ -149,7 +161,6 @@ fn strip_credentials_if_cross_origin(
         }
     }
 }
-
 
 /// Parse `Retry-After` header value as a `Duration`.
 ///
@@ -271,10 +282,14 @@ mod tests {
         let mut req = reqwest::Request::new(reqwest::Method::GET, original);
         req.headers_mut().insert(AUTHORIZATION, HeaderValue::from_static("Bearer secret"));
         req.headers_mut().insert(COOKIE, HeaderValue::from_static("session=1"));
-        let trusted = crate::security::header::trusted_hosts(&["*.example.com".to_string()]).unwrap();
+        let trusted =
+            crate::security::header::trusted_hosts(&["*.example.com".to_string()]).unwrap();
 
         strip_credentials_if_cross_origin(&mut req, &new_url, &[AUTHORIZATION], &trusted);
-        assert!(req.headers().get(AUTHORIZATION).is_some(), "configured header kept for trusted host");
+        assert!(
+            req.headers().get(AUTHORIZATION).is_some(),
+            "configured header kept for trusted host"
+        );
         assert!(req.headers().get(COOKIE).is_none(), "unconfigured credential still stripped");
     }
 

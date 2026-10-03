@@ -186,10 +186,15 @@ impl<ResBody> Clone for AcceptJsonOrSse<ResBody> {
     }
 }
 
-impl<B, ResBody: Default> tower_http::validate_request::ValidateRequest<B> for AcceptJsonOrSse<ResBody> {
+impl<B, ResBody: Default> tower_http::validate_request::ValidateRequest<B>
+    for AcceptJsonOrSse<ResBody>
+{
     type ResponseBody = ResBody;
 
-    fn validate(&mut self, req: &mut http::Request<B>) -> std::result::Result<(), http::Response<ResBody>> {
+    fn validate(
+        &mut self,
+        req: &mut http::Request<B>,
+    ) -> std::result::Result<(), http::Response<ResBody>> {
         let accepted = match req.headers().get(http::header::ACCEPT).and_then(|v| v.to_str().ok()) {
             None => true,
             Some(value) => value.split(',').any(|v| {
@@ -201,7 +206,10 @@ impl<B, ResBody: Default> tower_http::validate_request::ValidateRequest<B> for A
             Ok(())
         } else {
             #[allow(clippy::unwrap_used)]
-            Err(http::Response::builder().status(http::StatusCode::NOT_ACCEPTABLE).body(ResBody::default()).unwrap())
+            Err(http::Response::builder()
+                .status(http::StatusCode::NOT_ACCEPTABLE)
+                .body(ResBody::default())
+                .unwrap())
         }
     }
 }
@@ -254,17 +262,14 @@ fn app(
     if let Some(registry) = crate::otel::prometheus_registry() {
         inner = inner.merge(axum_tracing_opentelemetry::prometheus_metrics::router(registry));
     }
-    inner
-        .fallback(fallback)
-        .layer(Extension(shutdown_token))
-        .layer((
-            cors,
-            SetSensitiveRequestHeadersLayer::new(std::iter::once(http::header::AUTHORIZATION)),
-            ValidateRequestHeaderLayer::custom(AcceptJsonOrSse(std::marker::PhantomData)),
-            RequestDecompressionLayer::new(),
-            CompressionLayer::new(),
-            DefaultBodyLimit::max(DEFAULT_BODY_LIMIT_BYTES),
-        ))
+    inner.fallback(fallback).layer(Extension(shutdown_token)).layer((
+        cors,
+        SetSensitiveRequestHeadersLayer::new(std::iter::once(http::header::AUTHORIZATION)),
+        ValidateRequestHeaderLayer::custom(AcceptJsonOrSse(std::marker::PhantomData)),
+        RequestDecompressionLayer::new(),
+        CompressionLayer::new(),
+        DefaultBodyLimit::max(DEFAULT_BODY_LIMIT_BYTES),
+    ))
 }
 
 async fn ready(shutdown_token: Extension<CancellationToken>) -> impl IntoResponse {
@@ -465,7 +470,12 @@ mod tests {
 
         let sink = SseSink::new("test".to_string(), HeaderRuleMap::default());
         let sse_route = sink.make_route();
-        let app = app(AccessLogConfig::default(), default_request_timeout(), vec![sse_route], CancellationToken::new());
+        let app = app(
+            AccessLogConfig::default(),
+            default_request_timeout(),
+            vec![sse_route],
+            CancellationToken::new(),
+        );
 
         // A real SSE client sends `Accept: text/event-stream`; the global Accept validator
         // must not reject it with 406 (regression for audit finding A2).
@@ -482,7 +492,10 @@ mod tests {
             .unwrap();
         assert_ne!(response.status(), StatusCode::NOT_ACCEPTABLE);
         assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(response.headers().get(http::header::CONTENT_TYPE).unwrap(), "text/event-stream");
+        assert_eq!(
+            response.headers().get(http::header::CONTENT_TYPE).unwrap(),
+            "text/event-stream"
+        );
 
         // application/json (existing default) still works.
         let response = app

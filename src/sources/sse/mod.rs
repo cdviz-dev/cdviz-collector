@@ -359,7 +359,11 @@ mod integration_tests {
         let run = tokio::spawn(SseExtractor::from(&config, pipe).run(cancel_token.clone()));
         tokio::time::sleep(Duration::from_millis(200)).await; // let it connect
         cancel_token.cancel();
-        timeout(Duration::from_secs(2), run).await.expect("run must return on cancel").unwrap().unwrap();
+        timeout(Duration::from_secs(2), run)
+            .await
+            .expect("run must return on cancel")
+            .unwrap()
+            .unwrap();
 
         let closed = timeout(Duration::from_secs(2), rx.recv()).await;
         assert!(

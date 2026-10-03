@@ -186,7 +186,11 @@ pub(crate) fn trusted_hosts(patterns: &[String]) -> crate::errors::Result<globse
 
 /// Whether a redirect from `from` to `to` may carry the configured headers: same origin, or a
 /// host listed in `trusted_redirect_hosts` (without an https → http downgrade).
-pub(crate) fn may_forward_headers(from: &url::Url, to: &url::Url, trusted: &globset::GlobSet) -> bool {
+pub(crate) fn may_forward_headers(
+    from: &url::Url,
+    to: &url::Url,
+    trusted: &globset::GlobSet,
+) -> bool {
     !is_cross_origin(from, to)
         || (to.host_str().is_some_and(|host| trusted.is_match(host))
             && !(from.scheme() == "https" && to.scheme() != "https"))
@@ -302,7 +306,10 @@ mod tests {
         assert!(may_forward_headers(&from, &url("https://CDN.Example.com/b"), &trusted));
         assert!(!may_forward_headers(&from, &url("https://example.com/b"), &trusted));
         assert!(!may_forward_headers(&from, &url("https://evil.test/b"), &trusted));
-        assert!(!may_forward_headers(&from, &url("http://cdn.example.com/b"), &trusted), "downgrade");
+        assert!(
+            !may_forward_headers(&from, &url("http://cdn.example.com/b"), &trusted),
+            "downgrade"
+        );
         assert!(trusted_hosts(&["[".to_string()]).is_err());
     }
 

@@ -398,8 +398,8 @@ async fn fetch(
     // Configured secret headers must not follow a driver-derived URL (e.g. from a
     // response Link header or body cursor) to a different origin than the poll's
     // original trusted request — same threat as credential-stripping on redirects.
-    let same_origin =
-        trusted_origin.is_none_or(|trusted| !crate::security::header::is_cross_origin(trusted, &url));
+    let same_origin = trusted_origin
+        .is_none_or(|trusted| !crate::security::header::is_cross_origin(trusted, &url));
     if same_origin {
         match generate_headers(header_configs, Some(body_bytes)) {
             Ok(headers) => req = req.headers(headers),
@@ -940,10 +940,7 @@ mod tests {
 
     fn unix_now() -> i64 {
         i64::try_from(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
         )
         .unwrap()
     }
@@ -992,8 +989,7 @@ mod tests {
         // GitHub reports a spent rate limit as 403; the built-in default aborts the source,
         // which silently ends a backfill. The generated backfill config overrides it.
         assert_eq!(StatusPolicy::default().resolve(403), Behavior::Abort);
-        let policy: StatusPolicy =
-            serde_json::from_str(r#"{"403":"hold","429":"hold"}"#).unwrap();
+        let policy: StatusPolicy = serde_json::from_str(r#"{"403":"hold","429":"hold"}"#).unwrap();
         assert_eq!(policy.resolve(403), Behavior::Hold);
         assert_eq!(policy.resolve(429), Behavior::Hold);
         // unlisted statuses keep the built-in defaults
@@ -1297,11 +1293,9 @@ mod tests {
         // GitHub's "budget spent" 403 must not hit the default `403 => abort`: the request is
         // re-queued, waits for the reset, and its page is emitted.
         let server = MockServer::start().await;
-        let reset_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            + 1;
+        let reset_at =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+                + 1;
         Mock::given(method("GET"))
             .and(path("/data"))
             .respond_with(
@@ -1332,11 +1326,9 @@ mod tests {
         // a request every `polling_interval` until the reset — exactly the hammering that
         // trips secondary rate limits. Only the first poll should reach the server.
         let server = MockServer::start().await;
-        let reset_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            + 3600;
+        let reset_at =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+                + 3600;
         Mock::given(method("GET"))
             .and(path("/data"))
             .respond_with(

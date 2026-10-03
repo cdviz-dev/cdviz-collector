@@ -555,8 +555,8 @@ mod tests {
             .mount(&server)
             .await;
 
-        let sink = HttpSink::try_from(config_with_api_key(&format!("{}/events", server.uri())))
-            .unwrap();
+        let sink =
+            HttpSink::try_from(config_with_api_key(&format!("{}/events", server.uri()))).unwrap();
         sink.send(&msg).await.unwrap();
     }
 
@@ -578,8 +578,8 @@ mod tests {
             .mount(&server)
             .await;
 
-        let sink = HttpSink::try_from(config_with_api_key(&format!("{}/events", server.uri())))
-            .unwrap();
+        let sink =
+            HttpSink::try_from(config_with_api_key(&format!("{}/events", server.uri()))).unwrap();
         // The 3xx comes back as a non-2xx response (logged), the key never reaches `attacker`.
         sink.send(&msg).await.unwrap();
     }

@@ -74,11 +74,8 @@ impl Function for GetEnvVar {
     }
 
     fn parameters(&self) -> &'static [Parameter] {
-        const PARAMETERS: &[Parameter] = &[Parameter::required(
-            "name",
-            kind::BYTES,
-            "The name of the environment variable.",
-        )];
+        const PARAMETERS: &[Parameter] =
+            &[Parameter::required("name", kind::BYTES, "The name of the environment variable.")];
         PARAMETERS
     }
 
@@ -129,8 +126,7 @@ mod tests {
     use vrl::value::Secrets;
 
     fn run(allowed: &[&str], src: &str) -> vrl::value::Value {
-        set_allowed_env_vars(&allowed.iter().map(ToString::to_string).collect::<Vec<_>>())
-            .unwrap();
+        set_allowed_env_vars(&allowed.iter().map(ToString::to_string).collect::<Vec<_>>()).unwrap();
         let program = vrl::compiler::compile(src, &functions()).unwrap().program;
         let mut target = TargetValue {
             value: vrl::value::Value::Null,
