@@ -1,3 +1,7 @@
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use super::{Sink, retry};
@@ -8,9 +12,10 @@ use crate::{
 use retry_policies::policies::ExponentialBackoff;
 use secrecy::{ExposeSecret, SecretString, zeroize::Zeroize};
 use serde::Deserialize;
+use serde_json::Value;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Notify, mpsc, oneshot};
 use tracing::Instrument;
 
 fn default_pool_connections_max() -> u32 {
@@ -108,10 +113,17 @@ pub(crate) struct Config {
     #[serde(default = "default_batch_max_size")]
     batch_max_size: usize,
 
-    /// Flush a partial batch after this long, even if `batch_max_size` wasn't reached,
-    /// so low-traffic events aren't held indefinitely.
+    /// Flush buffered events at least this often, even if `batch_max_size` wasn't reached,
+    /// so low-traffic events aren't held indefinitely. A long value (e.g. `30m`) with a short
+    /// `pool_idle_timeout` lets a scale-to-zero database (e.g. Neon) suspend between flushes.
     #[serde(default = "default_batch_max_wait", with = "humantime_serde")]
     batch_max_wait: Duration,
+
+    /// Directory where buffered (not yet stored) events are also appended, so they survive a
+    /// crash and are replayed at startup. `None` (default) keeps them in memory only.
+    /// Replays may re-send already stored events; `cdviz.store_cdevents` ignores duplicates.
+    #[serde(default)]
+    batch_spool_dir: Option<PathBuf>,
 }
 
 /// Build database connections pool
@@ -157,15 +169,26 @@ impl DbSink {
             pool_options.connect(&url).await.into_diagnostic()?
         };
 
-        // Bounded to batch_max_size: once full, `send()` blocking on it is the backpressure
-        // (same effect as the old one-insert-per-send call, just amortized over a batch).
+        let buffers = Arc::new(Mutex::new(Buffers::open(config.batch_spool_dir.as_deref())?));
+        let notify = Arc::new(Notify::new());
+        // Bounded, but the writer never waits on the DB (the flusher does), so it drains fast.
         let (tx, rx) = mpsc::channel(batch_max_size);
-        tokio::spawn(run_batcher(
-            pool.clone(),
+        let (flush_tx, flush_rx) = mpsc::channel(1);
+        tokio::spawn(run_writer(
+            Arc::clone(&buffers),
             rx,
+            batch_max_size,
+            Arc::clone(&notify),
+            flush_tx,
+        ));
+        tokio::spawn(run_flusher(
+            pool,
+            buffers,
             batch_max_size,
             batch_max_wait,
             total_duration_of_retries,
+            notify,
+            flush_rx,
         ));
 
         Ok(Self { tx })
@@ -181,7 +204,7 @@ impl Sink for DbSink {
     #[tracing::instrument(skip(self, message), fields(cdevent_id = %message.cdevent.id()))]
     async fn send(&self, message: &Message) -> Result<()> {
         let payload = serde_json::to_value(&message.cdevent).into_diagnostic()?;
-        self.tx.send(BatchCmd::Push(Event { payload })).await.into_diagnostic()
+        self.tx.send(BatchCmd::Push(payload)).await.into_diagnostic()
     }
 
     async fn flush(&self) -> Result<()> {
@@ -194,87 +217,235 @@ impl Sink for DbSink {
 }
 
 enum BatchCmd {
-    Push(Event),
+    Push(Value),
     Flush(oneshot::Sender<()>),
 }
 
-/// Accumulates pushed events into batches of up to `batch_max_size`, flushing early on an
-/// explicit `Flush` request (graceful shutdown) or after `batch_max_wait` since the first
-/// event of the batch, whichever comes first. Exits once `tx` is dropped and the channel
-/// drains, so any events still buffered at shutdown are flushed before the task ends.
-async fn run_batcher(
-    pool: PgPool,
-    mut rx: mpsc::Receiver<BatchCmd>,
-    batch_max_size: usize,
-    batch_max_wait: Duration,
-    total_duration_of_retries: Duration,
-) {
-    let policy =
-        ExponentialBackoff::builder().build_with_total_retry_duration(total_duration_of_retries);
-    loop {
-        let mut batch = Vec::with_capacity(batch_max_size);
-        let mut flush_ack = None;
+/// One of the two buffers: events in memory, mirrored to an append-only JSONL file if spooling.
+#[derive(Default)]
+struct Slot {
+    events: Vec<Value>,
+    file: Option<File>,
+}
 
-        match rx.recv().await {
-            Some(BatchCmd::Push(event)) => batch.push(event),
-            Some(BatchCmd::Flush(ack)) => flush_ack = Some(ack),
-            None => break,
-        }
-
-        if flush_ack.is_none() {
-            let deadline = tokio::time::sleep(batch_max_wait);
-            tokio::pin!(deadline);
-            while batch.len() < batch_max_size {
-                tokio::select! {
-                    received = rx.recv() => match received {
-                        Some(BatchCmd::Push(event)) => batch.push(event),
-                        Some(BatchCmd::Flush(ack)) => {
-                            flush_ack = Some(ack);
-                            break;
-                        }
-                        None => break,
-                    },
-                    () = &mut deadline => break,
+impl Slot {
+    /// Open (or create) the spool file, loading events left by a previous run.
+    fn open(path: &Path) -> Result<Self> {
+        let mut events = Vec::new();
+        if path.exists() {
+            for line in BufReader::new(File::open(path).into_diagnostic()?).lines() {
+                let line = line.into_diagnostic()?;
+                if line.trim().is_empty() {
+                    continue;
+                }
+                match serde_json::from_str(&line) {
+                    Ok(event) => events.push(event),
+                    Err(err) => tracing::warn!(?err, ?path, "skip unreadable spooled event"),
                 }
             }
         }
+        let file = OpenOptions::new().create(true).append(true).open(path).into_diagnostic()?;
+        Ok(Self { events, file: Some(file) })
+    }
 
-        if !batch.is_empty()
-            && let Err(err) = retry::retry_on_transient(&policy, is_transient_sqlx_error, || {
-                store_events_batch(&pool, &batch)
-            })
-            .await
+    // ponytail: fsync per event under a std Mutex, fine at CI rates; batch fsyncs /
+    // spawn_blocking if throughput matters.
+    fn push(&mut self, event: Value) {
+        if let Some(file) = &mut self.file {
+            // Leading newline: a record torn by a crash / failed write is terminated by the next
+            // one, so it only loses itself (skipped at replay) instead of corrupting the next.
+            let mut record = b"\n".to_vec();
+            let written = serde_json::to_writer(&mut record, &event)
+                .map_err(std::io::Error::from)
+                .and_then(|()| file.write_all(&record))
+                .and_then(|()| file.sync_data());
+            if let Err(err) = written {
+                tracing::warn!(?err, "fail to spool event, kept in memory only");
+            }
+        }
+        self.events.push(event);
+    }
+
+    /// Forget the spooled copy once its events are stored (or definitively rejected).
+    fn truncate(&mut self) {
+        if let Some(file) = &mut self.file
+            && let Err(err) = file.set_len(0)
         {
-            tracing::warn!(?err, batch_len = batch.len(), "fail during batch insert of events");
-            // One bad event must not drop the whole batch: retry one by one so only the
-            // offending event(s) are lost (same outcome as the pre-batching behavior).
-            // Skipped when the retry budget was already exhausted on a transient error
-            // (DB down): retrying per event would just stall for `len × budget`.
-            if batch.len() > 1 && !is_transient_sqlx_error(&err) {
-                for event in &batch {
-                    if let Err(err) =
-                        retry::retry_on_transient(&policy, is_transient_sqlx_error, || {
-                            store_events_batch(&pool, std::slice::from_ref(event))
-                        })
-                        .await
-                    {
-                        tracing::warn!(?err, "fail during insert of event");
-                    }
-                }
-            }
-        }
-        if let Some(ack) = flush_ack {
-            let _ = ack.send(());
+            tracing::warn!(?err, "fail to truncate spool, events will be replayed at restart");
         }
     }
 }
 
-fn is_transient_sqlx_error(err: &sqlx::Error) -> bool {
-    matches!(err, sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed | sqlx::Error::Io(_))
+/// Double buffer: the writer appends to `slots[active]` while the flusher drains the other
+/// (sealed) one, then they swap. So `send()` never waits on the DB, and a sealed slot is only
+/// cleared (memory + file) after its events are stored.
+// ponytail: memory and spool are unbounded while the DB is down; cap + drop-oldest if that
+// becomes real. Events still in the mpsc channel (≤ batch_max_size) aren't spooled yet.
+#[derive(Default)]
+struct Buffers {
+    slots: [Slot; 2],
+    active: usize,
 }
 
-struct Event {
-    payload: serde_json::Value,
+impl Buffers {
+    fn open(spool_dir: Option<&Path>) -> Result<Self> {
+        let Some(dir) = spool_dir else {
+            return Ok(Self::default());
+        };
+        std::fs::create_dir_all(dir).into_diagnostic()?;
+        let slots =
+            [Slot::open(&dir.join("spool-0.jsonl"))?, Slot::open(&dir.join("spool-1.jsonl"))?];
+        Ok(Self { slots, active: 0 })
+    }
+}
+
+fn lock(buffers: &Mutex<Buffers>) -> MutexGuard<'_, Buffers> {
+    buffers.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Appends pushed events to the active slot, waking the flusher once `batch_max_size` is
+/// reached. Exits once `tx` is dropped; dropping `flush_tx` then makes the flusher drain all.
+async fn run_writer(
+    buffers: Arc<Mutex<Buffers>>,
+    mut rx: mpsc::Receiver<BatchCmd>,
+    batch_max_size: usize,
+    notify: Arc<Notify>,
+    flush_tx: mpsc::Sender<oneshot::Sender<()>>,
+) {
+    while let Some(cmd) = rx.recv().await {
+        match cmd {
+            BatchCmd::Push(event) => {
+                let len = {
+                    let mut buffers = lock(&buffers);
+                    let active = buffers.active;
+                    buffers.slots[active].push(event);
+                    buffers.slots[active].events.len()
+                };
+                if len >= batch_max_size {
+                    notify.notify_one();
+                }
+            }
+            BatchCmd::Flush(ack) => {
+                if flush_tx.send(ack).await.is_err() {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+/// Drains buffered events to the DB every `batch_max_wait`, when the writer reports a full
+/// batch, on an explicit `Flush` (graceful shutdown) and at startup (spool replay).
+async fn run_flusher(
+    pool: PgPool,
+    buffers: Arc<Mutex<Buffers>>,
+    batch_max_size: usize,
+    batch_max_wait: Duration,
+    total_duration_of_retries: Duration,
+    notify: Arc<Notify>,
+    mut flush_rx: mpsc::Receiver<oneshot::Sender<()>>,
+) {
+    let policy =
+        ExponentialBackoff::builder().build_with_total_retry_duration(total_duration_of_retries);
+    // Keep swapping + draining until both slots are empty (events pushed meanwhile included).
+    // Stops early if the DB is unreachable: leftovers stay in memory + spool, never a hang.
+    let drain_all = async |pool: &PgPool| {
+        while drain_sealed(pool, &buffers, &policy, batch_max_size).await {
+            if lock(&buffers).slots.iter().all(|slot| slot.events.is_empty()) {
+                break;
+            }
+        }
+    };
+    drain_all(&pool).await;
+    loop {
+        tokio::select! {
+            () = tokio::time::sleep(batch_max_wait) => {
+                drain_sealed(&pool, &buffers, &policy, batch_max_size).await;
+            }
+            () = notify.notified() => {
+                drain_sealed(&pool, &buffers, &policy, batch_max_size).await;
+            }
+            received = flush_rx.recv() => {
+                drain_all(&pool).await;
+                match received {
+                    Some(ack) => {
+                        let _ = ack.send(());
+                    }
+                    None => break,
+                }
+            }
+        }
+    }
+}
+
+/// Swap slots (unless the sealed one still holds events from a failed drain), then store
+/// the sealed slot. Returns `false` when the DB is unreachable: events stay in the sealed slot
+/// (memory + spool) to be retried on the next drain.
+async fn drain_sealed<P: retry_policies::RetryPolicy>(
+    pool: &PgPool,
+    buffers: &Mutex<Buffers>,
+    policy: &P,
+    batch_max_size: usize,
+) -> bool {
+    let (sealed, events) = {
+        let mut buffers = lock(buffers);
+        if buffers.slots[1 - buffers.active].events.is_empty() {
+            buffers.active = 1 - buffers.active;
+        }
+        let sealed = 1 - buffers.active;
+        (sealed, std::mem::take(&mut buffers.slots[sealed].events))
+    };
+    if events.is_empty() {
+        return true;
+    }
+    for batch in events.chunks(batch_max_size) {
+        if !store_with_fallback(pool, policy, batch).await {
+            // Put everything back (already stored chunks too: duplicates are ignored by the DB).
+            lock(buffers).slots[sealed].events = events;
+            return false;
+        }
+    }
+    lock(buffers).slots[sealed].truncate();
+    true
+}
+
+/// Store a batch, falling back to one by one on a non-transient error so only the offending
+/// event(s) are lost. Returns `false` only if the DB stayed unreachable (transient error).
+async fn store_with_fallback<P: retry_policies::RetryPolicy>(
+    pool: &PgPool,
+    policy: &P,
+    batch: &[Value],
+) -> bool {
+    let Err(err) = retry::retry_on_transient(policy, is_transient_sqlx_error, || {
+        store_events_batch(pool, batch)
+    })
+    .await
+    else {
+        return true;
+    };
+    tracing::warn!(?err, batch_len = batch.len(), "fail during batch insert of events");
+    if is_transient_sqlx_error(&err) {
+        return false;
+    }
+    if batch.len() > 1 {
+        for event in batch {
+            if let Err(err) = retry::retry_on_transient(policy, is_transient_sqlx_error, || {
+                store_events_batch(pool, std::slice::from_ref(event))
+            })
+            .await
+            {
+                tracing::warn!(?err, "fail during insert of event");
+                if is_transient_sqlx_error(&err) {
+                    return false; // DB went down mid-fallback: keep the batch for the next drain
+                }
+            }
+        }
+    }
+    true
+}
+
+fn is_transient_sqlx_error(err: &sqlx::Error) -> bool {
+    matches!(err, sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed | sqlx::Error::Io(_))
 }
 
 // basic handmade span far to be compliant with
@@ -297,9 +468,8 @@ fn build_otel_span(db_operation: &str) -> tracing::Span {
 // Duplicates (`PostgreSQL` 23505 `unique_violation`, expected on restart when opendal
 // replays already-processed files — see TODO in sources/opendal/mod.rs about state
 // persistence) are caught per-row inside `cdviz.store_cdevents` itself, not here.
-async fn store_events_batch(pg_pool: &PgPool, events: &[Event]) -> sqlx::Result<()> {
-    let payloads: Vec<serde_json::Value> = events.iter().map(|e| e.payload.clone()).collect();
-    sqlx::query!("CALL cdviz.store_cdevents($1)", &payloads[..])
+async fn store_events_batch(pg_pool: &PgPool, events: &[Value]) -> sqlx::Result<()> {
+    sqlx::query!("CALL cdviz.store_cdevents($1)", events)
         .execute(pg_pool)
         .instrument(build_otel_span("store_cdevents"))
         .await?;
@@ -324,6 +494,7 @@ mod tests {
         // Separate pool for test assertions/setup: DbSink no longer exposes its own pool,
         // it owns one privately for the batcher task.
         pub pool: PgPool,
+        pub url: String,
         // Keep db container reference - testcontainers will automatically remove container when dropped
         #[allow(dead_code)]
         db_guard: ContainerAsync<GenericImage>,
@@ -341,7 +512,7 @@ mod tests {
     // }
 
     #[fixture]
-    async fn async_pg() -> (DbSink, PgPool, ContainerAsync<GenericImage>) {
+    async fn async_pg() -> (DbSink, PgPool, String, ContainerAsync<GenericImage>) {
         let pg_container = GenericImage::new("postgres", "16")
             .with_exposed_port(5432.tcp())
             .with_wait_for(WaitFor::message_on_stdout(
@@ -375,6 +546,7 @@ mod tests {
             lazy_connection: true,
             batch_max_size: default_batch_max_size(),
             batch_max_wait: default_batch_max_wait(),
+            batch_spool_dir: None,
         };
 
         // Own pool for schema setup and assertions: DbSink keeps its pool private for the
@@ -390,7 +562,7 @@ mod tests {
 
         let dbsink = DbSink::try_from_config(config).await.unwrap();
         // container should be keep, else it is remove on drop
-        (dbsink, pool, pg_container)
+        (dbsink, pool, url, pg_container)
     }
 
     // testcontext() is called once per test, so db could be started several times.
@@ -398,15 +570,15 @@ mod tests {
     // if needed look at testkit::shared_async_resource
     #[fixture]
     async fn testcontext(
-        #[future] async_pg: (DbSink, PgPool, ContainerAsync<GenericImage>),
+        #[future] async_pg: (DbSink, PgPool, String, ContainerAsync<GenericImage>),
     ) -> TestContext {
         let subscriber = tracing_subscriber::FmtSubscriber::builder()
             .with_max_level(tracing::Level::WARN)
             .finish();
         let tracing_guard = tracing::subscriber::set_default(subscriber);
 
-        let (sink, pool, db_guard) = async_pg.await;
-        TestContext { sink, pool, db_guard, tracing_guard }
+        let (sink, pool, url, db_guard) = async_pg.await;
+        TestContext { sink, pool, url, db_guard, tracing_guard }
     }
 
     #[test]
@@ -418,6 +590,87 @@ mod tests {
     #[test]
     fn non_transient_errors_are_not_retried() {
         assert!(!is_transient_sqlx_error(&sqlx::Error::RowNotFound));
+    }
+
+    fn spool_config(url: &str, spool_dir: &Path) -> Config {
+        Config {
+            enabled: true,
+            url: url.to_owned().into(),
+            pool_connections_min: 0,
+            pool_connections_max: 2,
+            pool_acquire_timeout: Duration::from_secs(1),
+            pool_idle_timeout: default_pool_idle_timeout(),
+            pool_max_lifetime: default_pool_max_lifetime(),
+            pool_test_before_acquire: default_pool_test_before_acquire(),
+            total_duration_of_retries: Duration::ZERO,
+            lazy_connection: true,
+            batch_max_size: default_batch_max_size(),
+            batch_max_wait: Duration::from_secs(3600),
+            batch_spool_dir: Some(spool_dir.to_path_buf()),
+        }
+    }
+
+    fn spooled_lines(spool_dir: &Path) -> usize {
+        ["spool-0.jsonl", "spool-1.jsonl"]
+            .iter()
+            .map(|name| {
+                read_to_string(spool_dir.join(name))
+                    .unwrap_or_default()
+                    .lines()
+                    .filter(|l| !l.is_empty())
+                    .count()
+            })
+            .sum()
+    }
+
+    #[tokio::test]
+    async fn unreachable_db_keeps_events_in_spool() {
+        let spool_dir = tempfile::tempdir().unwrap();
+        let config = spool_config("postgres://user:pass@127.0.0.1:1/db", spool_dir.path());
+        let sink = DbSink::try_from_config(config).await.unwrap();
+        let mut runner = proptest::test_runner::TestRunner::default();
+        for _ in 0..3 {
+            use proptest::prelude::*;
+            let message = any::<Message>().new_tree(&mut runner).unwrap().current();
+            sink.send(&message).await.unwrap();
+        }
+        sink.flush().await.unwrap(); // fails to store, must keep everything
+        assert_eq!(spooled_lines(spool_dir.path()), 3);
+    }
+
+    #[rstest()]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn spooled_events_are_replayed_at_startup(#[future] testcontext: TestContext) {
+        use sqlx::Row;
+        let testcontext = testcontext.await;
+        let count = async || -> i64 {
+            sqlx::QueryBuilder::new("SELECT count(*) from cdviz.cdevents_lake")
+                .build()
+                .fetch_one(&testcontext.pool)
+                .await
+                .unwrap()
+                .get(0)
+        };
+        let before = count().await;
+
+        // Leftovers of a crashed run: 2 events in a slot, 1 in the other.
+        let spool_dir = tempfile::tempdir().unwrap();
+        let mut runner = proptest::test_runner::TestRunner::default();
+        let mut lines = Vec::new();
+        for _ in 0..3 {
+            use proptest::prelude::*;
+            let message = any::<Message>().new_tree(&mut runner).unwrap().current();
+            lines.push(serde_json::to_string(&message.cdevent).unwrap());
+        }
+        std::fs::write(spool_dir.path().join("spool-0.jsonl"), lines[..2].join("\n")).unwrap();
+        std::fs::write(spool_dir.path().join("spool-1.jsonl"), &lines[2]).unwrap();
+
+        let sink = DbSink::try_from_config(spool_config(&testcontext.url, spool_dir.path()))
+            .await
+            .unwrap();
+        sink.flush().await.unwrap();
+        assert_eq!(count().await, before + 3);
+        assert_eq!(spooled_lines(spool_dir.path()), 0);
     }
 
     #[tokio::test]
@@ -435,6 +688,7 @@ mod tests {
             lazy_connection: true,
             batch_max_size: default_batch_max_size(),
             batch_max_wait: default_batch_max_wait(),
+            batch_spool_dir: None,
         };
         assert!(DbSink::try_from_config(config).await.is_err());
     }
