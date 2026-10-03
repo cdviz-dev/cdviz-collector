@@ -49,12 +49,15 @@ runs:
     - name: Point rustc at sccache
       shell: bash
       run: |
+        # Windows: sccache.exe is native and can't resolve git-bash POSIX paths (/c/..., /tmp)
+        dir="$HOME/.cache/sccache"
+        if command -v cygpath >/dev/null; then dir=$(cygpath -m "$dir"); fi
         echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
-        echo "SCCACHE_DIR=$HOME/.cache/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_DIR=$dir" >> "$GITHUB_ENV"
         echo "SCCACHE_IDLE_TIMEOUT=0" >> "$GITHUB_ENV"
         echo "SCCACHE_CACHE_SIZE=${{ inputs.cache-size }}" >> "$GITHUB_ENV"
         # readable after a failed run, since the sccache server outlives the step that crashed
-        echo "SCCACHE_ERROR_LOG=/tmp/sccache.log" >> "$GITHUB_ENV"
+        echo "SCCACHE_ERROR_LOG=${{ runner.temp }}/sccache.log" >> "$GITHUB_ENV"
         echo "SCCACHE_LOG=warn" >> "$GITHUB_ENV"
         # also route CMake-built C/C++ deps (e.g. from -sys crates) through sccache
         echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
