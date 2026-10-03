@@ -1,6 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -468,12 +469,52 @@ fn build_otel_span(db_operation: &str) -> tracing::Span {
 // Duplicates (`PostgreSQL` 23505 `unique_violation`, expected on restart when opendal
 // replays already-processed files — see TODO in sources/opendal/mod.rs about state
 // persistence) are caught per-row inside `cdviz.store_cdevents` itself, not here.
+// Older schemas only have `cdviz.store_cdevent` (one event per call): fall back to it,
+// one by one, and remember it to skip the failing batch call next time.
 async fn store_events_batch(pg_pool: &PgPool, events: &[Value]) -> sqlx::Result<()> {
-    sqlx::query!("CALL cdviz.store_cdevents($1)", events)
-        .execute(pg_pool)
-        .instrument(build_otel_span("store_cdevents"))
-        .await?;
+    if !USE_STORE_CDEVENT.load(Ordering::Relaxed) {
+        let result = sqlx::query!("CALL cdviz.store_cdevents($1)", events)
+            .execute(pg_pool)
+            .instrument(build_otel_span("store_cdevents"))
+            .await;
+        match result {
+            Err(err) if has_code(&err, "42883") => {
+                tracing::warn!(
+                    ?err,
+                    "`cdviz.store_cdevents` not found, fallback to `cdviz.store_cdevent` (1 by 1), upgrade the db schema to batch inserts"
+                );
+                USE_STORE_CDEVENT.store(true, Ordering::Relaxed);
+            }
+            other => return other.map(|_| ()),
+        }
+    }
+    for event in events {
+        let result = sqlx::query("CALL cdviz.store_cdevent($1)")
+            .bind(event)
+            .execute(pg_pool)
+            .instrument(build_otel_span("store_cdevent"))
+            .await;
+        match result {
+            // Duplicates (replay) are ignored, like `store_cdevents` does per row.
+            Ok(_) => {}
+            Err(err) if has_code(&err, "23505") => {}
+            // Earlier events are already stored (not atomic): only a transient error makes the
+            // caller retry the batch; any other error drops just this event, no re-insert.
+            // ponytail: a transient retry re-inserts the already stored events, deduped only
+            // if the schema has a unique constraint; a savepoint per event if that matters.
+            Err(err) if is_transient_sqlx_error(&err) => return Err(err),
+            Err(err) => tracing::warn!(?err, "fail during insert of event"),
+        }
+    }
     Ok(())
+}
+
+// ponytail: process-wide flag, shared by all db sinks; a sink on an up-to-date schema then
+// also goes 1 by 1 (correct, just slower). Move into DbSink if mixed schemas ever matter.
+static USE_STORE_CDEVENT: AtomicBool = AtomicBool::new(false);
+
+fn has_code(err: &sqlx::Error, code: &str) -> bool {
+    err.as_database_error().and_then(sqlx::error::DatabaseError::code).is_some_and(|c| c == code)
 }
 
 #[cfg(test)]
@@ -636,6 +677,31 @@ mod tests {
         }
         sink.flush().await.unwrap(); // fails to store, must keep everything
         assert_eq!(spooled_lines(spool_dir.path()), 3);
+    }
+
+    #[rstest()]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn fallback_to_store_cdevent_on_older_schema(#[future] testcontext: TestContext) {
+        use proptest::prelude::*;
+        use sqlx::Row;
+        let testcontext = testcontext.await;
+        sqlx::raw_sql(sqlx::AssertSqlSafe("DROP PROCEDURE cdviz.store_cdevents(jsonb[])"))
+            .execute(&testcontext.pool)
+            .await
+            .unwrap();
+        let mut runner = proptest::test_runner::TestRunner::default();
+        for _ in 0..3 {
+            let message = any::<Message>().new_tree(&mut runner).unwrap().current();
+            testcontext.sink.send(&message).await.unwrap();
+        }
+        testcontext.sink.flush().await.unwrap();
+        let count: i64 = sqlx::QueryBuilder::new("SELECT count(*) from cdviz.cdevents_lake")
+            .build()
+            .fetch_one(&testcontext.pool)
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(count, 3);
     }
 
     #[rstest()]
