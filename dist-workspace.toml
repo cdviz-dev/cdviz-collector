@@ -6,15 +6,15 @@ members = ["cargo:."]
 # Config for 'dist'
 [dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.32.0"
+cargo-dist-version = "0.33.0"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
-installers = ["shell", "homebrew"]
+installers = ["shell", "powershell", "homebrew"]
 # A GitHub repo to push Homebrew formulas to
 tap = "cdviz-dev/homebrew-tap"
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl"]
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl", "x86_64-pc-windows-msvc"]
 github-build-setup = "release-build-setup.yml.part"
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
@@ -27,7 +27,7 @@ post-announce-jobs = ["./release-after"]
 github-custom-job-permissions = { "release-after" = { packages = "write", contents = "read" } }
 # Whether CI should trigger releases with dispatches instead of tag pushes
 dispatch-releases = false
-# Sign release artifacts with GitHub Artifact Attestations (SLSA provenance)
+# Whether to enable GitHub Attestations
 github-attestations = true
 
 [dist.github-custom-runners]
@@ -44,10 +44,11 @@ aarch64-unknown-linux-gnu = "ubuntu-22.04-arm"
 aarch64-unknown-linux-musl = "ubuntu-22.04-arm" # "buildjet-8vcpu-ubuntu-2204-arm" #
 x86_64-unknown-linux-musl = "ubuntu-latest"
 
-[dist.github-custom-runners.aarch64-apple-darwin]
-# Use ARM Mac runner to build ARM binary (not strictly required, but nice).
-# dist uses `macos-13` (Intel) by default and cross-compiles to ARM.
-runner = "macos-14"
+# Both macOS targets build on the ARM runner; x86_64 is cross-compiled (same SDK,
+# no extra toolchain), so Intel binaries survive the EOL of Intel runner images.
+aarch64-apple-darwin = "macos-15"
+x86_64-apple-darwin = "macos-15"
+x86_64-pc-windows-msvc = "windows-2025"
 
 [dist.github-custom-runners.x86_64-unknown-linux-gnu]
 # # Lock Linux to minimum supported version (Ubuntu 18.04 / RHEL 8, glibc 2.28).

@@ -15,7 +15,7 @@ description: >-
 
   Key layering: runner.arch is in the key and not just runner.os, because the
   release matrix builds on ubuntu-latest (X64), ubuntu-22.04-arm (ARM64) and
-  macos-14 in parallel, and Linux X64 would otherwise collide with Linux ARM64.
+  macos-15 / windows-2025 in parallel, and Linux X64 would otherwise collide with Linux ARM64.
   The hash covers mise.toml (this repo pins the rust version there, it has no
   rust-toolchain.toml) and Cargo.lock; mise.toml also holds task definitions and
   churns for unrelated reasons, which is harmless because the second restore-key

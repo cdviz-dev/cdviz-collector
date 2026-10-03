@@ -23,6 +23,8 @@ jobs:
         runner:
           - ubuntu-22.04
           # - ubuntu-24.04-arm
+          - macos-15
+          - windows-2025
     runs-on: ${{ matrix.runner }}
     env:
       CARGO_TERM_COLOR: always
