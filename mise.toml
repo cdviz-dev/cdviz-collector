@@ -73,7 +73,8 @@ description = "Lint all the code (lint_rust)"
 # - lint:megalinter
 
 [tasks."lint:rust"]
-wait_for = ["build:cli"]
+# run after tests: clippy (profile test) reuses the test build artifacts
+wait_for = ["build:cli", "test", "test:*"]
 run = [
   # fmt --check is intentionally not a lint gate: formatting is enforced by
   # `mise run autofix` (runs `format`) before commit, not by CI failing the build.
@@ -94,10 +95,9 @@ run = [
 
 [tasks."test"]
 depends = ["test:unit", "test:transform", "test:config"]
-wait_for = ["lint", "lint:*"]
 
 [tasks."test:unit"]
-wait_for = ["lint", "lint:*", "build:cli"]
+wait_for = ["build:cli"]
 run = [
   # a retry was previously used here to mask a random integration-test failure; removed,
   # root cause unclear - if flakiness reappears, root-cause it rather than re-adding a blind retry
@@ -111,7 +111,7 @@ description = "run a single test by name pattern, e.g. `mise run test:one -- tes
 run = "cargo --locked nextest run {{arg(var=true)}}"
 
 [tasks."test:ignored"]
-wait_for = ["lint", "lint:*", "build:cli"]
+wait_for = ["build:cli"]
 run = [
   # not part of the ci task's depends, so this retry isn't currently masking anything in
   # CI - revisit if this task is ever wired into ci
@@ -120,7 +120,7 @@ run = [
 
 [tasks."test:kafka"]
 description = "run tests requiring the kafka feature (heavy: builds rdkafka, needs docker for the Redpanda testcontainer); not run on every push, see ci:heavy"
-wait_for = ["lint", "lint:*", "build:cli"]
+wait_for = ["build:cli"]
 run = [
   "cargo --locked nextest run --test-threads 1 --workspace --features sink_kafka,source_kafka",
 ]
