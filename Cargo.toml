@@ -2,7 +2,7 @@
 name = "cdviz-collector"
 version = "0.52.0"
 edition = "2024"
-rust-version = "1.98"
+rust-version = "1.99"
 description = "A service and CLI tool for collecting SDLC/CI/CD events and dispatching them as CDEvents"
 homepage = "https://cdviz.dev"
 repository = "https://github.com/cdviz-dev/cdviz-collector"
@@ -135,7 +135,7 @@ tracing-opentelemetry-instrumentation-sdk = { version = "0.42" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 url = "2.5.7"
 uuid = { version = "1", optional = true }
-vrl = { version = "0.35", default-features = false, features = [
+vrl = { version = "0.36", default-features = false, features = [
   "compiler",
   "enable_crypto_functions",
   "enable_env_functions",

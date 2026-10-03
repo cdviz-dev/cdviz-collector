@@ -149,9 +149,13 @@ pub fn validate_header(
             // Constant-time comparison: this is a configured secret value (e.g. a static
             // API key), so a `==`/`!=` compare would leak its length/prefix via timing.
             let matches = if *case_sensitive {
-                bool::from(subtle::ConstantTimeEq::ct_eq(actual_value.as_bytes(), expected.as_bytes()))
+                bool::from(subtle::ConstantTimeEq::ct_eq(
+                    actual_value.as_bytes(),
+                    expected.as_bytes(),
+                ))
             } else {
-                let (actual_lower, expected_lower) = (actual_value.to_lowercase(), expected.to_lowercase());
+                let (actual_lower, expected_lower) =
+                    (actual_value.to_lowercase(), expected.to_lowercase());
                 bool::from(subtle::ConstantTimeEq::ct_eq(
                     actual_lower.as_bytes(),
                     expected_lower.as_bytes(),
@@ -934,7 +938,7 @@ mod tests {
         match err {
             ValidationError::InvalidValue { header, reason } => {
                 assert_eq!(header, "Invalid Header Name");
-                assert!(!reason.is_empty());
+                assert2::assert!(!reason.is_empty());
             }
             other => panic!("Expected InvalidValue, got {other:?}"),
         }

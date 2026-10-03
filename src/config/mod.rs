@@ -473,7 +473,7 @@ mod tests {
 
     #[test]
     fn join_toml_fragments_empty_list() {
-        assert!(join_toml_fragments(&[]).unwrap().is_empty());
+        assert2::assert!(join_toml_fragments(&[]).unwrap().is_empty());
     }
 
     #[test]

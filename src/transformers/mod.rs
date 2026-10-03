@@ -328,7 +328,7 @@ mod tests {
     fn discard_all_drops_events() {
         let (chain, collector) = make_chain(&[Config::DiscardAll]);
         chain.push(sample_event()).unwrap();
-        assert!(collector.drain().unwrap().is_empty());
+        assert2::assert!(collector.drain().unwrap().is_empty());
     }
 
     #[test]
@@ -349,7 +349,7 @@ mod tests {
         // DiscardAll is applied first → event never reaches Passthrough or terminal
         let (chain, collector) = make_chain(&[Config::DiscardAll, Config::Passthrough]);
         chain.push(sample_event()).unwrap();
-        assert!(collector.drain().unwrap().is_empty());
+        assert2::assert!(collector.drain().unwrap().is_empty());
     }
 
     #[test]
@@ -357,7 +357,7 @@ mod tests {
         // Passthrough is applied first (passes through), DiscardAll is applied second (drops)
         let (chain, collector) = make_chain(&[Config::Passthrough, Config::DiscardAll]);
         chain.push(sample_event()).unwrap();
-        assert!(collector.drain().unwrap().is_empty());
+        assert2::assert!(collector.drain().unwrap().is_empty());
     }
 
     /// Verifies that configs are applied left-to-right: configs[0] runs first, configs[1] second.
@@ -387,7 +387,7 @@ mod tests {
         let configs = vec![Config::Vrl { template: "[]".to_string() }];
         let (chain, collector) = make_chain(&configs);
         chain.push(sample_event()).unwrap();
-        assert!(collector.drain().unwrap().is_empty());
+        assert2::assert!(collector.drain().unwrap().is_empty());
     }
 
     /// Verifies that a VRL transformer can fan out (emit multiple events).

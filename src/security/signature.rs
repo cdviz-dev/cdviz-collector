@@ -468,7 +468,7 @@ mod security_edge_cases {
 
         let empty_body = b"";
         assert2::assert!(let Ok(signature) = build_signature(&config, &HeaderMap::new(), empty_body));
-        assert!(!signature.is_empty());
+        assert2::assert!(!signature.is_empty());
 
         // Verify empty body signature validation
         let mut headers = HeaderMap::new();
