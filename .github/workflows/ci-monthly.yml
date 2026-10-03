@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/rust-cache-restore
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
         with:
           cache: false
           cache_save: false
