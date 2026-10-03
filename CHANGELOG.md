@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.52.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.52.2...0.52.3) - 2026-10-03
+
+### Other
+
+- *(cache)* use native paths for sccache env on Windows runners
+
 ## [0.52.2](https://github.com/cdviz-dev/cdviz-collector/compare/0.52.1...0.52.2) - 2026-10-03
 
 ### Other
