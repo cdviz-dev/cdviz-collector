@@ -5,6 +5,16 @@ name: try-build-on
 
 on:
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner to build on"
+        type: choice
+        default: all
+        options:
+          - all
+          - ubuntu-22.04
+          - macos-15
+          - windows-2025
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,11 +30,8 @@ jobs:
     # - fewer available => longer "queued times"
     strategy:
       matrix:
-        runner:
-          - ubuntu-22.04
-          # - ubuntu-24.04-arm
-          - macos-15
-          - windows-2025
+        # ubuntu-24.04-arm also available
+        runner: ${{ inputs.runner == 'all' && fromJSON('["ubuntu-22.04", "macos-15", "windows-2025"]') || fromJSON(format('["{0}"]', inputs.runner)) }}
     runs-on: ${{ matrix.runner }}
     env:
       CARGO_TERM_COLOR: always
@@ -35,6 +42,9 @@ jobs:
       # local dev - CI wants the smallest target dir it can get
       CARGO_PROFILE_TEST_DEBUG: 0
     steps:
+      - name: enable windows longpaths
+        if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
       - uses: actions/checkout@v7
       - uses: ./.github/actions/rust-cache-restore
       - uses: dtolnay/rust-toolchain@stable
