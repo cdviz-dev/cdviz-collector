@@ -27,12 +27,14 @@
 //! query = "INSERT INTO cdevents_lake (id, type, source, subject, predicate, specversion, timestamp, payload) VALUES ({id}, {type}, {source}, {subject}, {predicate}, {specversion}, {timestamp}, {payload})"
 //! ```
 
+use std::path::PathBuf;
 use std::time::Duration;
 
+use super::batch::{BatchStore, Batcher, default_batch_max_size, default_batch_max_wait};
 use super::{Sink, retry};
 use crate::Message;
 use crate::errors::{IntoDiagnostic, Report, Result};
-use retry_policies::policies::ExponentialBackoff;
+use retry_policies::policies::{ExponentialBackoff, ExponentialBackoffTimed};
 use secrecy::{ExposeSecret, SecretString, zeroize::Zeroize};
 use serde::Deserialize;
 use tracing::Instrument;
@@ -59,6 +61,20 @@ pub(crate) struct Config {
     /// Set to `0s` to disable retries.
     #[serde(default = "default_total_duration_of_retries", with = "humantime_serde")]
     total_duration_of_retries: Duration,
+    /// Flush once this many events are buffered, and insert at most this many rows per `INSERT`.
+    /// Not a buffer cap: while a flush is in flight, new events keep buffering past it and are
+    /// inserted later in several `INSERT`s. `ClickHouse` prefers few large inserts over many small.
+    #[serde(default = "default_batch_max_size")]
+    batch_max_size: usize,
+    /// Flush buffered events at least this often, even if `batch_max_size` wasn't reached.
+    #[serde(default = "default_batch_max_wait", with = "humantime_serde")]
+    batch_max_wait: Duration,
+    /// Directory where buffered (not yet stored) events are also appended, so they survive a
+    /// crash and are replayed at startup. `None` (default) keeps them in memory only.
+    /// Replays may re-insert already stored events: use e.g. a `ReplacingMergeTree` keyed on `id`
+    /// if duplicates matter.
+    #[serde(default)]
+    batch_spool_dir: Option<PathBuf>,
 }
 
 /// Supported placeholder fields in query templates
@@ -121,6 +137,9 @@ struct ParsedQuery {
     sql: String,
     /// Ordered list of fields to bind
     fields: Vec<PlaceholderField>,
+    /// `sql` split as (`... VALUES`, `(?, ...)`) to build multi-row inserts,
+    /// `None` if the template has no trailing `VALUES (...)` (e.g. `INSERT ... SELECT`).
+    values: Option<(String, String)>,
 }
 
 impl ParsedQuery {
@@ -161,23 +180,40 @@ impl ParsedQuery {
             ));
         }
 
-        Ok(Self { sql, fields })
+        // ASCII uppercase keeps byte offsets, so `idx` is valid in `sql`.
+        // Whole word only, so `json_values(...)` in an `INSERT ... SELECT` isn't taken for it.
+        let is_ident = |c: Option<char>| c.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
+        let upper = sql.to_ascii_uppercase();
+        let values_idx = upper
+            .match_indices("VALUES")
+            .map(|(idx, _)| idx)
+            .filter(|&idx| {
+                !is_ident(sql[..idx].chars().next_back())
+                    && !is_ident(sql[idx + "VALUES".len()..].chars().next())
+            })
+            .last();
+        let values = values_idx.and_then(|idx| {
+            let (head, tuple) = sql.split_at(idx + "VALUES".len());
+            let tuple = tuple.trim().trim_end_matches(';').trim_end();
+            (tuple.starts_with('(') && tuple.ends_with(')'))
+                .then(|| (head.to_owned(), tuple.to_owned()))
+        });
+
+        Ok(Self { sql, fields, values })
+    }
+
+    /// SQL inserting `rows` rows in one statement (the `VALUES` tuple repeated).
+    fn batch_sql(&self, rows: usize) -> Option<String> {
+        self.values
+            .as_ref()
+            .map(|(head, tuple)| format!("{head} {}", vec![tuple.as_str(); rows].join(", ")))
     }
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct ClickHouseSink {
-    client: clickhouse::Client,
     parsed_query: ParsedQuery,
-    total_duration_of_retries: Duration,
-}
-
-// Manual Debug impl since clickhouse::Client doesn't implement Debug
-impl std::fmt::Debug for ClickHouseSink {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ClickHouseSink")
-            .field("parsed_query", &self.parsed_query)
-            .finish_non_exhaustive()
-    }
+    batcher: Batcher<Vec<String>>,
 }
 
 impl TryFrom<Config> for ClickHouseSink {
@@ -209,14 +245,19 @@ impl TryFrom<Config> for ClickHouseSink {
             database = %config.database,
             user = ?config.user,
             placeholders = ?parsed_query.fields.len(),
+            multi_row_insert = parsed_query.values.is_some(),
             "Using ClickHouse sink"
         );
 
-        Ok(Self {
-            client,
-            parsed_query,
-            total_duration_of_retries: config.total_duration_of_retries,
-        })
+        let policy = ExponentialBackoff::builder()
+            .build_with_total_retry_duration(config.total_duration_of_retries);
+        let batcher = Batcher::start(
+            ChStore { client, parsed_query: parsed_query.clone(), policy },
+            config.batch_max_size,
+            config.batch_max_wait,
+            config.batch_spool_dir.as_deref(),
+        )?;
+        Ok(Self { parsed_query, batcher })
     }
 }
 
@@ -225,25 +266,73 @@ impl Sink for ClickHouseSink {
     async fn send(&self, message: &Message) -> Result<()> {
         let values: Result<Vec<String>> =
             self.parsed_query.fields.iter().map(|f| f.extract_value(message)).collect();
-        let values = values?;
-        let policy = ExponentialBackoff::builder()
-            .build_with_total_retry_duration(self.total_duration_of_retries);
-        retry::retry_on_transient(&policy, is_transient_clickhouse_error, || {
-            execute_query(&self.client, &self.parsed_query.sql, &values)
-        })
-        .await
-        .into_diagnostic()
+        self.batcher.push(values?).await
+    }
+
+    async fn flush(&self) -> Result<()> {
+        self.batcher.flush().await
+    }
+}
+
+struct ChStore {
+    client: clickhouse::Client,
+    parsed_query: ParsedQuery,
+    policy: ExponentialBackoffTimed,
+}
+
+impl BatchStore for ChStore {
+    /// The placeholder values of one row, in `parsed_query.fields` order.
+    type Item = Vec<String>;
+
+    /// Insert all rows in one statement, falling back to one by one on a non-transient error
+    /// (or a template without `VALUES`) so only the offending row(s) are lost. Returns `false`
+    /// only if `ClickHouse` stayed unreachable (transient error).
+    async fn store(&self, rows: &[Vec<String>]) -> bool {
+        let (client, policy) = (&self.client, &self.policy);
+        if let Some(sql) = self.parsed_query.batch_sql(rows.len()) {
+            let values: Vec<&String> = rows.iter().flatten().collect();
+            let Err(err) = retry::retry_on_transient(policy, is_transient_clickhouse_error, || {
+                execute_query(client, &sql, &values)
+            })
+            .await
+            else {
+                return true;
+            };
+            tracing::warn!(?err, batch_len = rows.len(), "fail during batch insert of events");
+            if is_transient_clickhouse_error(&err) {
+                return false;
+            }
+            if rows.len() == 1 {
+                return true;
+            }
+        }
+        for row in rows {
+            if let Err(err) =
+                retry::retry_on_transient(policy, is_transient_clickhouse_error, || {
+                    execute_query(client, &self.parsed_query.sql, row)
+                })
+                .await
+            {
+                tracing::warn!(?err, "fail during insert of event");
+                if is_transient_clickhouse_error(&err) {
+                    // ponytail: rows already inserted by this loop are re-inserted on the next
+                    // drain; dedup in the table (ReplacingMergeTree) if that matters.
+                    return false;
+                }
+            }
+        }
+        true
     }
 }
 
 async fn execute_query(
     client: &clickhouse::Client,
     sql: &str,
-    values: &[String],
+    values: &[impl AsRef<str>],
 ) -> clickhouse::error::Result<()> {
     let mut query = client.query(sql);
     for value in values {
-        query = query.bind(value.as_str());
+        query = query.bind(value.as_ref());
     }
     query.execute().instrument(build_otel_span("INSERT")).await
 }
@@ -325,6 +414,25 @@ mod tests {
     }
 
     #[test]
+    fn test_batch_sql_repeats_values_tuple() {
+        let parsed =
+            ParsedQuery::parse("INSERT INTO t (id, payload) values ({id}, f({payload}));").unwrap();
+        assert_eq!(
+            parsed.batch_sql(2).unwrap(),
+            "INSERT INTO t (id, payload) values (?, f(?)), (?, f(?))"
+        );
+    }
+
+    #[test]
+    fn test_batch_sql_none_without_values() {
+        let parsed = ParsedQuery::parse("INSERT INTO t SELECT {id}, {payload}").unwrap();
+        assert!(parsed.batch_sql(2).is_none());
+        let parsed =
+            ParsedQuery::parse("INSERT INTO t SELECT {id}, json_values({payload})").unwrap();
+        assert!(parsed.batch_sql(2).is_none());
+    }
+
+    #[test]
     fn test_extract_type_segment_subject() {
         let type_str = "dev.cdevents.service.deployed.0.1.1";
         let subject = extract_type_segment(type_str, 2).unwrap();
@@ -347,6 +455,7 @@ mod tests {
 
     struct TestContext {
         pub sink: ClickHouseSink,
+        pub client: clickhouse::Client,
         #[allow(dead_code)]
         db_guard: ContainerAsync<GenericImage>,
         #[allow(dead_code)]
@@ -354,7 +463,8 @@ mod tests {
     }
 
     #[fixture]
-    async fn async_clickhouse() -> (ClickHouseSink, ContainerAsync<GenericImage>) {
+    async fn async_clickhouse() -> (ClickHouseSink, clickhouse::Client, ContainerAsync<GenericImage>)
+    {
         let ch_container = GenericImage::new("clickhouse/clickhouse-server", "24")
             .with_exposed_port(8123.tcp())
             .with_network("bridge")
@@ -381,14 +491,21 @@ mod tests {
             password: None,
             query: "INSERT INTO cdevents_lake (id, type, source, subject, predicate, specversion, timestamp, payload) VALUES ({id}, {type}, {source}, {subject}, {predicate}, {specversion}, {timestamp}, {payload})".to_string(),
             total_duration_of_retries: default_total_duration_of_retries(),
+            batch_max_size: default_batch_max_size(),
+            batch_max_wait: default_batch_max_wait(),
+            batch_spool_dir: None,
         };
 
         let sink = ClickHouseSink::try_from(config).unwrap();
+        let client = clickhouse::Client::default()
+            .with_url(format!("http://127.0.0.1:{host_port}"))
+            .with_database("default")
+            .with_user("default");
 
         // Initialize schema
         // Note: timestamp stored as String because CDEvent timestamps include timezone offsets
         // Users can cast to DateTime64 in queries if needed: parseDateTime64BestEffort(timestamp)
-        sink.client
+        client
             .query(
                 r"
                 CREATE TABLE IF NOT EXISTS cdevents_lake (
@@ -409,20 +526,24 @@ mod tests {
             .await
             .unwrap();
 
-        (sink, ch_container)
+        (sink, client, ch_container)
     }
 
     #[fixture]
     async fn testcontext(
-        #[future] async_clickhouse: (ClickHouseSink, ContainerAsync<GenericImage>),
+        #[future] async_clickhouse: (
+            ClickHouseSink,
+            clickhouse::Client,
+            ContainerAsync<GenericImage>,
+        ),
     ) -> TestContext {
         let subscriber = tracing_subscriber::FmtSubscriber::builder()
             .with_max_level(tracing::Level::WARN)
             .finish();
         let tracing_guard = tracing::subscriber::set_default(subscriber);
 
-        let (sink, db_guard) = async_clickhouse.await;
-        TestContext { sink, db_guard, tracing_guard }
+        let (sink, client, db_guard) = async_clickhouse.await;
+        TestContext { sink, client, db_guard, tracing_guard }
     }
 
     #[rstest()]
@@ -435,14 +556,21 @@ mod tests {
         let sink = testcontext.sink;
         let mut runner = TestRunner::default();
 
-        // Send a random CDEvent
-        let test_message = any::<Message>().new_tree(&mut runner).unwrap().current();
-        sink.send(&test_message).await.unwrap();
+        // Send random CDEvents, batched into a single multi-row insert by flush()
+        for _ in 0..3 {
+            let test_message = any::<Message>().new_tree(&mut runner).unwrap().current();
+            sink.send(&test_message).await.unwrap();
+        }
+        sink.flush().await.unwrap();
 
         // Query to verify insertion
-        let count: u64 =
-            sink.client.query("SELECT count(*) FROM cdevents_lake").fetch_one().await.unwrap();
+        let count: u64 = testcontext
+            .client
+            .query("SELECT count(*) FROM cdevents_lake")
+            .fetch_one()
+            .await
+            .unwrap();
 
-        assert_eq!(count, 1);
+        assert_eq!(count, 3);
     }
 }

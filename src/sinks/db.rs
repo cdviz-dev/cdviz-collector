@@ -1,22 +1,19 @@
-use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
+use super::batch::{BatchStore, Batcher, default_batch_max_size, default_batch_max_wait};
 use super::{Sink, retry};
 use crate::{
     Message,
     errors::{IntoDiagnostic, Result},
 };
-use retry_policies::policies::ExponentialBackoff;
+use retry_policies::policies::{ExponentialBackoff, ExponentialBackoffTimed};
 use secrecy::{ExposeSecret, SecretString, zeroize::Zeroize};
 use serde::Deserialize;
 use serde_json::Value;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
-use tokio::sync::{Notify, mpsc, oneshot};
 use tracing::Instrument;
 
 fn default_pool_connections_max() -> u32 {
@@ -39,12 +36,6 @@ fn default_pool_test_before_acquire() -> bool {
 }
 fn default_lazy_connection() -> bool {
     false
-}
-fn default_batch_max_size() -> usize {
-    50
-}
-fn default_batch_max_wait() -> Duration {
-    Duration::from_secs(1)
 }
 use retry::default_total_duration_of_retries;
 
@@ -107,10 +98,11 @@ pub(crate) struct Config {
     #[serde(default = "default_lazy_connection")]
     lazy_connection: bool,
 
-    /// Insert events in batches of up to this many, instead of one `CALL` per event.
-    /// Reduces round trips when a source produces events faster than one-at-a-time
-    /// inserts can keep up (polling, backfill). `1` disables batching in practice
-    /// (every push flushes immediately).
+    /// Flush once this many events are buffered, and insert at most this many per `CALL`.
+    /// Not a buffer cap: while a flush is in flight, new events keep buffering past it and are
+    /// inserted later in several calls. Reduces round trips when a source produces events
+    /// faster than one-at-a-time inserts can keep up (polling, backfill). `1` disables
+    /// batching in practice (every push flushes immediately).
     #[serde(default = "default_batch_max_size")]
     batch_max_size: usize,
 
@@ -161,288 +153,80 @@ impl DbSink {
         let url = config.url.expose_secret().to_owned();
         let lazy_connection = config.lazy_connection;
         let total_duration_of_retries = config.total_duration_of_retries;
-        let batch_max_size = config.batch_max_size.max(1);
-        let batch_max_wait = config.batch_max_wait;
         config.url.zeroize();
         let pool = if lazy_connection {
             pool_options.connect_lazy(&url).into_diagnostic()?
         } else {
             pool_options.connect(&url).await.into_diagnostic()?
         };
-
-        let buffers = Arc::new(Mutex::new(Buffers::open(config.batch_spool_dir.as_deref())?));
-        let notify = Arc::new(Notify::new());
-        // Bounded, but the writer never waits on the DB (the flusher does), so it drains fast.
-        let (tx, rx) = mpsc::channel(batch_max_size);
-        let (flush_tx, flush_rx) = mpsc::channel(1);
-        tokio::spawn(run_writer(
-            Arc::clone(&buffers),
-            rx,
-            batch_max_size,
-            Arc::clone(&notify),
-            flush_tx,
-        ));
-        tokio::spawn(run_flusher(
-            pool,
-            buffers,
-            batch_max_size,
-            batch_max_wait,
-            total_duration_of_retries,
-            notify,
-            flush_rx,
-        ));
-
-        Ok(Self { tx })
+        let policy = ExponentialBackoff::builder()
+            .build_with_total_retry_duration(total_duration_of_retries);
+        let batcher = Batcher::start(
+            PgStore { pool, policy },
+            config.batch_max_size,
+            config.batch_max_wait,
+            config.batch_spool_dir.as_deref(),
+        )?;
+        Ok(Self { batcher })
     }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct DbSink {
-    tx: mpsc::Sender<BatchCmd>,
+    batcher: Batcher<Value>,
 }
 
 impl Sink for DbSink {
     #[tracing::instrument(skip(self, message), fields(cdevent_id = %message.cdevent.id()))]
     async fn send(&self, message: &Message) -> Result<()> {
         let payload = serde_json::to_value(&message.cdevent).into_diagnostic()?;
-        self.tx.send(BatchCmd::Push(payload)).await.into_diagnostic()
+        self.batcher.push(payload).await
     }
 
     async fn flush(&self) -> Result<()> {
-        let (ack_tx, ack_rx) = oneshot::channel();
-        if self.tx.send(BatchCmd::Flush(ack_tx)).await.is_err() {
-            return Ok(()); // batcher already gone, nothing pending
-        }
-        ack_rx.await.into_diagnostic()
+        self.batcher.flush().await
     }
 }
 
-enum BatchCmd {
-    Push(Value),
-    Flush(oneshot::Sender<()>),
-}
-
-/// One of the two buffers: events in memory, mirrored to an append-only JSONL file if spooling.
-#[derive(Default)]
-struct Slot {
-    events: Vec<Value>,
-    file: Option<File>,
-}
-
-impl Slot {
-    /// Open (or create) the spool file, loading events left by a previous run.
-    fn open(path: &Path) -> Result<Self> {
-        let mut events = Vec::new();
-        if path.exists() {
-            for line in BufReader::new(File::open(path).into_diagnostic()?).lines() {
-                let line = line.into_diagnostic()?;
-                if line.trim().is_empty() {
-                    continue;
-                }
-                match serde_json::from_str(&line) {
-                    Ok(event) => events.push(event),
-                    Err(err) => tracing::warn!(?err, ?path, "skip unreadable spooled event"),
-                }
-            }
-        }
-        let file = OpenOptions::new().create(true).append(true).open(path).into_diagnostic()?;
-        Ok(Self { events, file: Some(file) })
-    }
-
-    // ponytail: fsync per event under a std Mutex, fine at CI rates; batch fsyncs /
-    // spawn_blocking if throughput matters.
-    fn push(&mut self, event: Value) {
-        if let Some(file) = &mut self.file {
-            // Leading newline: a record torn by a crash / failed write is terminated by the next
-            // one, so it only loses itself (skipped at replay) instead of corrupting the next.
-            let mut record = b"\n".to_vec();
-            let written = serde_json::to_writer(&mut record, &event)
-                .map_err(std::io::Error::from)
-                .and_then(|()| file.write_all(&record))
-                .and_then(|()| file.sync_data());
-            if let Err(err) = written {
-                tracing::warn!(?err, "fail to spool event, kept in memory only");
-            }
-        }
-        self.events.push(event);
-    }
-
-    /// Forget the spooled copy once its events are stored (or definitively rejected).
-    fn truncate(&mut self) {
-        if let Some(file) = &mut self.file
-            && let Err(err) = file.set_len(0)
-        {
-            tracing::warn!(?err, "fail to truncate spool, events will be replayed at restart");
-        }
-    }
-}
-
-/// Double buffer: the writer appends to `slots[active]` while the flusher drains the other
-/// (sealed) one, then they swap. So `send()` never waits on the DB, and a sealed slot is only
-/// cleared (memory + file) after its events are stored.
-// ponytail: memory and spool are unbounded while the DB is down; cap + drop-oldest if that
-// becomes real. Events still in the mpsc channel (≤ batch_max_size) aren't spooled yet.
-#[derive(Default)]
-struct Buffers {
-    slots: [Slot; 2],
-    active: usize,
-}
-
-impl Buffers {
-    fn open(spool_dir: Option<&Path>) -> Result<Self> {
-        let Some(dir) = spool_dir else {
-            return Ok(Self::default());
-        };
-        std::fs::create_dir_all(dir).into_diagnostic()?;
-        let slots =
-            [Slot::open(&dir.join("spool-0.jsonl"))?, Slot::open(&dir.join("spool-1.jsonl"))?];
-        Ok(Self { slots, active: 0 })
-    }
-}
-
-fn lock(buffers: &Mutex<Buffers>) -> MutexGuard<'_, Buffers> {
-    buffers.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-/// Appends pushed events to the active slot, waking the flusher once `batch_max_size` is
-/// reached. Exits once `tx` is dropped; dropping `flush_tx` then makes the flusher drain all.
-async fn run_writer(
-    buffers: Arc<Mutex<Buffers>>,
-    mut rx: mpsc::Receiver<BatchCmd>,
-    batch_max_size: usize,
-    notify: Arc<Notify>,
-    flush_tx: mpsc::Sender<oneshot::Sender<()>>,
-) {
-    while let Some(cmd) = rx.recv().await {
-        match cmd {
-            BatchCmd::Push(event) => {
-                let len = {
-                    let mut buffers = lock(&buffers);
-                    let active = buffers.active;
-                    buffers.slots[active].push(event);
-                    buffers.slots[active].events.len()
-                };
-                if len >= batch_max_size {
-                    notify.notify_one();
-                }
-            }
-            BatchCmd::Flush(ack) => {
-                if flush_tx.send(ack).await.is_err() {
-                    break;
-                }
-            }
-        }
-    }
-}
-
-/// Drains buffered events to the DB every `batch_max_wait`, when the writer reports a full
-/// batch, on an explicit `Flush` (graceful shutdown) and at startup (spool replay).
-async fn run_flusher(
+struct PgStore {
     pool: PgPool,
-    buffers: Arc<Mutex<Buffers>>,
-    batch_max_size: usize,
-    batch_max_wait: Duration,
-    total_duration_of_retries: Duration,
-    notify: Arc<Notify>,
-    mut flush_rx: mpsc::Receiver<oneshot::Sender<()>>,
-) {
-    let policy =
-        ExponentialBackoff::builder().build_with_total_retry_duration(total_duration_of_retries);
-    // Keep swapping + draining until both slots are empty (events pushed meanwhile included).
-    // Stops early if the DB is unreachable: leftovers stay in memory + spool, never a hang.
-    let drain_all = async |pool: &PgPool| {
-        while drain_sealed(pool, &buffers, &policy, batch_max_size).await {
-            if lock(&buffers).slots.iter().all(|slot| slot.events.is_empty()) {
-                break;
-            }
-        }
-    };
-    drain_all(&pool).await;
-    loop {
-        tokio::select! {
-            () = tokio::time::sleep(batch_max_wait) => {
-                drain_sealed(&pool, &buffers, &policy, batch_max_size).await;
-            }
-            () = notify.notified() => {
-                drain_sealed(&pool, &buffers, &policy, batch_max_size).await;
-            }
-            received = flush_rx.recv() => {
-                drain_all(&pool).await;
-                match received {
-                    Some(ack) => {
-                        let _ = ack.send(());
-                    }
-                    None => break,
-                }
-            }
-        }
-    }
+    policy: ExponentialBackoffTimed,
 }
 
-/// Swap slots (unless the sealed one still holds events from a failed drain), then store
-/// the sealed slot. Returns `false` when the DB is unreachable: events stay in the sealed slot
-/// (memory + spool) to be retried on the next drain.
-async fn drain_sealed<P: retry_policies::RetryPolicy>(
-    pool: &PgPool,
-    buffers: &Mutex<Buffers>,
-    policy: &P,
-    batch_max_size: usize,
-) -> bool {
-    let (sealed, events) = {
-        let mut buffers = lock(buffers);
-        if buffers.slots[1 - buffers.active].events.is_empty() {
-            buffers.active = 1 - buffers.active;
-        }
-        let sealed = 1 - buffers.active;
-        (sealed, std::mem::take(&mut buffers.slots[sealed].events))
-    };
-    if events.is_empty() {
-        return true;
-    }
-    for batch in events.chunks(batch_max_size) {
-        if !store_with_fallback(pool, policy, batch).await {
-            // Put everything back (already stored chunks too: duplicates are ignored by the DB).
-            lock(buffers).slots[sealed].events = events;
+impl BatchStore for PgStore {
+    type Item = Value;
+
+    /// Store a batch, falling back to one by one on a non-transient error so only the offending
+    /// event(s) are lost. Returns `false` only if the DB stayed unreachable (transient error).
+    async fn store(&self, batch: &[Value]) -> bool {
+        let (pool, policy) = (&self.pool, &self.policy);
+        let Err(err) = retry::retry_on_transient(policy, is_transient_sqlx_error, || {
+            store_events_batch(pool, batch)
+        })
+        .await
+        else {
+            return true;
+        };
+        tracing::warn!(?err, batch_len = batch.len(), "fail during batch insert of events");
+        if is_transient_sqlx_error(&err) {
             return false;
         }
-    }
-    lock(buffers).slots[sealed].truncate();
-    true
-}
-
-/// Store a batch, falling back to one by one on a non-transient error so only the offending
-/// event(s) are lost. Returns `false` only if the DB stayed unreachable (transient error).
-async fn store_with_fallback<P: retry_policies::RetryPolicy>(
-    pool: &PgPool,
-    policy: &P,
-    batch: &[Value],
-) -> bool {
-    let Err(err) = retry::retry_on_transient(policy, is_transient_sqlx_error, || {
-        store_events_batch(pool, batch)
-    })
-    .await
-    else {
-        return true;
-    };
-    tracing::warn!(?err, batch_len = batch.len(), "fail during batch insert of events");
-    if is_transient_sqlx_error(&err) {
-        return false;
-    }
-    if batch.len() > 1 {
-        for event in batch {
-            if let Err(err) = retry::retry_on_transient(policy, is_transient_sqlx_error, || {
-                store_events_batch(pool, std::slice::from_ref(event))
-            })
-            .await
-            {
-                tracing::warn!(?err, "fail during insert of event");
-                if is_transient_sqlx_error(&err) {
-                    return false; // DB went down mid-fallback: keep the batch for the next drain
+        if batch.len() > 1 {
+            for event in batch {
+                if let Err(err) = retry::retry_on_transient(policy, is_transient_sqlx_error, || {
+                    store_events_batch(pool, std::slice::from_ref(event))
+                })
+                .await
+                {
+                    tracing::warn!(?err, "fail during insert of event");
+                    if is_transient_sqlx_error(&err) {
+                        return false; // DB went down mid-fallback: keep the batch for the next drain
+                    }
                 }
             }
         }
+        true
     }
-    true
 }
 
 fn is_transient_sqlx_error(err: &sqlx::Error) -> bool {
@@ -520,6 +304,7 @@ fn has_code(err: &sqlx::Error, code: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use std::fs::read_to_string;
+    use std::path::Path;
 
     use super::*;
     use rstest::*;

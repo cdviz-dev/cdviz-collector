@@ -1,3 +1,5 @@
+#[cfg(any(feature = "sink_clickhouse", feature = "sink_db"))]
+mod batch;
 #[cfg(feature = "sink_clickhouse")]
 pub(crate) mod clickhouse;
 #[cfg(feature = "sink_db")]
