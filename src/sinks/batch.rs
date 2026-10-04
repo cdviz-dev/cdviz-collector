@@ -130,22 +130,29 @@ impl<T: Serialize + DeserializeOwned> Slot<T> {
         Ok(Self { items, file: Some(file) })
     }
 
-    // ponytail: fsync per item under a std Mutex, fine at CI rates; batch fsyncs /
-    // spawn_blocking if throughput matters.
-    fn push(&mut self, item: T) {
+    /// Append items, spooled with one write + one fsync for the whole group (fsync dominates the
+    /// cost, JSON encoding is negligible: see the `spool_throughput` bench).
+    // ponytail: fsync under a std Mutex on a tokio worker; spawn_blocking if a slow disk ever
+    // stalls the runtime.
+    fn push_all(&mut self, items: Vec<T>) {
         if let Some(file) = &mut self.file {
             // Leading newline: a record torn by a crash / failed write is terminated by the next
             // one, so it only loses itself (skipped at replay) instead of corrupting the next.
-            let mut record = b"\n".to_vec();
-            let written = serde_json::to_writer(&mut record, &item)
+            let mut records = Vec::new();
+            let written = items
+                .iter()
+                .try_for_each(|item| {
+                    records.push(b'\n');
+                    serde_json::to_writer(&mut records, item)
+                })
                 .map_err(std::io::Error::from)
-                .and_then(|()| file.write_all(&record))
+                .and_then(|()| file.write_all(&records))
                 .and_then(|()| file.sync_data());
             if let Err(err) = written {
-                tracing::warn!(?err, "fail to spool event, kept in memory only");
+                tracing::warn!(?err, "fail to spool events, kept in memory only");
             }
         }
-        self.items.push(item);
+        self.items.extend(items);
     }
 
     /// Forget the spooled copy once its items are stored (or definitively rejected).
@@ -193,25 +200,43 @@ async fn run_writer<T: Serialize + DeserializeOwned>(
     notify: Arc<Notify>,
     flush_tx: mpsc::Sender<oneshot::Sender<()>>,
 ) {
-    while let Some(cmd) = rx.recv().await {
-        match cmd {
-            BatchCmd::Push(item) => {
-                let len = {
-                    let mut buffers = lock(&buffers);
-                    let active = buffers.active;
-                    buffers.slots[active].push(item);
-                    buffers.slots[active].items.len()
-                };
-                if len >= batch_max_size {
-                    notify.notify_one();
-                }
-            }
-            BatchCmd::Flush(ack) => {
-                if flush_tx.send(ack).await.is_err() {
-                    break;
+    let mut cmds = Vec::with_capacity(batch_max_size);
+    while rx.recv_many(&mut cmds, batch_max_size).await > 0 {
+        // Group consecutive pushes so they are spooled together (one fsync); a flush is only
+        // forwarded once every push received before it is in a slot.
+        let mut items = Vec::new();
+        for cmd in cmds.drain(..) {
+            match cmd {
+                BatchCmd::Push(item) => items.push(item),
+                BatchCmd::Flush(ack) => {
+                    push_items(&buffers, std::mem::take(&mut items), batch_max_size, &notify);
+                    if flush_tx.send(ack).await.is_err() {
+                        return;
+                    }
                 }
             }
         }
+        push_items(&buffers, items, batch_max_size, &notify);
+    }
+}
+
+fn push_items<T: Serialize + DeserializeOwned>(
+    buffers: &Mutex<Buffers<T>>,
+    items: Vec<T>,
+    batch_max_size: usize,
+    notify: &Notify,
+) {
+    if items.is_empty() {
+        return;
+    }
+    let len = {
+        let mut buffers = lock(buffers);
+        let active = buffers.active;
+        buffers.slots[active].push_all(items);
+        buffers.slots[active].items.len()
+    };
+    if len >= batch_max_size {
+        notify.notify_one();
     }
 }
 
@@ -360,6 +385,48 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await; // several timer ticks
         batcher.flush().await.unwrap();
         assert!(store.chunks.lock().unwrap().is_empty());
+    }
+
+    struct NullStore;
+
+    impl BatchStore for NullStore {
+        type Item = serde_json::Value;
+        fn store(&self, _chunk: &[Self::Item]) -> impl Future<Output = bool> + Send {
+            std::future::ready(true)
+        }
+    }
+
+    /// Manual benchmark: `cargo nextest run --run-ignored only spool_throughput --no-capture`.
+    #[tokio::test]
+    #[ignore = "benchmark"]
+    #[allow(clippy::print_stdout, clippy::disallowed_macros, clippy::cast_precision_loss)]
+    async fn spool_throughput() {
+        const N: usize = 10_000;
+        let event: serde_json::Value = serde_json::from_str(include_str!(
+            "../../examples/assets/inputs/cdevents_json/service_deployed.json"
+        ))
+        .unwrap();
+        let start = std::time::Instant::now();
+        for _ in 0..N {
+            std::hint::black_box(serde_json::to_vec(&event).unwrap());
+        }
+        let serialize = start.elapsed();
+
+        let spool_dir = tempfile::tempdir().unwrap();
+        let batcher =
+            Batcher::start(NullStore, 50, Duration::from_secs(3600), Some(spool_dir.path()))
+                .unwrap();
+        let start = std::time::Instant::now();
+        for _ in 0..N {
+            batcher.push(event.clone()).await.unwrap();
+        }
+        batcher.flush().await.unwrap();
+        let total = start.elapsed();
+        println!(
+            "{N} events: push+spool {total:?} ({:.0}/s), serialize alone {serialize:?} ({:.1}%)",
+            N as f64 / total.as_secs_f64(),
+            100.0 * serialize.as_secs_f64() / total.as_secs_f64(),
+        );
     }
 
     #[tokio::test]
