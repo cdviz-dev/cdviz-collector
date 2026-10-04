@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.53.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.52.3...0.53.0) - 2026-10-04
+
+### Added
+
+- *(sink-clickhouse)* batch inserts via shared double-buffer batcher
+- *(sink-db)* double-buffer batching with optional on-disk spool (batch_spool_dir) for crash-safe long flush intervals
+
+### Fixed
+
+- *(build)* restrict opendal sftp service to unix targets to unblock Windows build
+- *(sink-db)* fallback to cdviz.store_cdevent (1 by 1) when cdviz.store_cdevents is missing
+
+### Other
+
+- *(try-build-on)* add runner choice input and enable longpaths on Windows
+
 ## [0.52.3](https://github.com/cdviz-dev/cdviz-collector/compare/0.52.2...0.52.3) - 2026-10-03
 
 ### Other
