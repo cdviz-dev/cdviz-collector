@@ -6,7 +6,7 @@ description: >-
   rust-cache-restore's own description for the key layering and for why
   SCCACHE_GHA_ENABLED must never be set.
 
-  Only ci.yml calls this, and only on `main` - every other workflow, and every
+  Only ci.yml (on `main`) and cache-warm-release.yml call this - every other workflow, and every
   feature-branch run, is restore-only. Feature branches read main's entry, so
   they get the cache without burning the repo's 10GB cache quota on a write per
   push. release.yml is restore-only for an additional reason: it runs on tag

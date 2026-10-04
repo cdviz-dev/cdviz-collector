@@ -78,3 +78,24 @@ jobs:
       # only `main` writes the cache; branches restore from it (see the action)
       - uses: ./.github/actions/rust-cache-save
         if: always() && github.ref == 'refs/heads/main'
+
+  # Keep only the newest sccache entry per <prefix>-<os>-<arch> group (key minus
+  # the trailing hash + run_id): restore only ever picks the newest one, and stale
+  # entries push the repo over its 10GB quota, where GitHub's LRU eviction would
+  # drop the weekly-warmed release caches. A separate job without checkout, so the
+  # actions:write token never shares a runner with build code (deps' build.rs),
+  # and scoped to main's sccache-rust* entries.
+  cache-prune:
+    needs: ci
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - run: |
+          gh cache list --ref refs/heads/main --key sccache-rust --limit 100 --json id,key,createdAt \
+            --jq 'group_by(.key | split("-") | .[:-2] | join("-")) | .[] | sort_by(.createdAt) | .[:-1][] | .id' \
+            | xargs -r -n1 gh cache delete

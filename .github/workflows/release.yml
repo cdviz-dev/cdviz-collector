@@ -136,7 +136,8 @@ jobs:
       - name: "Restore cargo + sccache cache"
         uses: "./.github/actions/rust-cache-restore"
         with:
-          "key-prefix": "sccache-rust-release"
+          "cache-size": "1G"
+          "key-prefix": "sccache-rust-release-${{ join(matrix.targets, '-') }}"
       - name: "Add gettid shim for glibc < 2.30 (manylinux_2_28)"
         if: "runner.os == 'Linux'"
         run: |

@@ -1,9 +1,15 @@
 ---
-# Warms the sccache-rust-release cache from `main`, the only ref release.yml's
-# tag-triggered runs can restore from (GitHub Actions cache access is scoped to
-# the current ref or the default branch - a cache saved on one tag is never
-# visible to another tag). `cargo check --release` populates most of the
-# release-profile sccache object store without paying for a full link/codegen.
+# Warms the sccache-rust-release-<target> caches from `main`, the only ref
+# release.yml's tag-triggered runs can restore from (GitHub Actions cache access
+# is scoped to the current ref or the default branch - a cache saved on one tag
+# is never visible to another tag, so release.yml itself stays restore-only).
+#
+# Each matrix entry mirrors one release.yml build-local-artifacts job (same
+# runner, container, setup steps and `dist build` invocation): sccache only hits
+# when rustc args, target, profile and RUSTFLAGS are identical, so a
+# `cargo check` (metadata only) or a host-only build would warm nothing.
+# Keep the matrix in sync with dist-workspace.toml targets/custom-runners, and
+# the steps in sync with release-build-setup.yml.part.
 name: cache-warm-release
 
 on:
@@ -21,18 +27,96 @@ permissions:
 
 jobs:
   cache-warm-release:
-    runs-on: ubuntu-latest
+    name: cache-warm-release (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-15
+          - target: x86_64-apple-darwin
+            runner: macos-15
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-22.04-arm
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            packages_install: sudo apt-get update && sudo apt-get install musl-tools
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container || null }}
     env:
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v7
+      - name: enable windows longpaths
+        run: git config --global core.longpaths true
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - name: Install Rust non-interactively if not already installed
+        if: ${{ matrix.container }}
+        shell: bash
+        run: |
+          if ! command -v cargo > /dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          fi
+      - uses: dtolnay/rust-toolchain@stable
       - uses: ./.github/actions/rust-cache-restore
         with:
-          key-prefix: sccache-rust-release
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo check --release --workspace --locked
+          key-prefix: sccache-rust-release-${{ matrix.target }}
+          cache-size: 1G # keep in sync with release-build-setup.yml.part
+      - name: Add gettid shim for glibc < 2.30 (manylinux_2_28)
+        # same as release-build-setup.yml.part: it changes RUSTFLAGS, hence the sccache hash
+        if: runner.os == 'Linux'
         shell: bash
+        run: |
+          if ! nm -D /lib64/libc.so.6 2>/dev/null | grep -qw gettid; then
+            printf '#define _GNU_SOURCE\n#include <unistd.h>\n#include <sys/syscall.h>\npid_t gettid(void){return (pid_t)syscall(SYS_gettid);}\n' \
+              | gcc -x c - -c -o /tmp/gettid_shim.o
+            ar rcs /tmp/libgettid_shim.a /tmp/gettid_shim.o
+            echo "RUSTFLAGS=${RUSTFLAGS} -C link-arg=-L/tmp -C link-arg=-lgettid_shim" >> "$GITHUB_ENV"
+          fi
+      - name: Install dist
+        if: runner.os != 'Windows'
+        shell: sh
+        run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.33.0/cargo-dist-installer.sh | sh"
+      - name: Install dist
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: "irm https://github.com/axodotdev/cargo-dist/releases/download/v0.33.0/cargo-dist-installer.ps1 | iex"
+      - name: Install dependencies
+        if: ${{ matrix.packages_install }}
+        run: ${{ matrix.packages_install }}
+      - name: Build (same invocation as release.yml)
+        shell: bash
+        run: dist build --artifacts=local --target=${{ matrix.target }}
       - uses: ./.github/actions/rust-cache-save
         if: always()
         with:
-          key-prefix: sccache-rust-release
+          key-prefix: sccache-rust-release-${{ matrix.target }}
+
+  # Keep only the newest sccache entry per <prefix>-<os>-<arch> group (key minus
+  # the trailing hash + run_id): restore only ever picks the newest one, and stale
+  # entries push the repo over its 10GB quota, where GitHub's LRU eviction would
+  # drop the weekly-warmed release caches. A separate job without checkout, so the
+  # actions:write token never shares a runner with build code (deps' build.rs),
+  # and scoped to main's sccache-rust* entries.
+  cache-prune:
+    needs: cache-warm-release
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - run: |
+          gh cache list --ref refs/heads/main --key sccache-rust --limit 100 --json id,key,createdAt \
+            --jq 'group_by(.key | split("-") | .[:-2] | join("-")) | .[] | sort_by(.createdAt) | .[:-1][] | .id' \
+            | xargs -r -n1 gh cache delete
