@@ -60,7 +60,7 @@ The usual way to get there is a bespoke webhook receiver per tool, each one a sm
 |               |                                                                           |
 | ------------- | ------------------------------------------------------------------------- |
 | **Receive**   | HTTP webhook (with HMAC signature verification), SSE, NATS, Kafka         |
-| **Poll**      | REST/GraphQL APIs, filesystem, S3, GCS, SFTP, GitHub                      |
+| **Poll**      | REST/GraphQL APIs, filesystem, S3, GCS, SFTP (not on Windows), GitHub     |
 | **Wrap**      | any command — exit code plus JUnit/TAP/SARIF reports                      |
 | **Transform** | VRL — reshape, filter, enrich, deduplicate, split one input into N events |
 | **Ship to**   | PostgreSQL, ClickHouse, HTTP, SSE, NATS, Kafka, files/S3, stdout          |

@@ -80,7 +80,6 @@ opendal = { version = "0.59", default-features = false, features = [
   "services-github",
   "services-http",
   "services-s3",
-  "services-sftp",
 ], optional = true }
 packageurl = "0.7"
 prometheus = "0.14"
@@ -164,6 +163,10 @@ wiremock = "0.6"
 
 [target.'cfg(all(target_env = "musl", target_pointer_width = "64"))'.dependencies.jemallocator]
 version = "0.5"
+
+# sftp (openssh) is unix-only; enabled per-target so Windows builds compile
+[target.'cfg(unix)'.dependencies]
+opendal = { version = "0.59", default-features = false, features = ["services-sftp"], optional = true }
 
 [features]
 ## default is "full" feature set minus kafka (require native tools)
