@@ -353,6 +353,16 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn empty_batch_never_reaches_the_store() {
+        // A store call may open a connection (e.g. db sink with a lazy pool): skip it when idle.
+        let store = FakeStore::default();
+        let batcher = Batcher::start(store.clone(), 2, Duration::from_millis(5), None).unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await; // several timer ticks
+        batcher.flush().await.unwrap();
+        assert!(store.chunks.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
     async fn spooled_items_are_replayed_at_startup() {
         let spool_dir = tempfile::tempdir().unwrap();
         // Leftovers of a crashed run (incl. a torn record): 2 items in a slot, 1 in the other.
