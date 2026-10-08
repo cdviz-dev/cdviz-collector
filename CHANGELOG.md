@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.53.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.53.0...0.53.1) - 2026-10-08
+
+### Other
+
+- *(deps)* update actions/checkout action to v7 ([#427](https://github.com/cdviz-dev/cdviz-collector/pull/427))
+- *(sink-batch)* group spool writes into one fsync per receive batch (~46x throughput)
+- *(cache)* warm per-target release sccache from main and prune stale entries
+- *(sink-batch)* assert empty batches never reach the store
+
 ## [0.53.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.52.3...0.53.0) - 2026-10-04
 
 ### Added
