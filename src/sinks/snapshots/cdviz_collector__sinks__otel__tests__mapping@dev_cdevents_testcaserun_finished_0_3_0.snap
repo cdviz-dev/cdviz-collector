@@ -1,0 +1,22 @@
+---
+source: src/sinks/otel.rs
+expression: attributes(&cdevent)
+---
+- - cdevents.id
+  - 271069a8-fc18-44f1-b38f-9d70a1695819
+- - cdevents.type
+  - dev.cdevents.testcaserun.finished.0.3.0
+- - cdevents.source
+  - /event/source/123
+- - cdevents.subject.id
+  - case-1
+- - cdevents.subject.source
+  - /event/source/123
+- - cdevents.subject.type
+  - testcaserun
+- - cdevents.predicate
+  - finished
+- - test.case.name
+  - it_works
+- - test.case.result.status
+  - pass

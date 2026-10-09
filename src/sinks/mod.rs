@@ -13,6 +13,8 @@ pub(crate) mod http;
 pub(crate) mod kafka;
 #[cfg(feature = "sink_nats")]
 pub(crate) mod nats;
+#[cfg(feature = "sink_otel")]
+pub(crate) mod otel;
 #[cfg(any(feature = "sink_clickhouse", feature = "sink_db"))]
 mod retry;
 #[cfg(feature = "sink_sse")]
@@ -37,6 +39,8 @@ use init_tracing_opentelemetry::opentelemetry::KeyValue;
 use kafka::KafkaSink;
 #[cfg(feature = "sink_nats")]
 use nats::NatsSink;
+#[cfg(feature = "sink_otel")]
+use otel::OtelSink;
 use serde::Deserialize;
 #[cfg(feature = "sink_sse")]
 use sse::SseSink;
@@ -67,6 +71,9 @@ pub(crate) enum Config {
     #[cfg(feature = "sink_nats")]
     #[serde(alias = "nats")]
     Nats(nats::Config),
+    #[cfg(feature = "sink_otel")]
+    #[serde(alias = "otel")]
+    Otel(otel::Config),
     #[cfg(feature = "sink_folder")]
     #[serde(alias = "folder")]
     Folder(folder::Config),
@@ -123,6 +130,8 @@ impl Config {
             Self::Kafka(kafka::Config { enabled, .. }) => *enabled,
             #[cfg(feature = "sink_nats")]
             Self::Nats(nats::Config { enabled, .. }) => *enabled,
+            #[cfg(feature = "sink_otel")]
+            Self::Otel(otel::Config { enabled, .. }) => *enabled,
             #[cfg(feature = "sink_sse")]
             Self::Sse(sse::Config { enabled, .. }) => *enabled,
         }
@@ -145,6 +154,8 @@ impl SinkEnum {
             Config::Kafka(config) => KafkaSink::try_from(config)?.into(),
             #[cfg(feature = "sink_nats")]
             Config::Nats(config) => NatsSink::try_from_config(config).await?.into(),
+            #[cfg(feature = "sink_otel")]
+            Config::Otel(config) => OtelSink::try_from(config)?.into(),
             #[cfg(feature = "sink_sse")]
             Config::Sse(config) => SseSink::try_from(config)?.into(),
         };
@@ -168,6 +179,8 @@ enum SinkEnum {
     KafkaSink,
     #[cfg(feature = "sink_nats")]
     NatsSink,
+    #[cfg(feature = "sink_otel")]
+    OtelSink,
     #[cfg(feature = "sink_sse")]
     SseSink,
 }

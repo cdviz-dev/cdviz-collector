@@ -81,6 +81,20 @@ opendal = { version = "0.59", default-features = false, features = [
   "services-http",
   "services-s3",
 ], optional = true }
+opentelemetry = { version = "0.33", features = ["logs"], optional = true }
+opentelemetry-otlp = { version = "0.33", default-features = false, features = [
+  "grpc-tonic",
+  "http-proto",
+  "logs",
+  "reqwest-blocking-client",
+  "reqwest-rustls",
+  "tls-ring",
+  "tls-webpki-roots",
+], optional = true }
+opentelemetry-semantic-conventions = { version = "0.33", features = [
+  "semconv_experimental",
+], optional = true }
+opentelemetry_sdk = { version = "0.33", features = ["logs", "rt-tokio"], optional = true }
 packageurl = "0.7"
 prometheus = "0.14"
 pin-project-lite = { version = "0.2", optional = true }
@@ -149,6 +163,7 @@ cdviz-collector-testkit = { path = "testkit" }
 figment = { version = "0.10", features = ["env", "test"] }
 indoc = "2"
 insta = { version = "1", features = ["yaml"] }
+opentelemetry_sdk = { version = "0.33", features = ["testing"] }
 pretty_assertions = "1"
 proptest = "1"
 rstest = "0.27"
@@ -211,6 +226,7 @@ sink_all = [
   "sink_http",
   "sink_kafka",
   "sink_nats",
+  "sink_otel",
   "sink_sse",
 ]
 sink_default = [
@@ -220,6 +236,7 @@ sink_default = [
   "sink_http",
   # "sink_kafka",
   "sink_nats",
+  "sink_otel",
   "sink_sse",
 ]
 sink_clickhouse = ["dep:clickhouse", "dep:retry-policies"]
@@ -228,6 +245,12 @@ sink_folder = ["dep:opendal"]
 sink_http = ["http_client"]
 sink_kafka = ["dep:rdkafka"]
 sink_nats = ["dep:async-nats"]
+sink_otel = [
+  "dep:opentelemetry",
+  "dep:opentelemetry-otlp",
+  "dep:opentelemetry-semantic-conventions",
+  "dep:opentelemetry_sdk",
+]
 sink_sse = ["dep:tokio-stream"]
 #! ### Sources
 source_all = [

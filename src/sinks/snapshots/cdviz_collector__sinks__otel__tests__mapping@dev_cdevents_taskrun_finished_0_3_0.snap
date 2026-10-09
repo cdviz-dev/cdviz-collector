@@ -1,0 +1,26 @@
+---
+source: src/sinks/otel.rs
+expression: attributes(&cdevent)
+---
+- - cdevents.id
+  - 271069a8-fc18-44f1-b38f-9d70a1695819
+- - cdevents.type
+  - dev.cdevents.taskrun.finished.0.3.0
+- - cdevents.source
+  - /event/source/123
+- - cdevents.subject.id
+  - task-1
+- - cdevents.subject.source
+  - /event/source/123
+- - cdevents.subject.type
+  - taskrun
+- - cdevents.predicate
+  - finished
+- - cicd.pipeline.task.name
+  - test
+- - cicd.pipeline.task.run.id
+  - task-1
+- - cicd.pipeline.run.id
+  - run-1
+- - cicd.pipeline.task.run.result
+  - cancellation
