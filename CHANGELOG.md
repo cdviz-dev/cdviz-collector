@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.54.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.53.1...0.54.0) - 2026-10-09
+
+### Added
+
+- *(sink)* add `otel` sink exporting CDEvents as OTLP log records
+
+### Other
+
+- *(readme)* mention OpenTelemetry backends as a sink destination
+- *(skill)* add `otel` sink config example
+- *(sink-otel)* add integration test against a real OpenTelemetry Collector
+
 ## [0.53.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.53.0...0.53.1) - 2026-10-08
 
 ### Other
