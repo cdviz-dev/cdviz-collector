@@ -2,6 +2,7 @@ pub mod cdevent_utils;
 pub mod connector_chain;
 mod shared_async_resource;
 pub mod testcontainers_nats;
+pub mod testcontainers_otelcol;
 pub mod testcontainers_redpanda;
 
 pub use cdevent_utils::generate_random_cdevents;
