@@ -263,6 +263,24 @@ topic   = "cdevents"
 "message.timeout.ms" = "5000"
 ```
 
+### OpenTelemetry (OTLP logs)
+
+```toml
+# Each CDEvent -> one OTLP log record (event name = CDEvent type, body = CDEvent),
+# with `cdevents.*` and OTel CI/CD semantic-convention attributes (`cicd.*`, `vcs.*`, `test.*`, `deployment.*`)
+[sinks.otel]
+enabled  = true
+type     = "otel"
+endpoint = "http://localhost:4317"   # optional, default from OTEL_EXPORTER_OTLP_* env vars
+protocol = "grpc"                    # or "http_protobuf" (endpoint e.g. "http://localhost:4318/v1/logs")
+timeout  = "10s"
+
+# Optional: headers sent with each export (only `static` and `secret`)
+[sinks.otel.headers]
+"x-api-key" = { type = "secret", value = "your-api-key" }  # literal value, not logged; or override via env:
+# CDVIZ_COLLECTOR__SINKS__OTEL__HEADERS__X-API-KEY__VALUE=...
+```
+
 ---
 
 ## Transformers
