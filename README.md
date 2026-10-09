@@ -53,7 +53,7 @@ Every tool in your pipeline emits events, and none of them agree on what an even
 
 The usual way to get there is a bespoke webhook receiver per tool, each one a small service to write, deploy, and keep alive. Here the mapping is a [VRL](https://vector.dev/docs/reference/vrl/) script in a config file. Change a mapping without shipping a binary.
 
-> **This does not sign you up for anything.** cdviz-collector is standalone: it writes to PostgreSQL, ClickHouse, plain HTTP, or files you already run, and CDEvents is an open [CDF](https://cd.foundation/) standard rather than a format we invented. [CDviz](https://cdviz.dev) is one thing you can point the data at. It is not a requirement.
+> **This does not sign you up for anything.** cdviz-collector is standalone: it writes to PostgreSQL, ClickHouse, plain HTTP, an OpenTelemetry backend, or files you already run, and CDEvents is an open [CDF](https://cd.foundation/) standard rather than a format we invented. [CDviz](https://cdviz.dev) is one thing you can point the data at. It is not a requirement.
 
 ## The swiss knife
 
