@@ -166,7 +166,7 @@ insta = { version = "1", features = ["yaml"] }
 opentelemetry_sdk = { version = "0.33", features = ["testing"] }
 pretty_assertions = "1"
 proptest = "1"
-rstest = "0.27"
+rstest = "0.28"
 tempfile = "3"
 test-strategy = "0.4"
 test-trace = "0.3"
