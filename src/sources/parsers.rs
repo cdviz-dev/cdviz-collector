@@ -131,13 +131,8 @@ pub(crate) fn parse_xml(data: &str) -> Result<serde_json::Value> {
 /// Parse YAML to JSON.
 #[cfg(feature = "parser_yaml")]
 pub(crate) fn parse_yaml(data: &str) -> Result<serde_json::Value> {
-    let yaml_value: serde_yaml::Value = serde_yaml::from_str(data)
+    let json_value: serde_json::Value = serde_saphyr::from_str(data)
         .map_err(|cause| miette::miette!("Failed to parse YAML: {}", cause))?;
-
-    let json_str = serde_json::to_string(&yaml_value).into_diagnostic()?;
-
-    let json_value: serde_json::Value = serde_json::from_str(&json_str)
-        .map_err(|cause| Error::from_serde_error(&json_str, cause))?;
 
     Ok(json_value)
 }

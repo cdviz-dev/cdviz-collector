@@ -296,21 +296,21 @@ fn purl_object_to_string(purl_obj: &Value) -> Result<String, ExpressionError> {
 
     // Extract required fields
     let pkg_type =
-        obj.get("type").and_then(Value::as_str).ok_or("PURL object must have a 'type' field")?;
+        obj.get("type").and_then(Value::to_str_lossy).ok_or("PURL object must have a 'type' field")?;
 
     let raw_name =
-        obj.get("name").and_then(Value::as_str).ok_or("PURL object must have a 'name' field")?;
+        obj.get("name").and_then(Value::to_str_lossy).ok_or("PURL object must have a 'name' field")?;
 
     // Extract optional fields (convert Cow to owned String to avoid lifetime issues)
-    let namespace = obj.get("namespace").and_then(Value::as_str).map(|s| s.to_string());
+    let namespace = obj.get("namespace").and_then(Value::to_str_lossy).map(|s| s.to_string());
 
     let version = obj.get("version").and_then(|v| match v {
         Value::Null => None,
         Value::Bytes(b) => std::str::from_utf8(b).ok().map(std::string::ToString::to_string),
-        _ => v.as_str().map(|s| s.to_string()),
+        _ => v.to_str_lossy().map(|s| s.to_string()),
     });
 
-    let subpath = obj.get("subpath").and_then(Value::as_str).map(|s| s.to_string());
+    let subpath = obj.get("subpath").and_then(Value::to_str_lossy).map(|s| s.to_string());
 
     // Extract qualifiers
     let mut qualifiers: Vec<(String, String)> = obj
@@ -318,7 +318,7 @@ fn purl_object_to_string(purl_obj: &Value) -> Result<String, ExpressionError> {
         .and_then(|v| v.as_object())
         .map(|q| {
             q.iter()
-                .filter_map(|(k, v)| v.as_str().map(|s| (k.to_string(), s.to_string())))
+                .filter_map(|(k, v)| v.to_str_lossy().map(|s| (k.to_string(), s.to_string())))
                 .collect()
         })
         .unwrap_or_default();
@@ -781,16 +781,16 @@ mod tests {
         let result = parse_oci_image_to_purl("nginx");
         let obj = result.as_object().unwrap();
 
-        assert_eq!(obj.get("type").unwrap().as_str().unwrap(), "oci");
-        assert_eq!(obj.get("name").unwrap().as_str().unwrap(), "nginx");
+        assert_eq!(obj.get("type").unwrap().to_str_lossy().unwrap(), "oci");
+        assert_eq!(obj.get("name").unwrap().to_str_lossy().unwrap(), "nginx");
         assert_eq!(obj.get("namespace"), None);
 
         let qualifiers = obj.get("qualifiers").unwrap().as_object().unwrap();
         assert_eq!(
-            qualifiers.get("repository_url").unwrap().as_str().unwrap(),
+            qualifiers.get("repository_url").unwrap().to_str_lossy().unwrap(),
             "docker.io/library"
         );
-        assert_eq!(qualifiers.get("tag").unwrap().as_str().unwrap(), "latest");
+        assert_eq!(qualifiers.get("tag").unwrap().to_str_lossy().unwrap(), "latest");
     }
 
     #[test]
@@ -798,10 +798,10 @@ mod tests {
         let result = parse_oci_image_to_purl("nginx:1.21");
         let obj = result.as_object().unwrap();
 
-        assert_eq!(obj.get("name").unwrap().as_str().unwrap(), "nginx");
+        assert_eq!(obj.get("name").unwrap().to_str_lossy().unwrap(), "nginx");
 
         let qualifiers = obj.get("qualifiers").unwrap().as_object().unwrap();
-        assert_eq!(qualifiers.get("tag").unwrap().as_str().unwrap(), "1.21");
+        assert_eq!(qualifiers.get("tag").unwrap().to_str_lossy().unwrap(), "1.21");
     }
 
     #[test]
@@ -809,8 +809,8 @@ mod tests {
         let result = parse_oci_image_to_purl("nginx@sha256:abc123");
         let obj = result.as_object().unwrap();
 
-        assert_eq!(obj.get("name").unwrap().as_str().unwrap(), "nginx");
-        assert_eq!(obj.get("version").unwrap().as_str().unwrap(), "@sha256:abc123");
+        assert_eq!(obj.get("name").unwrap().to_str_lossy().unwrap(), "nginx");
+        assert_eq!(obj.get("version").unwrap().to_str_lossy().unwrap(), "@sha256:abc123");
 
         let qualifiers = obj.get("qualifiers").unwrap().as_object().unwrap();
         assert!(!qualifiers.contains_key("tag"));
@@ -821,14 +821,14 @@ mod tests {
         let result = parse_oci_image_to_purl("ghcr.io/owner/image:v1.0@sha256:abc123");
         let obj = result.as_object().unwrap();
 
-        assert_eq!(obj.get("type").unwrap().as_str().unwrap(), "oci");
+        assert_eq!(obj.get("type").unwrap().to_str_lossy().unwrap(), "oci");
         assert_eq!(obj.get("namespace"), None);
-        assert_eq!(obj.get("name").unwrap().as_str().unwrap(), "image");
-        assert_eq!(obj.get("version").unwrap().as_str().unwrap(), "@sha256:abc123");
+        assert_eq!(obj.get("name").unwrap().to_str_lossy().unwrap(), "image");
+        assert_eq!(obj.get("version").unwrap().to_str_lossy().unwrap(), "@sha256:abc123");
 
         let qualifiers = obj.get("qualifiers").unwrap().as_object().unwrap();
-        assert_eq!(qualifiers.get("repository_url").unwrap().as_str().unwrap(), "ghcr.io/owner");
-        assert_eq!(qualifiers.get("tag").unwrap().as_str().unwrap(), "v1.0");
+        assert_eq!(qualifiers.get("repository_url").unwrap().to_str_lossy().unwrap(), "ghcr.io/owner");
+        assert_eq!(qualifiers.get("tag").unwrap().to_str_lossy().unwrap(), "v1.0");
     }
 
     #[test]
@@ -837,10 +837,10 @@ mod tests {
         let obj = result.as_object().unwrap();
 
         assert_eq!(obj.get("namespace"), None);
-        assert_eq!(obj.get("name").unwrap().as_str().unwrap(), "image");
+        assert_eq!(obj.get("name").unwrap().to_str_lossy().unwrap(), "image");
 
         let qualifiers = obj.get("qualifiers").unwrap().as_object().unwrap();
-        assert_eq!(qualifiers.get("repository_url").unwrap().as_str().unwrap(), "ghcr.io/org/team");
+        assert_eq!(qualifiers.get("repository_url").unwrap().to_str_lossy().unwrap(), "ghcr.io/org/team");
     }
 
     #[test]
