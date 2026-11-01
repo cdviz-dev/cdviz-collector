@@ -26,12 +26,16 @@ jobs:
       CARGO_PROFILE_TEST_DEBUG: 0
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/rust-cache-restore
       - uses: jdx/mise-action@v5
         with:
           cache: false
           cache_save: false
           experimental: true
+      # after mise-action: uses the mbx installed by mise (mise.toml) and keys the
+      # cache on its rustc. Default `github` backend restores target/ + cargo registry;
+      # it saves only on pushes to the default branch (PRs, forks, schedules restore-only).
+      # cargo runs through mbx because of the rust `mr_boxington` option in mise.toml.
+      - uses: jdx/mr-boxington-action@v1
       - name: install cdviz-collector
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf \

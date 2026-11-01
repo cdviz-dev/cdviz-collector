@@ -34,9 +34,6 @@ jobs:
       CARGO_PROFILE_TEST_DEBUG: 0
     steps:
       - uses: actions/checkout@v7
-      # sccache + cargo dirs restored from one actions/cache blob (local-dir
-      # backend, not SCCACHE_GHA_ENABLED); also exports CARGO_INCREMENTAL=0.
-      - uses: ./.github/actions/rust-cache-restore
       - uses: jdx/mise-action@v5
         with:
           # version 2025.5.11, a symlink is created for rust setup
@@ -45,6 +42,11 @@ jobs:
           cache: false
           cache_save: false
           experimental: true
+      # after mise-action: uses the mbx installed by mise (mise.toml) and keys the
+      # cache on its rustc. Default `github` backend restores target/ + cargo registry;
+      # it saves only on pushes to the default branch (PRs, forks, schedules restore-only).
+      # cargo runs through mbx because of the rust `mr_boxington` option in mise.toml.
+      - uses: jdx/mr-boxington-action@v1
       - name: install cdviz-collector
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf \
@@ -67,16 +69,14 @@ jobs:
           CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__TOKEN: ${{ secrets.CDVIZ_COLLECTOR_TOKEN }}
           CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__SIGNATURE_PREFIX: "sha256="
           CDVIZ_COLLECTOR__SINKS__HTTP__HEADERS__X-SIGNATURE__SIGNATURE_ENCODING: "hex"
-      # only `main` writes the cache; branches restore from it (see the action)
-      - uses: ./.github/actions/rust-cache-save
-        if: always() && github.ref == 'refs/heads/main'
 
-  # Keep only the newest sccache entry per <prefix>-<os>-<arch> group (key minus
-  # the trailing hash + run_id): restore only ever picks the newest one, and stale
-  # entries push the repo over its 10GB quota, where GitHub's LRU eviction would
-  # drop the weekly-warmed release caches. A separate job without checkout, so the
-  # actions:write token never shares a runner with build code (deps' build.rs),
-  # and scoped to main's sccache-rust* entries.
+  # Keep only the newest mbx entry per <os>-<arch>-mbx-<generation>-<toolchain>
+  # group (key minus the trailing commit sha): restore only ever picks the newest
+  # one, and stale entries push the repo over its 10GB quota, where GitHub's LRU
+  # eviction would drop the weekly-warmed release caches. A separate job without
+  # checkout, so the actions:write token never shares a runner with build code
+  # (deps' build.rs), and scoped to main's mbx entries (the sccache-rust-release*
+  # entries are pruned by cache-warm-release.yml).
   cache-prune:
     needs: ci
     if: always() && github.ref == 'refs/heads/main'
@@ -88,6 +88,6 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - run: |
-          gh cache list --ref refs/heads/main --key sccache-rust --limit 100 --json id,key,createdAt \
-            --jq 'group_by(.key | split("-") | .[:-2] | join("-")) | .[] | sort_by(.createdAt) | .[:-1][] | .id' \
+          gh cache list --ref refs/heads/main --limit 100 --json id,key,createdAt \
+            --jq '[.[] | select(.key | contains("-mbx-"))] | group_by(.key | split("-") | .[:-1] | join("-")) | .[] | sort_by(.createdAt) | .[:-1][] | .id' \
             | xargs -r -n1 gh cache delete
