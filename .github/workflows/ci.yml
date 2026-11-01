@@ -4,9 +4,10 @@
 name: ci
 
 on:
+  # `push` only on `main`: PR branches are covered by `pull_request` (avoids a double run per push)
   push:
-    branches-ignore:
-      - "release-plz-*"
+    branches:
+      - main
   pull_request: {}
   workflow_dispatch:
 
@@ -19,8 +20,7 @@ permissions:
 
 jobs:
   ci:
-    # skip release-plz PRs: `push` above already ignores that branch, so without this the
-    # `pull_request` event would still trigger a redundant run of the same commits.
+    # skip release-plz PRs
     if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'release-plz-')
     # "ubuntu-22.04-arm" vs "ubuntu-latest"
     # - faster? (not sure 10min for both with cold cache, and 4min (+1min) for arm on 90% cache'hit)
