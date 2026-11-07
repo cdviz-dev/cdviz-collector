@@ -35,7 +35,6 @@ use crate::errors::{IntoDiagnostic, Result};
 use crate::security::header::{
     OutgoingHeaderMap, generate_headers, outgoing_header_map_to_configs,
 };
-use async_nats::header::HeaderValue as NatsHeaderValue;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -117,11 +116,11 @@ impl NatsSink {
 
         // Forward headers from the source message
         for (name, value) in msg_headers {
-            nats_headers.insert(name.as_str(), NatsHeaderValue::from(value.as_str()));
+            nats_headers.insert(name.as_str(), value.as_str());
         }
 
         // Add content-type
-        nats_headers.insert("content-type", NatsHeaderValue::from("application/json"));
+        nats_headers.insert("content-type", "application/json");
 
         // Generate and add configured outgoing headers (they take precedence)
         let header_configs = outgoing_header_map_to_configs(&self.headers);
@@ -129,7 +128,7 @@ impl NatsSink {
             let http_headers = generate_headers(&header_configs, Some(body)).into_diagnostic()?;
             for (name, value) in &http_headers {
                 if let Ok(value_str) = value.to_str() {
-                    nats_headers.insert(name.as_str(), NatsHeaderValue::from(value_str));
+                    nats_headers.insert(name.as_str(), value_str);
                 }
             }
         }
