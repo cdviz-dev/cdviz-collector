@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.54.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.53.1...0.54.0) - 2026-11-07
+
+### Added
+
+- *(sink)* add `otel` sink exporting CDEvents as OTLP log records
+
+### Fixed
+
+- *(deps)* update deny config, update nats ([#440](https://github.com/cdviz-dev/cdviz-collector/pull/440))
+- *(deps)* update rust crate init-tracing-opentelemetry to 0.44 ([#434](https://github.com/cdviz-dev/cdviz-collector/pull/434))
+- *(deps)* update rust crate async-nats to 0.51 ([#433](https://github.com/cdviz-dev/cdviz-collector/pull/433))
+- *(deps)* resolve cargo-deny RustSec advisories ([#436](https://github.com/cdviz-dev/cdviz-collector/pull/436))
+
+### Other
+
+- *(deps)* update rust crate rstest to 0.28 ([#430](https://github.com/cdviz-dev/cdviz-collector/pull/430))
+- *(ci)* use mr-boxington (mbx) as cargo build cache for local and CI ([#435](https://github.com/cdviz-dev/cdviz-collector/pull/435))
+- *(deps)* update rust crate proptest to v1.12.0 ([#429](https://github.com/cdviz-dev/cdviz-collector/pull/429))
+- *(readme)* mention OpenTelemetry backends as a sink destination
+- *(skill)* add `otel` sink config example
+- *(sink-otel)* add integration test against a real OpenTelemetry Collector
+
 ## [0.53.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.53.0...0.53.1) - 2026-10-08
 
 ### Other
