@@ -99,7 +99,7 @@ packageurl = "0.7"
 prometheus = "0.14"
 pin-project-lite = { version = "0.2", optional = true }
 quick-xml-to-json = "0.3"
-rdkafka = { version = "0.39", default-features = false, features = [
+rdkafka = { version = "0.40", default-features = false, features = [
   "cmake-build",
   "curl-static",
   "libz-static",
