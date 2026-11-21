@@ -396,7 +396,7 @@ impl Pipe for OutputToJsonFile {
             // Insert index before the .json extension
             let path = Path::new(&base_filename);
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(&base_filename);
-            let parent = path.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+            let parent = path.parent().map_or_default(|p| p.to_string_lossy().to_string());
             let unique_name = format!("{stem}.{current_index}.json");
             if parent.is_empty() { unique_name } else { format!("{parent}/{unique_name}") }
         };

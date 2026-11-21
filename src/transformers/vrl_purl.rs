@@ -295,11 +295,15 @@ fn purl_object_to_string(purl_obj: &Value) -> Result<String, ExpressionError> {
     let obj = purl_obj.as_object().ok_or("purl_to_string requires an object")?;
 
     // Extract required fields
-    let pkg_type =
-        obj.get("type").and_then(Value::to_str_lossy).ok_or("PURL object must have a 'type' field")?;
+    let pkg_type = obj
+        .get("type")
+        .and_then(Value::to_str_lossy)
+        .ok_or("PURL object must have a 'type' field")?;
 
-    let raw_name =
-        obj.get("name").and_then(Value::to_str_lossy).ok_or("PURL object must have a 'name' field")?;
+    let raw_name = obj
+        .get("name")
+        .and_then(Value::to_str_lossy)
+        .ok_or("PURL object must have a 'name' field")?;
 
     // Extract optional fields (convert Cow to owned String to avoid lifetime issues)
     let namespace = obj.get("namespace").and_then(Value::to_str_lossy).map(|s| s.to_string());
@@ -313,15 +317,12 @@ fn purl_object_to_string(purl_obj: &Value) -> Result<String, ExpressionError> {
     let subpath = obj.get("subpath").and_then(Value::to_str_lossy).map(|s| s.to_string());
 
     // Extract qualifiers
-    let mut qualifiers: Vec<(String, String)> = obj
-        .get("qualifiers")
-        .and_then(|v| v.as_object())
-        .map(|q| {
+    let mut qualifiers: Vec<(String, String)> =
+        obj.get("qualifiers").and_then(|v| v.as_object()).map_or_default(|q| {
             q.iter()
                 .filter_map(|(k, v)| v.to_str_lossy().map(|s| (k.to_string(), s.to_string())))
                 .collect()
-        })
-        .unwrap_or_default();
+        });
 
     // OCI spec: name must not contain '/' — path prefix belongs in repository_url.
     // Any registry (GHCR, Docker Hub, Harbor, GitLab, ...) may supply a multi-segment
@@ -373,7 +374,7 @@ fn purl_object_to_string(purl_obj: &Value) -> Result<String, ExpressionError> {
 pub struct PurlFromOciImage;
 
 impl Function for PurlFromOciImage {
-    fn usage(&self) -> &'static str {
+    fn description(&self) -> &'static str {
         "Parse OCI/Docker image string to PURL object"
     }
 
@@ -466,7 +467,7 @@ impl FunctionExpression for PurlFromOciImageFn {
 pub struct PurlToString;
 
 impl Function for PurlToString {
-    fn usage(&self) -> &'static str {
+    fn description(&self) -> &'static str {
         "Convert PURL object to spec-compliant string"
     }
 
@@ -546,7 +547,7 @@ impl FunctionExpression for PurlToStringFn {
 pub struct PurlFromArgoCdHelm;
 
 impl Function for PurlFromArgoCdHelm {
-    fn usage(&self) -> &'static str {
+    fn description(&self) -> &'static str {
         "Parse ArgoCD Helm chart string to PURL object"
     }
 
@@ -649,7 +650,7 @@ impl FunctionExpression for PurlFromArgoCdHelmFn {
 pub struct PurlFromArgoCdGitSource;
 
 impl Function for PurlFromArgoCdGitSource {
-    fn usage(&self) -> &'static str {
+    fn description(&self) -> &'static str {
         "Parse ArgoCD git repo string to PURL object"
     }
 
@@ -827,7 +828,10 @@ mod tests {
         assert_eq!(obj.get("version").unwrap().to_str_lossy().unwrap(), "@sha256:abc123");
 
         let qualifiers = obj.get("qualifiers").unwrap().as_object().unwrap();
-        assert_eq!(qualifiers.get("repository_url").unwrap().to_str_lossy().unwrap(), "ghcr.io/owner");
+        assert_eq!(
+            qualifiers.get("repository_url").unwrap().to_str_lossy().unwrap(),
+            "ghcr.io/owner"
+        );
         assert_eq!(qualifiers.get("tag").unwrap().to_str_lossy().unwrap(), "v1.0");
     }
 
@@ -840,7 +844,10 @@ mod tests {
         assert_eq!(obj.get("name").unwrap().to_str_lossy().unwrap(), "image");
 
         let qualifiers = obj.get("qualifiers").unwrap().as_object().unwrap();
-        assert_eq!(qualifiers.get("repository_url").unwrap().to_str_lossy().unwrap(), "ghcr.io/org/team");
+        assert_eq!(
+            qualifiers.get("repository_url").unwrap().to_str_lossy().unwrap(),
+            "ghcr.io/org/team"
+        );
     }
 
     #[test]

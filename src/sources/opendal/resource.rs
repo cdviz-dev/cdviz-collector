@@ -34,12 +34,14 @@ impl Resource {
             }
             last_modified = stats.as_ref().and_then(Metadata::last_modified);
         }
-        let last_modified = last_modified.map(opendal::raw::Timestamp::into_inner);
+        // opendal uses jiff 0.2, convert to our jiff 1.x `Timestamp`
+        let last_modified = last_modified
+            .and_then(|ts| Timestamp::from_nanosecond(ts.into_inner().as_nanosecond()).ok());
         if content_length == 0 {
             if stats.is_none() {
                 stats = op.stat(entry.path()).await.ok();
             }
-            content_length = stats.as_ref().map(Metadata::content_length).unwrap_or_default();
+            content_length = stats.as_ref().map_or_default(Metadata::content_length);
         }
         if try_to_load_headers_json && let Some(headers) = load_header_json(entry.path(), op).await
         {
