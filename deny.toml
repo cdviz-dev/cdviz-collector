@@ -78,6 +78,9 @@ ignore = [
   # { crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },
   # { id = "RUSTSEC-2024-0436", reason = "no longer maintained but required by crate (vrl use paste)" }
   { id = "RUSTSEC-2023-0071", reason = "rsa 0.9.10 is used by opendal 0.59.5 -> opendal-core -> reqsign-core 3.3.2; no safe upgrade available" },
+  { id = "RUSTSEC-2026-0543", reason = "chrono 0.4.45 is used by vrl 0.39, cloudevents-sdk 0.9, opentelemetry-stdout 0.33; no safe upgrade available" },
+  { id = "RUSTSEC-2026-0555", reason = "chrono-tz 0.10.4 is used by vrl 0.39; no safe upgrade available" },
+  { id = "RUSTSEC-2026-0542", reason = "humantime 2.4.0 is used by humantime-serde 1.1.1 (config Duration fields); no safe upgrade available" },
   # { id = "RUSTSEC-2024-0388", reason = "derivative 2.2.0 is used by vrl 0.26 -> fancy-regex 0.15" },
   # { id = "RUSTSEC-2024-0384", reason = "instant 0.1.13 is used by reqwest-retry 0.7 -> parking_lot 0.11" },
   # { id = "RUSTSEC-2025-0119", reason = "number_prefix 0.4.0 is used by cliclack 0.3.6 -> indicatif 0.17" },
@@ -155,6 +158,12 @@ license-files = [
   { path = "LICENSE", hash = 0xbd0eed23 },
 ]
 
+[[licenses.clarify]]
+# cloudevents-sdk 0.9 declares only `license-file` (Apache-2.0), no SPDX expression
+crate = "cloudevents-sdk"
+expression = "Apache-2.0"
+license-files = [{ path = "LICENSE", hash = 0x544e3a40 }]
+
 [licenses.private]
 # If true, ignores workspace crates that aren't published, or are only
 # published to private registries.
@@ -208,6 +217,7 @@ deny = [
 skip = [
   "aead",
   "aes",
+  "asyncband",
   # "ansi_term@0.11.0",
   "base64",
   "bit-set",
@@ -223,7 +233,6 @@ skip = [
   "convert_case",
   # "core-foundation",
   "cpufeatures",
-  "ctr",
   "crypto-common",
   "digest",
   "fancy-regex",
@@ -236,9 +245,12 @@ skip = [
   "hmac",
   "inout",
   "itertools",
+  "jiff",
+  "jiff-core",
+  "jiff-tzdb",
+  "jiff-tzdb-platform",
   # "keccak",
   "lock_api",
-  "lz4_flex",
   # "md-5",
   "nom",
   "object",
@@ -250,9 +262,6 @@ skip = [
   "phf_shared",
   "poly1305",
   # "proc-macro-crate",
-  "prost",
-  "prost-derive",
-  "prost-types",
   "quick-xml",
   "rand",
   "rand_chacha",

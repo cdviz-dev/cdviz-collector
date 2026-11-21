@@ -106,7 +106,7 @@ impl DriverProgram {
     pub(crate) fn execute(&self, input: &JsonValue) -> Result<DriverOutput> {
         let mut target = TargetValue {
             value: serde_json::to_value(input).into_diagnostic()?.into(),
-            metadata: Value::Object(std::collections::BTreeMap::new()),
+            metadata: Value::Object(vrl::value::ObjectMap::new()),
             secrets: Secrets::default(),
         };
         let mut state = RuntimeState::default();
@@ -167,12 +167,9 @@ impl DriverProgram {
 
 /// Extract a `{string: string}` map from an optional JSON object value.
 fn string_map(value: Option<&JsonValue>) -> HashMap<String, String> {
-    value
-        .and_then(|v| v.as_object())
-        .map(|obj| {
-            obj.iter().filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string()))).collect()
-        })
-        .unwrap_or_default()
+    value.and_then(|v| v.as_object()).map_or_default(|obj| {
+        obj.iter().filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string()))).collect()
+    })
 }
 
 #[cfg(test)]

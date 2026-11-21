@@ -49,7 +49,7 @@ impl Pipe for Processor {
             // the value starts as just an object with a single field "x" set to 1
             value: serde_json::to_value(&input).into_diagnostic()?.into(),
             // the metadata is empty
-            metadata: Value::Object(std::collections::BTreeMap::new()),
+            metadata: Value::Object(vrl::value::ObjectMap::new()),
             // and there are no secrets associated with the target
             secrets: Secrets::default(),
         };

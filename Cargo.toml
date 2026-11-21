@@ -117,7 +117,6 @@ retry-policies = { version = "0.5", optional = true }
 secrecy = { version = "0.10", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_with = "3"
 serde-saphyr = { version = "2.0", optional = true }
 sha2 = "0.11"
 similar = { version = "3", features = ["inline", "unicode"], optional = true }

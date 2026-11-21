@@ -53,7 +53,7 @@ impl Function for GetEnvVar {
         "get_env_var"
     }
 
-    fn usage(&self) -> &'static str {
+    fn description(&self) -> &'static str {
         "Returns the value of the environment variable `name`, if allowed by `vrl.allowed_env_vars`."
     }
 
