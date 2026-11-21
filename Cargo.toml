@@ -66,7 +66,7 @@ init-tracing-opentelemetry = { version = "0.44", features = [
   "otlp",
   "tracing_subscriber_ext",
 ] }
-jiff = { version = "0.2", features = ["serde"] }
+jiff = { version = "1.0", features = ["serde"] }
 miette = { version = "7", features = ["fancy"] }
 mime = { version = "0.3", optional = true }
 multihash = "0.19"
