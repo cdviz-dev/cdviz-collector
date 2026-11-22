@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.54.1](https://github.com/cdviz-dev/cdviz-collector/compare/0.54.0...0.54.1) - 2026-11-21
+
+### Fixed
+
+- *(deps)* adapt to vrl 0.39 and jiff 1.0 after cargo update ([#450](https://github.com/cdviz-dev/cdviz-collector/pull/450))
+- *(deps)* update rust crate rdkafka to 0.40 ([#448](https://github.com/cdviz-dev/cdviz-collector/pull/448))
+- *(deps)* update rust crate faster-hex to v2 ([#447](https://github.com/cdviz-dev/cdviz-collector/pull/447))
+- *(deps)* update rust crate vrl to 0.39 ([#444](https://github.com/cdviz-dev/cdviz-collector/pull/444))
+- *(deps)* update rust crate async-nats to 0.53 ([#443](https://github.com/cdviz-dev/cdviz-collector/pull/443))
+- *(deps)* update rust crate jiff to v1 ([#442](https://github.com/cdviz-dev/cdviz-collector/pull/442))
+
+### Other
+
+- *(deps)* update rust crate serde-saphyr to v2.2.0 ([#445](https://github.com/cdviz-dev/cdviz-collector/pull/445))
+- *(deps)* update dependency rust to v1.100.0 ([#441](https://github.com/cdviz-dev/cdviz-collector/pull/441))
+
 ## [0.54.0](https://github.com/cdviz-dev/cdviz-collector/compare/0.53.1...0.54.0) - 2026-11-07
 
 ### Added
